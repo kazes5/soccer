@@ -1,0 +1,24 @@
+{
+  "name": "@soccer/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@soccer/config": "workspace:*",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

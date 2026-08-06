@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+.next/
+dist/
+node_modules/
+coverage/
+apps/api/generated/
+.claude/
+CLAUDE.md
+PLAN.md
+pnpm-workspace.yaml

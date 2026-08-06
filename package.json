@@ -1,0 +1,28 @@
+{
+  "name": "soccer-carpool",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green \"pnpm --filter @soccer/web dev\" \"pnpm --filter @soccer/api dev\"",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @soccer/api run db:generate",
+    "db:migrate": "pnpm --filter @soccer/api run db:migrate",
+    "db:seed": "pnpm --filter @soccer/api run db:seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3"
+  }
+}
