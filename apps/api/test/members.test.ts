@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { generateSessionToken, hashSecret } from '../src/lib/crypto';
 import { RecordingOtpProvider } from './support/recording-otp-provider';
 
 describe('team member management', () => {
@@ -157,6 +158,66 @@ describe('team member management', () => {
 
     const auditEntries = await app.prisma.auditLog.findMany({
       where: { teamId, actionType: 'member_removed', targetId: parentUserId },
+    });
+    expect(auditEntries).toHaveLength(1);
+  });
+
+  it('releases any shift the removed member held, back to open', async () => {
+    const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
+
+    const point = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/collection-points`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: 'Oak St', address: '123 Oak St', type: 'pickup' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-templates`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+        startDate: '2026-08-10',
+        defaultTime: '18:00',
+        defaultFieldLocation: 'Central Field',
+        horizonWeeks: 1,
+        collectionPointIds: [point.json().id],
+      },
+    });
+    const sessionsResponse = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const shiftId = sessionsResponse.json().sessions[0].points[0].shift.id as string;
+
+    const parentToken = generateSessionToken();
+    await app.prisma.session.create({
+      data: {
+        userId: parentUserId,
+        tokenHash: hashSecret(parentToken),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/claim`,
+      headers: { authorization: `Bearer ${parentToken}` },
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/teams/${teamId}/members/${parentUserId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const shift = await app.prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+    expect(shift.status).toBe('open');
+    expect(shift.assignedUserId).toBeNull();
+
+    const auditEntries = await app.prisma.auditLog.findMany({
+      where: { teamId, actionType: 'shift_released', targetId: shiftId },
     });
     expect(auditEntries).toHaveLength(1);
   });

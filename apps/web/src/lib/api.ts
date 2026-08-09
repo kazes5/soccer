@@ -9,6 +9,8 @@ import {
   type InviteSummary,
   type RequestOtpRequest,
   type RequestOtpResponse,
+  type SessionListResponse,
+  type ShiftSummary,
   type VerifyOtpRequest,
   type VerifyOtpResponse,
   acceptInviteResponseSchema,
@@ -17,6 +19,8 @@ import {
   invitePreviewSchema,
   inviteSummarySchema,
   requestOtpResponseSchema,
+  sessionListResponseSchema,
+  shiftSummarySchema,
   verifyOtpResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
@@ -26,6 +30,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Extra JSON fields the server attached to the error, e.g. a conflict's holderName. */
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -66,14 +72,16 @@ async function request<TResponse>(
   const data: unknown = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const isRecord = typeof data === 'object' && data !== null;
     const message =
-      typeof data === 'object' &&
-      data !== null &&
-      'message' in data &&
-      typeof data.message === 'string'
+      isRecord && 'message' in data && typeof data.message === 'string'
         ? data.message
         : 'Something went wrong. Please try again.';
-    throw new ApiError(response.status, message);
+    throw new ApiError(
+      response.status,
+      message,
+      isRecord ? (data as Record<string, unknown>) : undefined,
+    );
   }
 
   return responseSchema.parse(data);
@@ -123,4 +131,21 @@ export const api = {
     }),
 
   logout: () => request<unknown>('/auth/logout', { method: 'POST', responseSchema: z.unknown() }),
+
+  listSessions: (teamId: string) =>
+    request<SessionListResponse>(`/teams/${encodeURIComponent(teamId)}/sessions`, {
+      responseSchema: sessionListResponseSchema,
+    }),
+
+  claimShift: (teamId: string, shiftId: string) =>
+    request<ShiftSummary>(
+      `/teams/${encodeURIComponent(teamId)}/shifts/${encodeURIComponent(shiftId)}/claim`,
+      { method: 'POST', responseSchema: shiftSummarySchema },
+    ),
+
+  releaseShift: (teamId: string, shiftId: string) =>
+    request<ShiftSummary>(
+      `/teams/${encodeURIComponent(teamId)}/shifts/${encodeURIComponent(shiftId)}/release`,
+      { method: 'POST', responseSchema: shiftSummarySchema },
+    ),
 };

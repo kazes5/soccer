@@ -40,6 +40,29 @@ enum AuditSource {
   ai_chat
 }
 
+enum CollectionPointType {
+  pickup
+  dropoff
+  both
+}
+
+enum ShiftDirection {
+  to_practice
+  from_practice
+}
+
+enum SessionStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum ShiftStatus {
+  open
+  claimed
+  pending_swap
+}
+
 model User {
   id                 String   @id @default(uuid())
   name               String
@@ -58,6 +81,8 @@ model User {
   notificationPrefs NotificationPreference[]
   auditLogEntries   AuditLog[]               @relation("AuditActor")
   pushSubscriptions PushSubscription[]
+  scheduleTemplates ScheduleTemplate[]       @relation("ScheduleTemplatesCreated")
+  assignedShifts    Shift[]                  @relation("ShiftsAssigned")
 
   @@map("users")
 }
@@ -75,6 +100,9 @@ model Team {
   invites           Invite[]
   notificationPrefs NotificationPreference[]
   auditLogEntries   AuditLog[]
+  collectionPoints  CollectionPoint[]
+  scheduleTemplates ScheduleTemplate[]
+  practiceSessions  PracticeSession[]
 
   @@map("teams")
 }
@@ -225,4 +253,112 @@ model AuditLog {
   @@index([actorId])
   @@index([actionType])
   @@map("audit_logs")
+}
+
+model CollectionPoint {
+  id        String              @id @default(uuid())
+  teamId    String              @map("team_id")
+  name      String
+  address   String
+  gpsLat    Decimal?            @map("gps_lat") @db.Decimal(10, 8)
+  gpsLng    Decimal?            @map("gps_lng") @db.Decimal(11, 8)
+  type      CollectionPointType
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  team               Team                              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  templateDefaults   ScheduleTemplateCollectionPoint[]
+  sessionAssignments SessionPointAssignment[]
+  shifts             Shift[]
+
+  @@index([teamId])
+  @@map("collection_points")
+}
+
+model ScheduleTemplate {
+  id                   String   @id @default(uuid())
+  teamId               String   @map("team_id")
+  recurrenceRule       String   @map("recurrence_rule")
+  startDate            DateTime @map("start_date") @db.Date
+  defaultTime          String   @map("default_time")
+  defaultFieldLocation String   @map("default_field_location")
+  horizonWeeks         Int      @default(8) @map("horizon_weeks")
+  createdByUserId      String   @map("created_by_user_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  team             Team                              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy        User                              @relation("ScheduleTemplatesCreated", fields: [createdByUserId], references: [id])
+  collectionPoints ScheduleTemplateCollectionPoint[]
+  sessions         PracticeSession[]
+
+  @@index([teamId])
+  @@map("schedule_templates")
+}
+
+model ScheduleTemplateCollectionPoint {
+  id         String @id @default(uuid())
+  templateId String @map("template_id")
+  pointId    String @map("point_id")
+
+  template ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  point    CollectionPoint  @relation(fields: [pointId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, pointId])
+  @@map("schedule_template_collection_points")
+}
+
+model PracticeSession {
+  id            String        @id @default(uuid())
+  teamId        String        @map("team_id")
+  templateId    String?       @map("template_id")
+  startsAt      DateTime      @map("starts_at")
+  fieldLocation String        @map("field_location")
+  status        SessionStatus @default(scheduled)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  team        Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template    ScheduleTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  assignments SessionPointAssignment[]
+  shifts      Shift[]
+
+  @@unique([templateId, startsAt])
+  @@index([teamId, startsAt])
+  @@map("practice_sessions")
+}
+
+model SessionPointAssignment {
+  id        String         @id @default(uuid())
+  sessionId String         @map("session_id")
+  pointId   String         @map("point_id")
+  direction ShiftDirection
+  playerIds String[]       @map("player_ids")
+
+  session PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  point   CollectionPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, pointId, direction])
+  @@index([pointId])
+  @@map("session_point_assignments")
+}
+
+model Shift {
+  id             String         @id @default(uuid())
+  sessionId      String         @map("session_id")
+  pointId        String         @map("point_id")
+  direction      ShiftDirection
+  assignedUserId String?        @map("assigned_user_id")
+  status         ShiftStatus    @default(open)
+  version        Int            @default(0)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  session      PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  point        CollectionPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  assignedUser User?           @relation("ShiftsAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, pointId, direction])
+  @@index([pointId])
+  @@index([assignedUserId])
+  @@map("shifts")
 }

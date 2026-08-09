@@ -7,3 +7,7 @@ export * from './invite';
 export * from './auth';
 export * from './member';
 export * from './push-subscription';
+export * from './collection-point';
+export * from './schedule-template';
+export * from './shift';
+export * from './session';

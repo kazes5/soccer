@@ -105,6 +105,36 @@ export default async function memberRoutes(app: FastifyInstance) {
         where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
       });
 
+      // Any shifts they held on this team are returned to open, per CLAUDE.md
+      // §4.2 — otherwise a removed user's login is revoked and the shift can
+      // never be claimed or released by anyone else again.
+      const heldShifts = await tx.shift.findMany({
+        where: {
+          assignedUserId: params.userId,
+          status: 'claimed',
+          session: { teamId: params.teamId },
+        },
+      });
+      for (const heldShift of heldShifts) {
+        await tx.shift.updateMany({
+          where: { id: heldShift.id, status: 'claimed', version: heldShift.version },
+          data: { status: 'open', assignedUserId: null, version: { increment: 1 } },
+        });
+        await recordAuditLog(tx, {
+          teamId: params.teamId,
+          actorId: currentUser.id,
+          actionType: 'shift_released',
+          targetEntity: 'shift',
+          targetId: heldShift.id,
+          beforeState: {
+            status: 'claimed',
+            assignedUserId: params.userId,
+            version: heldShift.version,
+          },
+          afterState: { status: 'open' },
+        });
+      }
+
       const remainingMemberships = await tx.teamMember.count({
         where: { userId: params.userId },
       });
