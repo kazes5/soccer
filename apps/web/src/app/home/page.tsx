@@ -3,11 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { buttonClassName, inputClassName } from '@/components/form-controls';
+import { LanguageToggle } from '@/components/language-toggle';
+import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
 import { clearSession, loadSession, type StoredSession } from '@/lib/session';
 
 export default function HomePage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [session] = useState<StoredSession | null>(() => loadSession());
 
   useEffect(() => {
@@ -34,21 +37,28 @@ export default function HomePage() {
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 p-8">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Welcome, {session.user.name}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {t('home.welcome', { name: session.user.name })}
+          </h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {session.user.phone ?? session.user.email}
           </p>
         </div>
-        <button
-          onClick={handleLogOut}
-          className="text-sm text-zinc-500 underline hover:text-zinc-700"
-        >
-          Log out
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageToggle />
+          <button
+            onClick={handleLogOut}
+            className="text-sm text-zinc-500 underline hover:text-zinc-700"
+          >
+            {t('home.logOut')}
+          </button>
+        </div>
       </header>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Your teams</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+          {t('home.yourTeams')}
+        </h2>
         {session.teamMemberships.map((membership) => (
           <TeamCard key={membership.teamId} membership={membership} sessionToken={session.token} />
         ))}
@@ -64,6 +74,7 @@ function TeamCard({
   membership: StoredSession['teamMemberships'][number];
   sessionToken: string;
 }) {
+  const { t } = useLocale();
   const [phone, setPhone] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +89,7 @@ function TeamCard({
       setInviteCode(invite.code);
       setPhone('');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
@@ -88,13 +99,15 @@ function TeamCard({
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center justify-between">
         <span className="font-medium">{membership.teamName}</span>
-        <span className="text-xs uppercase tracking-wide text-zinc-500">{membership.role}</span>
+        <span className="text-xs uppercase tracking-wide text-zinc-500">
+          {membership.role === 'admin' ? t('home.roleAdmin') : t('home.roleParent')}
+        </span>
       </div>
 
       {membership.role === 'admin' && (
         <form onSubmit={handleInvite} className="mt-4 flex flex-col gap-2">
           <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Invite a parent by phone
+            {t('home.inviteLabel')}
           </label>
           <div className="flex gap-2">
             <input
@@ -106,13 +119,13 @@ function TeamCard({
               placeholder="+15551234567"
             />
             <button type="submit" disabled={isSubmitting} className={`${buttonClassName} text-sm`}>
-              {isSubmitting ? 'Sending…' : 'Invite'}
+              {isSubmitting ? t('home.inviteSubmitting') : t('home.inviteSubmit')}
             </button>
           </div>
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           {inviteCode && (
             <p className="text-sm text-emerald-700 dark:text-emerald-400">
-              Invite link: <code>/invite/{inviteCode}</code>
+              {t('home.inviteLinkLabel')} <code>/invite/{inviteCode}</code>
             </p>
           )}
         </form>

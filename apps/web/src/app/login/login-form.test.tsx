@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
+import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import LoginForm from './login-form';
 
 const push = vi.fn();
@@ -43,7 +43,7 @@ describe('LoginForm', () => {
       teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' }],
     });
 
-    render(<LoginForm />);
+    renderWithProviders(<LoginForm />);
 
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15550002222' },
@@ -66,7 +66,7 @@ describe('LoginForm', () => {
       new ApiError(404, "You haven't been added to a team yet. Ask your team admin for an invite."),
     );
 
-    render(<LoginForm />);
+    renderWithProviders(<LoginForm />);
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15559990000' },
     });

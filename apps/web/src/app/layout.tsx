@@ -1,5 +1,9 @@
+import { defaultLocale, directionFor, isLocale, type Locale } from '@soccer/i18n';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { cookies } from 'next/headers';
+import { LocaleProvider } from '@/components/locale-provider';
+import { LOCALE_COOKIE_NAME } from '@/lib/locale-cookie';
 import './globals.css';
 
 const geistSans = Geist({
@@ -17,10 +21,24 @@ export const metadata: Metadata = {
   description: 'Coordinate youth soccer team carpool pickups and drop-offs.',
 };
 
-export default function RootLayout({ children }: LayoutProps<'/'>) {
+async function resolveLocale(): Promise<Locale> {
+  const cookieStore = await cookies();
+  const value = cookieStore.get(LOCALE_COOKIE_NAME)?.value;
+  return value && isLocale(value) ? value : defaultLocale;
+}
+
+export default async function RootLayout({ children }: LayoutProps<'/'>) {
+  const locale = await resolveLocale();
+
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html
+      lang={locale}
+      dir={directionFor(locale)}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">
+        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

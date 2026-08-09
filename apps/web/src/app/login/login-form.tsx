@@ -3,12 +3,14 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Field, buttonClassName, inputClassName } from '@/components/form-controls';
+import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
 import { saveSession } from '@/lib/session';
 
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLocale();
   const [phone, setPhone] = useState(searchParams.get('phone') ?? '');
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -23,7 +25,7 @@ export default function LoginForm() {
       const response = await api.requestOtp({ phone });
       setChallengeId(response.challengeId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
@@ -44,7 +46,7 @@ export default function LoginForm() {
       });
       router.push('/home');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
@@ -54,9 +56,9 @@ export default function LoginForm() {
     return (
       <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          We sent a 6-digit code to <span className="font-medium">{phone}</span>.
+          {t('login.codeSentTo', { phone })}
         </p>
-        <Field label="Code">
+        <Field label={t('login.codeLabel')}>
           <input
             required
             autoFocus
@@ -70,7 +72,7 @@ export default function LoginForm() {
         </Field>
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
-          {isSubmitting ? 'Verifying…' : 'Verify code'}
+          {isSubmitting ? t('login.verifying') : t('login.verifyCode')}
         </button>
         <button
           type="button"
@@ -81,7 +83,7 @@ export default function LoginForm() {
           }}
           className="text-sm text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
         >
-          Use a different phone number
+          {t('login.useDifferentPhone')}
         </button>
       </form>
     );
@@ -89,7 +91,7 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleRequestOtp} className="flex flex-col gap-4">
-      <Field label="Phone number">
+      <Field label={t('login.phoneLabel')}>
         <input
           required
           type="tel"
@@ -102,7 +104,7 @@ export default function LoginForm() {
       </Field>
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <button type="submit" disabled={isSubmitting} className={buttonClassName}>
-        {isSubmitting ? 'Sending…' : 'Send code'}
+        {isSubmitting ? t('login.sending') : t('login.sendCode')}
       </button>
     </form>
   );
