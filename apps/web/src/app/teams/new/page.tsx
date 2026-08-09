@@ -6,7 +6,6 @@ import { Field, FormError, buttonClassName, inputClassName } from '@/components/
 import { LanguageToggle } from '@/components/language-toggle';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
-import { saveSession } from '@/lib/session';
 
 export default function CreateTeamPage() {
   const router = useRouter();
@@ -23,15 +22,7 @@ export default function CreateTeamPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await api.createTeam({ teamName, season, adminName, adminPhone });
-      saveSession({
-        token: response.sessionToken,
-        expiresAt: response.sessionExpiresAt,
-        user: response.admin,
-        teamMemberships: [
-          { teamId: response.team.id, teamName: response.team.name, role: 'admin' },
-        ],
-      });
+      await api.createTeam({ teamName, season, adminName, adminPhone });
       router.push('/home');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));

@@ -3,11 +3,14 @@ import {
   requestOtpResponseSchema,
   verifyOtpRequestSchema,
   verifyOtpResponseSchema,
+  currentUserResponseSchema,
 } from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../env';
+import { clearSessionCookies, resolveSessionToken, setSessionCookies } from '../lib/cookies';
 import { generateOtpCode, generateSessionToken, hashSecret, secretsMatch } from '../lib/crypto';
 import { HttpError } from '../lib/errors';
+import { requireAuth } from '../lib/authorization';
 import type { OtpChannel } from '../lib/otp-provider';
 
 const INVALID_OR_EXPIRED_CODE = 'Invalid or expired code.';
@@ -43,6 +46,14 @@ export default async function authRoutes(app: FastifyInstance) {
       throw new HttpError(429, 'Too many code requests. Try again later.');
     }
 
+    const requestIp = request.ip;
+    const recentRequestCountForIp = await app.prisma.otpChallenge.count({
+      where: { requestIp, createdAt: { gte: oneHourAgo } },
+    });
+    if (recentRequestCountForIp >= env.OTP_MAX_REQUESTS_PER_IP_PER_HOUR) {
+      throw new HttpError(429, 'Too many code requests from this network. Try again later.');
+    }
+
     const code = generateOtpCode();
     const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
     const challenge = await app.prisma.otpChallenge.create({
@@ -51,6 +62,7 @@ export default async function authRoutes(app: FastifyInstance) {
         channel,
         destination,
         codeHash: hashSecret(code),
+        requestIp,
         expiresAt,
       },
     });
@@ -64,7 +76,7 @@ export default async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/auth/otp/verify', async (request) => {
+  app.post('/auth/otp/verify', async (request, reply) => {
     const body = verifyOtpRequestSchema.parse(request.body);
 
     const challenge = await app.prisma.otpChallenge.findUnique({
@@ -106,6 +118,8 @@ export default async function authRoutes(app: FastifyInstance) {
       }),
     ]);
 
+    setSessionCookies(reply, token, sessionExpiresAt);
+
     return verifyOtpResponseSchema.parse({
       sessionToken: token,
       expiresAt: sessionExpiresAt.toISOString(),
@@ -125,14 +139,37 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/auth/logout', async (request, reply) => {
-    const header = request.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      const token = header.slice('Bearer '.length);
+    const token = resolveSessionToken(request);
+    if (token) {
       await app.prisma.session.updateMany({
         where: { tokenHash: hashSecret(token), revokedAt: null },
         data: { revokedAt: new Date() },
       });
     }
+    clearSessionCookies(reply);
     reply.status(204).send();
+  });
+
+  app.get('/auth/me', async (request) => {
+    const currentUser = requireAuth(request);
+    const user = await app.prisma.user.findUniqueOrThrow({
+      where: { id: currentUser.id },
+      include: { teamMemberships: { include: { team: true } } },
+    });
+
+    return currentUserResponseSchema.parse({
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        languagePreference: user.languagePreference,
+      },
+      teamMemberships: user.teamMemberships.map((membership) => ({
+        teamId: membership.teamId,
+        teamName: membership.team.name,
+        role: membership.role,
+      })),
+    });
   });
 }

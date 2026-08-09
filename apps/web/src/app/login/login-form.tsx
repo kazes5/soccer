@@ -5,7 +5,6 @@ import { useState, type FormEvent } from 'react';
 import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
-import { saveSession } from '@/lib/session';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -37,13 +36,7 @@ export default function LoginForm() {
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await api.verifyOtp({ challengeId, code });
-      saveSession({
-        token: response.sessionToken,
-        expiresAt: response.expiresAt,
-        user: response.user,
-        teamMemberships: response.teamMemberships,
-      });
+      await api.verifyOtp({ challengeId, code });
       router.push('/home');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));

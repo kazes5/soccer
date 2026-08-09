@@ -57,6 +57,7 @@ model User {
   sessions          Session[]
   notificationPrefs NotificationPreference[]
   auditLogEntries   AuditLog[]               @relation("AuditActor")
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -147,6 +148,7 @@ model OtpChallenge {
   destination String
   codeHash    String     @map("code_hash")
   attempts    Int        @default(0)
+  requestIp   String?    @map("request_ip")
   expiresAt   DateTime   @map("expires_at")
   consumedAt  DateTime?  @map("consumed_at")
   createdAt   DateTime   @default(now()) @map("created_at")
@@ -154,6 +156,7 @@ model OtpChallenge {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([requestIp, createdAt])
   @@map("otp_challenges")
 }
 
@@ -186,6 +189,20 @@ model NotificationPreference {
   @@unique([userId, teamId, eventType, channel])
   @@index([teamId])
   @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model AuditLog {

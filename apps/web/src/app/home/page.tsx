@@ -1,5 +1,6 @@
 'use client';
 
+import type { CurrentUserResponse, TeamMembership } from '@soccer/contracts';
 import { Copy, Home, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -12,35 +13,49 @@ import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { ApiError, api } from '@/lib/api';
-import { clearSession, loadSession, type StoredSession } from '@/lib/session';
 
 export default function HomePage() {
   const router = useRouter();
   const { t } = useLocale();
-  const [session] = useState<StoredSession | null>(() => loadSession());
-  const [activeTeamId, setActiveTeamId] = useState<string | null>(
-    () => session?.teamMemberships[0]?.teamId ?? null,
-  );
+  const [session, setSession] = useState<CurrentUserResponse | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
 
   useEffect(() => {
-    if (!session) {
+    let cancelled = false;
+    api
+      .me()
+      .then((data) => {
+        if (cancelled) return;
+        setSession(data);
+        setActiveTeamId(data.teamMemberships[0]?.teamId ?? null);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus('unauthenticated');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
       router.replace('/login');
     }
-  }, [session, router]);
+  }, [status, router]);
 
   async function handleLogOut() {
     setConfirmingLogOut(false);
-    if (session) {
-      await api.logout(session.token).catch(() => {
-        // Best-effort: even if the server call fails, still clear the local session.
-      });
-    }
-    clearSession();
+    await api.logout().catch(() => {
+      // Best-effort: even if the server call fails, still send the user home.
+    });
     router.push('/');
   }
 
-  if (!session) {
+  if (status !== 'ready' || !session) {
     return null;
   }
 
@@ -88,7 +103,7 @@ export default function HomePage() {
           </h2>
           {activeMembership && (
             <DataList ariaLabel={t('home.yourTeams')}>
-              <TeamCard membership={activeMembership} sessionToken={session.token} />
+              <TeamCard membership={activeMembership} />
             </DataList>
           )}
         </section>
@@ -108,13 +123,7 @@ export default function HomePage() {
   );
 }
 
-function TeamCard({
-  membership,
-  sessionToken,
-}: {
-  membership: StoredSession['teamMemberships'][number];
-  sessionToken: string;
-}) {
+function TeamCard({ membership }: { membership: TeamMembership }) {
   const { t } = useLocale();
   const { showToast } = useToast();
   const [phone, setPhone] = useState('');
@@ -127,7 +136,7 @@ function TeamCard({
     setError(null);
     setIsSubmitting(true);
     try {
-      const invite = await api.createInvite(membership.teamId, { phone }, sessionToken);
+      const invite = await api.createInvite(membership.teamId, { phone });
       setInviteCode(invite.code);
       setPhone('');
     } catch (err) {

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env';
 import { recordAuditLog } from '../lib/audit';
+import { setSessionCookies } from '../lib/cookies';
 import { generateSessionToken, hashSecret } from '../lib/crypto';
 
 export default async function teamRoutes(app: FastifyInstance) {
@@ -58,6 +59,8 @@ export default async function teamRoutes(app: FastifyInstance) {
         };
       },
     );
+
+    setSessionCookies(reply, sessionToken, sessionExpiresAt);
 
     reply.status(201);
     return createTeamResponseSchema.parse({

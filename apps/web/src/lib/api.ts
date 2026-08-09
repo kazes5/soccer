@@ -4,6 +4,7 @@ import {
   type CreateInviteRequest,
   type CreateTeamRequest,
   type CreateTeamResponse,
+  type CurrentUserResponse,
   type InvitePreview,
   type InviteSummary,
   type RequestOtpRequest,
@@ -12,6 +13,7 @@ import {
   type VerifyOtpResponse,
   acceptInviteResponseSchema,
   createTeamResponseSchema,
+  currentUserResponseSchema,
   invitePreviewSchema,
   inviteSummarySchema,
   requestOtpResponseSchema,
@@ -30,22 +32,33 @@ export class ApiError extends Error {
   }
 }
 
+const MUTATING_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
+
+/** Session auth rides on the httpOnly `soccer_session` cookie; this reads its readable CSRF pair. */
+function readCsrfCookie(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)soccer_csrf=([^;]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
 interface RequestOptions<TResponse> {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
-  token?: string;
   responseSchema: ZodType<TResponse>;
 }
 
 async function request<TResponse>(
   path: string,
-  { method = 'GET', body, token, responseSchema }: RequestOptions<TResponse>,
+  { method = 'GET', body, responseSchema }: RequestOptions<TResponse>,
 ): Promise<TResponse> {
+  const csrfToken = MUTATING_METHODS.has(method) ? readCsrfCookie() : undefined;
+
   const response = await fetch(`${env.NEXT_PUBLIC_API_URL}${path}`, {
     method,
+    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -88,6 +101,8 @@ export const api = {
       responseSchema: verifyOtpResponseSchema,
     }),
 
+  me: () => request<CurrentUserResponse>('/auth/me', { responseSchema: currentUserResponseSchema }),
+
   getInvitePreview: (code: string) =>
     request<InvitePreview>(`/invites/${encodeURIComponent(code)}`, {
       responseSchema: invitePreviewSchema,
@@ -100,14 +115,12 @@ export const api = {
       responseSchema: acceptInviteResponseSchema,
     }),
 
-  createInvite: (teamId: string, body: CreateInviteRequest, token: string) =>
+  createInvite: (teamId: string, body: CreateInviteRequest) =>
     request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/invites`, {
       method: 'POST',
       body,
-      token,
       responseSchema: inviteSummarySchema,
     }),
 
-  logout: (token: string) =>
-    request<unknown>('/auth/logout', { method: 'POST', token, responseSchema: z.unknown() }),
+  logout: () => request<unknown>('/auth/logout', { method: 'POST', responseSchema: z.unknown() }),
 };
