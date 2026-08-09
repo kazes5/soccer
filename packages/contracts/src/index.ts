@@ -5,3 +5,5 @@ export * from './user';
 export * from './player';
 export * from './invite';
 export * from './auth';
+export * from './member';
+export * from './push-subscription';

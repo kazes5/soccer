@@ -31,3 +31,9 @@ export const verifyOtpResponseSchema = z.object({
   teamMemberships: z.array(teamMembershipSchema),
 });
 export type VerifyOtpResponse = z.infer<typeof verifyOtpResponseSchema>;
+
+export const currentUserResponseSchema = z.object({
+  user: userSummarySchema,
+  teamMemberships: z.array(teamMembershipSchema),
+});
+export type CurrentUserResponse = z.infer<typeof currentUserResponseSchema>;
