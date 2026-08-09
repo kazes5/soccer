@@ -1,35 +1,51 @@
 'use client';
 
+import type { CurrentUserResponse, TeamMembership } from '@soccer/contracts';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { buttonClassName, inputClassName } from '@/components/form-controls';
 import { LanguageToggle } from '@/components/language-toggle';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
-import { clearSession, loadSession, type StoredSession } from '@/lib/session';
 
 export default function HomePage() {
   const router = useRouter();
   const { t } = useLocale();
-  const [session] = useState<StoredSession | null>(() => loadSession());
+  const [session, setSession] = useState<CurrentUserResponse | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
 
   useEffect(() => {
-    if (!session) {
+    let cancelled = false;
+    api
+      .me()
+      .then((data) => {
+        if (cancelled) return;
+        setSession(data);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus('unauthenticated');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
       router.replace('/login');
     }
-  }, [session, router]);
+  }, [status, router]);
 
   async function handleLogOut() {
-    if (session) {
-      await api.logout(session.token).catch(() => {
-        // Best-effort: even if the server call fails, still clear the local session.
-      });
-    }
-    clearSession();
+    await api.logout().catch(() => {
+      // Best-effort: even if the server call fails, still send the user home.
+    });
     router.push('/');
   }
 
-  if (!session) {
+  if (status !== 'ready' || !session) {
     return null;
   }
 
@@ -60,20 +76,14 @@ export default function HomePage() {
           {t('home.yourTeams')}
         </h2>
         {session.teamMemberships.map((membership) => (
-          <TeamCard key={membership.teamId} membership={membership} sessionToken={session.token} />
+          <TeamCard key={membership.teamId} membership={membership} />
         ))}
       </section>
     </main>
   );
 }
 
-function TeamCard({
-  membership,
-  sessionToken,
-}: {
-  membership: StoredSession['teamMemberships'][number];
-  sessionToken: string;
-}) {
+function TeamCard({ membership }: { membership: TeamMembership }) {
   const { t } = useLocale();
   const [phone, setPhone] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -85,7 +95,7 @@ function TeamCard({
     setError(null);
     setIsSubmitting(true);
     try {
-      const invite = await api.createInvite(membership.teamId, { phone }, sessionToken);
+      const invite = await api.createInvite(membership.teamId, { phone });
       setInviteCode(invite.code);
       setPhone('');
     } catch (err) {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { hashSecret } from '../lib/crypto';
+import { resolveSessionToken } from '../lib/cookies';
 
 export interface CurrentUser {
   id: string;
@@ -15,12 +16,11 @@ declare module 'fastify' {
 
 export default fp(async (app: FastifyInstance) => {
   app.addHook('onRequest', async (request) => {
-    const header = request.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    const token = resolveSessionToken(request);
+    if (!token) {
       return;
     }
 
-    const token = header.slice('Bearer '.length);
     const session = await app.prisma.session.findUnique({
       where: { tokenHash: hashSecret(token) },
       include: { user: true },
