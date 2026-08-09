@@ -11,7 +11,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 | Stage | Status | One-line note |
 |---|---|---|
 | 0 — Product & Architecture Foundation | Partial, non-blocking | ADRs/threat model/notification-template docs not written yet; nothing here has blocked code so far |
-| 1 — Repo, Environments, Quality Gates | Mostly done | Branch protection still off on `main`; staging/observability blocked on hosting-vendor choice |
+| 1 — Repo, Environments, Quality Gates | Mostly done | Branch protection on `main` now on (verified 2026-08-09); staging/observability still blocked on hosting-vendor choice |
 | **2 — Identity/Membership/i18n/Design** | **In progress** | Backend + onboarding UI loop, i18n foundation, backend hardening (cookies/CSRF, per-IP rate limit, member management, push-subscription table), and design tokens/accessible primitives all built and verified |
 | 3 — Schedule & Atomic Shift Core | Not started | |
 | 4 — Swap/Notification/Reminder/Escalation | Not started | |
@@ -44,13 +44,13 @@ Frontend:
 - Keyboard/screen-reader/contrast audit tooling (axe, VoiceOver/NVDA smoke checks) — the primitives were built accessibly (semantic roles, `aria-live`, focus rings, `aria-describedby`) and manually spot-checked, but no automated a11y scan has run yet; that's Stage 6's job per the Exit Criteria below.
 
 Process:
-- GitHub branch protection on `main` (require the `ci` status check) — still off, carried over from Stage 1.
+- None outstanding. Branch protection on `main` (the one remaining Stage 1 process item) is done, verified 2026-08-09.
 
 ### Immediate next steps
 
-1. Both Stage 2 PRs (backend hardening #8 and design tokens) are merged; the frontend has been re-pointed at the cookie-based session flow.
-2. After both merge: native-speaker Hebrew review, and a staging deploy — the two remaining Stage 2 exit criteria that can't be satisfied from this environment.
-3. Branch protection on `main` is done (verified 2026-08-09 — scoped correctly to `main` only, after an initial misconfiguration that accidentally protected every branch was caught and fixed).
+1. Both Stage 2 PRs (backend hardening #8 and design tokens #9) are merged to `main`; the frontend is fully on the cookie-based session flow. Branch protection on `main` is on (verified 2026-08-09 via the GitHub API — scoped correctly to `main` only, after an initial misconfiguration that accidentally protected every branch was caught and fixed).
+2. Remaining before Stage 2 can be marked done: a native-speaker Hebrew review of the message catalog, and a staging deploy — both blocked on environment/vendor decisions this session can't make (staging also needs the still-open Stage 0 hosting-vendor choice).
+3. In parallel, Stage 3 (Schedule, Collection Points, and Atomic Shift Core) can begin — it only depends on Stages 1 and 2's backend/contract work, both of which are functionally complete; it does not need to wait on the Hebrew review or staging deploy.
 
 ### Always run before calling anything "done"
 
@@ -448,4 +448,4 @@ Starts only after the web API and interaction patterns are stable. It must reuse
 - [ ] Confirm hosting and managed-service vendors, budget limits, and data residency expectations before provisioning production accounts.
 - [ ] Confirm whether web push plus in-app alerts is sufficient for the pilot or whether SMS is mandatory for urgent coverage on day one.
 - [ ] Confirm the planned pilot team size, team timezone, and whether Hebrew must be the default initial locale.
-- [x] Confirm the GitHub repository visibility and branch-protection policy before the first push. *(Repository is public on GitHub; branch protection itself is still not enabled — see Stage 1 Exit Criteria.)*
+- [x] Confirm the GitHub repository visibility and branch-protection policy before the first push. *(Repository is public on GitHub; branch protection on `main` is enabled, verified 2026-08-09 — see Stage 1 Exit Criteria.)*
