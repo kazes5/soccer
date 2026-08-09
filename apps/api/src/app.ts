@@ -10,10 +10,14 @@ import { ConsoleOtpProvider, type OtpProvider } from './lib/otp-provider';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import authRoutes from './routes/auth';
+import collectionPointRoutes from './routes/collection-points';
 import healthRoutes from './routes/health';
 import inviteRoutes from './routes/invites';
 import memberRoutes from './routes/members';
 import pushSubscriptionRoutes from './routes/push-subscriptions';
+import scheduleTemplateRoutes from './routes/schedule-templates';
+import sessionRoutes from './routes/sessions';
+import shiftRoutes from './routes/shifts';
 import teamRoutes from './routes/teams';
 
 declare module 'fastify' {
@@ -56,10 +60,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(authRoutes);
   app.register(memberRoutes);
   app.register(pushSubscriptionRoutes);
+  app.register(collectionPointRoutes);
+  app.register(scheduleTemplateRoutes);
+  app.register(sessionRoutes);
+  app.register(shiftRoutes);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HttpError) {
-      reply.status(error.statusCode).send({ message: error.message });
+      reply.status(error.statusCode).send({ message: error.message, ...error.details });
       return;
     }
 
@@ -70,6 +78,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       reply.status(404).send({ message: 'Not found.' });
+      return;
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      reply.status(409).send({ message: 'This conflicts with an existing record.' });
       return;
     }
 

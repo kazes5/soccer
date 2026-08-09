@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import { env } from '../src/env';
+import { combineDateAndTime, generateOccurrences } from '../src/lib/recurrence';
+import { createSessionWithShifts } from '../src/routes/schedule-templates';
 
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -106,8 +108,68 @@ async function main() {
     ),
   );
 
+  const oakSt = await prisma.collectionPoint.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000101' },
+    update: {},
+    create: {
+      id: '00000000-0000-4000-8000-000000000101',
+      teamId: team.id,
+      name: 'Oak St',
+      address: '123 Oak St',
+      type: 'pickup',
+    },
+  });
+  const centralField = await prisma.collectionPoint.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000102' },
+    update: {},
+    create: {
+      id: '00000000-0000-4000-8000-000000000102',
+      teamId: team.id,
+      name: 'Central Field',
+      address: '1 Field Rd',
+      type: 'both',
+    },
+  });
+
+  // Session generation isn't idempotent (unlike the upserts above), so only run it
+  // the first time this script is run against a given database.
+  const existingTemplate = await prisma.scheduleTemplate.findFirst({ where: { teamId: team.id } });
+  let sessionsCreated = 0;
+  if (!existingTemplate) {
+    const recurrenceRule = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+    const startDate = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const defaultTime = '18:00';
+    const dtstart = combineDateAndTime(startDate, defaultTime);
+
+    const template = await prisma.scheduleTemplate.create({
+      data: {
+        teamId: team.id,
+        recurrenceRule,
+        startDate,
+        defaultTime,
+        defaultFieldLocation: centralField.name,
+        createdByUserId: admin.id,
+        collectionPoints: {
+          create: [{ pointId: oakSt.id }, { pointId: centralField.id }],
+        },
+      },
+    });
+
+    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks);
+    for (const startsAt of occurrences) {
+      await createSessionWithShifts(prisma, {
+        teamId: team.id,
+        templateId: template.id,
+        startsAt,
+        fieldLocation: centralField.name,
+        points: [oakSt, centralField],
+      });
+      sessionsCreated += 1;
+    }
+  }
+
   console.log(
-    `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, and ${players.length} players.`,
+    `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, ${players.length} players, 2 collection points, and ${sessionsCreated || 'no new'} sessions.`,
   );
 }
 

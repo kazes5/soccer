@@ -1,7 +1,7 @@
 'use client';
 
 import type { CurrentUserResponse, TeamMembership } from '@soccer/contracts';
-import { Copy, Home, LogOut } from 'lucide-react';
+import { Calendar, Copy, Home, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { FormError, buttonClassName, inputClassName } from '@/components/form-controls';
@@ -65,6 +65,7 @@ export default function HomePage() {
 
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" />, active: true },
+    { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
   ];
 
   return (

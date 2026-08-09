@@ -7,8 +7,10 @@ export const en = {
   'common.loading': 'Loading…',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
+  'common.retry': 'Try again',
 
   'nav.home': 'Home',
+  'nav.schedule': 'Schedule',
   'nav.primaryLabel': 'Primary navigation',
   'nav.skipToContent': 'Skip to content',
 
@@ -66,6 +68,26 @@ export const en = {
   'home.inviteCopyFailed': "Couldn't copy — copy the link manually instead",
   'home.roleAdmin': 'Admin',
   'home.roleParent': 'Parent',
+
+  'schedule.title': 'Schedule',
+  'schedule.loading': 'Loading the schedule…',
+  'schedule.loadError': "Couldn't load the schedule. Please try again.",
+  'schedule.empty': 'No practice sessions yet.',
+  'schedule.cancelled': 'Cancelled',
+  'schedule.toPractice': 'Drop-off',
+  'schedule.fromPractice': 'Pick-up',
+  'schedule.playersCount': '{count} players',
+  'schedule.noPlayersAssigned': 'No players assigned yet',
+  'schedule.claim': 'Claim',
+  'schedule.claiming': 'Claiming…',
+  'schedule.release': 'Release',
+  'schedule.releasing': 'Releasing…',
+  'schedule.statusMine': 'You',
+  'schedule.statusCoveredBy': 'Covered by {name}',
+  'schedule.statusOpen': 'Open',
+  'schedule.claimConflictWithName': 'That shift was just claimed by {name}.',
+  'schedule.claimConflictUnknown': 'That shift was just claimed by someone else.',
+  'schedule.releaseConflict': 'This shift is no longer assigned to you.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -83,8 +105,10 @@ export const he: Record<MessageKey, string> = {
   'common.loading': 'טוען…',
   'common.close': 'סגירה',
   'common.cancel': 'ביטול',
+  'common.retry': 'ניסיון נוסף',
 
   'nav.home': 'בית',
+  'nav.schedule': 'לוח זמנים',
   'nav.primaryLabel': 'ניווט ראשי',
   'nav.skipToContent': 'דילוג לתוכן',
 
@@ -142,4 +166,24 @@ export const he: Record<MessageKey, string> = {
   'home.inviteCopyFailed': 'ההעתקה נכשלה — יש להעתיק את הקישור ידנית',
   'home.roleAdmin': 'מנהל/ת',
   'home.roleParent': 'הורה',
+
+  'schedule.title': 'לוח זמנים',
+  'schedule.loading': 'טוען את לוח הזמנים…',
+  'schedule.loadError': 'לא ניתן היה לטעון את לוח הזמנים. נסו שוב.',
+  'schedule.empty': 'עדיין אין אימונים מתוכננים.',
+  'schedule.cancelled': 'בוטל',
+  'schedule.toPractice': 'הסעה לאימון',
+  'schedule.fromPractice': 'הסעה מהאימון',
+  'schedule.playersCount': '{count} שחקנים',
+  'schedule.noPlayersAssigned': 'טרם שובצו שחקנים',
+  'schedule.claim': 'קבלה',
+  'schedule.claiming': 'משבץ…',
+  'schedule.release': 'שחרור',
+  'schedule.releasing': 'משחרר…',
+  'schedule.statusMine': 'אתם',
+  'schedule.statusCoveredBy': 'מכוסה על ידי {name}',
+  'schedule.statusOpen': 'פתוח',
+  'schedule.claimConflictWithName': 'המשמרת הזו שובצה הרגע על ידי {name}.',
+  'schedule.claimConflictUnknown': 'המשמרת הזו שובצה הרגע על ידי מישהו אחר.',
+  'schedule.releaseConflict': 'המשמרת הזו כבר לא משויכת אליכם.',
 };
