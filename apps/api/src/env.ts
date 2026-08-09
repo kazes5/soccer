@@ -11,6 +11,7 @@ const envSchema = z.object({
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   INVITE_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  WEB_ORIGIN: z.string().min(1).default('http://localhost:3000'),
 });
 
 export const env = envSchema.parse(process.env);

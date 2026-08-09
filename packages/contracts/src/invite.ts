@@ -17,7 +17,7 @@ export const createInviteRequestSchema = z
     message: 'Provide phone or email.',
     path: ['phone'],
   });
-export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>;
+export type CreateInviteRequest = z.input<typeof createInviteRequestSchema>;
 
 export const inviteSummarySchema = z.object({
   id: z.string().uuid(),
@@ -30,12 +30,19 @@ export const inviteSummarySchema = z.object({
 });
 export type InviteSummary = z.infer<typeof inviteSummarySchema>;
 
+export const invitePreviewSchema = z.object({
+  status: inviteStatusSchema,
+  expiresAt: z.string().datetime(),
+  team: z.object({ id: z.string().uuid(), name: z.string() }),
+});
+export type InvitePreview = z.infer<typeof invitePreviewSchema>;
+
 export const acceptInviteRequestSchema = z.object({
   name: z.string().min(1).max(255),
   language: languageSchema.default('en'),
   players: z.array(acceptInvitePlayerSchema).default([]),
 });
-export type AcceptInviteRequest = z.infer<typeof acceptInviteRequestSchema>;
+export type AcceptInviteRequest = z.input<typeof acceptInviteRequestSchema>;
 
 export const acceptInviteResponseSchema = z.object({
   user: userSummarySchema,

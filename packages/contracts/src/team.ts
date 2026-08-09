@@ -24,7 +24,7 @@ export const createTeamRequestSchema = z
     message: 'Provide adminPhone or adminEmail.',
     path: ['adminPhone'],
   });
-export type CreateTeamRequest = z.infer<typeof createTeamRequestSchema>;
+export type CreateTeamRequest = z.input<typeof createTeamRequestSchema>;
 
 export const createTeamResponseSchema = z.object({
   team: teamSummarySchema,

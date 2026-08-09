@@ -2,6 +2,7 @@ import {
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
   createInviteRequestSchema,
+  invitePreviewSchema,
   inviteSummarySchema,
 } from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
@@ -66,11 +67,11 @@ export default async function inviteRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'Invite not found.');
     }
 
-    return {
+    return invitePreviewSchema.parse({
       status: invite.status,
       expiresAt: invite.expiresAt.toISOString(),
       team: { id: invite.team.id, name: invite.team.name },
-    };
+    });
   });
 
   app.post('/invites/:code/accept', async (request, reply) => {

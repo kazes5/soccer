@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { env } from './env';
@@ -32,6 +33,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     options.otpProvider ?? new ConsoleOtpProvider((msg) => app.log.info(msg)),
   );
 
+  app.register(cors, {
+    origin: env.WEB_ORIGIN,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
   app.register(prismaPlugin);
   app.register(authPlugin);
   app.register(healthRoutes);
