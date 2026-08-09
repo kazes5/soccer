@@ -1,26 +1,121 @@
 @import 'tailwindcss';
 
+/*
+ * Design tokens. Semantics (which tone means what, and which class a component
+ * reaches for) live in `@soccer/ui-tokens`; the actual color/shadow values live
+ * here because Tailwind v4 themes are CSS, not JS. Keep these token *names* in
+ * sync with `packages/ui-tokens/src/status.ts` if you rename one.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --color-ink: #14181a;
+  --color-ink-muted: #52605c;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f6f5;
+  --color-surface-border: #e2e8e5;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* mine / owned+confirmed — field green */
+  --color-status-mine: #1f7a4d;
+  --color-status-mine-subtle: #e6f3ec;
+  --color-status-mine-on: #146239;
+  --color-status-mine-contrast: #ffffff;
+
+  /* open / urgent — coral */
+  --color-status-open: #e1493b;
+  --color-status-open-subtle: #fbe9e7;
+  --color-status-open-on: #b53326;
+  --color-status-open-contrast: #ffffff;
+
+  /* attention — amber */
+  --color-status-attention: #d98c1b;
+  --color-status-attention-subtle: #faedd6;
+  --color-status-attention-on: #96600e;
+
+  /* pending — teal */
+  --color-status-pending: #1d8a93;
+  --color-status-pending-subtle: #dff1f2;
+  --color-status-pending-on: #146369;
+
+  --color-focus-ring: var(--color-status-pending);
+
+  --shadow-raised: 0 1px 2px rgba(20, 24, 26, 0.06), 0 1px 1px rgba(20, 24, 26, 0.04);
+  --shadow-overlay: 0 12px 32px rgba(20, 24, 26, 0.18), 0 4px 12px rgba(20, 24, 26, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-ink: #f3f5f4;
+    --color-ink-muted: #9aa6a1;
+    --color-surface: #101413;
+    --color-surface-soft: #171c1b;
+    --color-surface-border: #2a302e;
+
+    --color-status-mine: #3fb586;
+    --color-status-mine-subtle: #113523;
+    --color-status-mine-on: #7bd6ac;
+    --color-status-mine-contrast: #062013;
+
+    --color-status-open: #f17164;
+    --color-status-open-subtle: #3a1913;
+    --color-status-open-on: #ffab9f;
+    --color-status-open-contrast: #1a0705;
+
+    --color-status-attention: #f0ac4b;
+    --color-status-attention-subtle: #392505;
+    --color-status-attention-on: #ffc978;
+
+    --color-status-pending: #3fb5be;
+    --color-status-pending-subtle: #0e2f32;
+    --color-status-pending-on: #83d7de;
+
+    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.32), 0 1px 1px rgba(0, 0, 0, 0.24);
+    --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.32);
   }
 }
 
+@theme inline {
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-surface: var(--color-surface);
+  --color-surface-soft: var(--color-surface-soft);
+  --color-surface-border: var(--color-surface-border);
+
+  --color-status-mine: var(--color-status-mine);
+  --color-status-mine-subtle: var(--color-status-mine-subtle);
+  --color-status-mine-on: var(--color-status-mine-on);
+  --color-status-mine-contrast: var(--color-status-mine-contrast);
+
+  --color-status-open: var(--color-status-open);
+  --color-status-open-subtle: var(--color-status-open-subtle);
+  --color-status-open-on: var(--color-status-open-on);
+  --color-status-open-contrast: var(--color-status-open-contrast);
+
+  --color-status-attention: var(--color-status-attention);
+  --color-status-attention-subtle: var(--color-status-attention-subtle);
+  --color-status-attention-on: var(--color-status-attention-on);
+
+  --color-status-pending: var(--color-status-pending);
+  --color-status-pending-subtle: var(--color-status-pending-subtle);
+  --color-status-pending-on: var(--color-status-pending-on);
+
+  --color-focus-ring: var(--color-focus-ring);
+
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+
+  --font-sans: var(--font-heebo);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans), 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Dates, counts, and other digits that update in place should not visually jitter. */
+.tabular-nums {
+  font-feature-settings:
+    'tnum' 1,
+    'lnum' 1;
+  font-variant-numeric: tabular-nums;
 }

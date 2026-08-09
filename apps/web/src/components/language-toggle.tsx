@@ -1,10 +1,11 @@
 'use client';
 
+import { focusRingClassName } from '@soccer/ui-tokens';
 import { useLocale } from './locale-provider';
 
-const buttonBase = 'rounded px-2 py-1 text-sm font-medium';
-const activeClassName = `${buttonBase} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`;
-const inactiveClassName = `${buttonBase} text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100`;
+const buttonBase = `flex min-h-11 min-w-11 items-center justify-center rounded-full text-sm font-medium ${focusRingClassName}`;
+const activeClassName = `${buttonBase} bg-ink text-surface`;
+const inactiveClassName = `${buttonBase} text-ink-muted hover:bg-surface-soft hover:text-ink`;
 
 export function LanguageToggle() {
   const { locale, setLocale } = useLocale();

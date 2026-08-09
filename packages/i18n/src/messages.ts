@@ -4,6 +4,13 @@ export const en = {
   'common.logIn': 'Log in',
   'common.createNewTeam': 'Create a new team',
   'common.somethingWentWrong': 'Something went wrong. Please try again.',
+  'common.loading': 'Loading…',
+  'common.close': 'Close',
+  'common.cancel': 'Cancel',
+
+  'nav.home': 'Home',
+  'nav.primaryLabel': 'Primary navigation',
+  'nav.skipToContent': 'Skip to content',
 
   'teamsNew.title': 'Create a team',
   'teamsNew.subtitle': "You'll be set up as the team's first admin.",
@@ -27,6 +34,7 @@ export const en = {
 
   'invite.loading': 'Loading invite…',
   'invite.notFoundTitle': 'Invite not found',
+  'invite.notFoundBody': 'This invite link is invalid or has already been used.',
   'invite.expiredTitle': 'This invite is no longer valid',
   'invite.expiredBody': 'Ask your team admin to send a new one.',
   'invite.joinTitle': 'Join {teamName}',
@@ -45,11 +53,17 @@ export const en = {
 
   'home.welcome': 'Welcome, {name}',
   'home.logOut': 'Log out',
+  'home.logOutConfirmTitle': 'Log out?',
+  'home.logOutConfirmBody': "You'll need to log in again to see your teams.",
   'home.yourTeams': 'Your teams',
+  'home.teamSwitcherLabel': 'Switch team',
   'home.inviteLabel': 'Invite a parent by phone',
   'home.inviteSubmit': 'Invite',
   'home.inviteSubmitting': 'Sending…',
   'home.inviteLinkLabel': 'Invite link:',
+  'home.copyInviteLinkAriaLabel': 'Copy invite link',
+  'home.inviteCopied': 'Copied to clipboard',
+  'home.inviteCopyFailed': "Couldn't copy — copy the link manually instead",
   'home.roleAdmin': 'Admin',
   'home.roleParent': 'Parent',
 } as const;
@@ -61,11 +75,18 @@ export type MessageKey = keyof typeof en;
  * Stage 2 (CLAUDE.md §3.10 calls for human-reviewed phrasing before pilot).
  */
 export const he: Record<MessageKey, string> = {
-  'common.appName': 'רכזת הסעות לכדורגל',
+  'common.appName': 'מערכת הסעות לכדורגל',
   'common.tagline': 'מתאמים הסעות לאימונים בלי הבלגן של קבוצת הווטסאפ.',
   'common.logIn': 'התחברות',
   'common.createNewTeam': 'יצירת קבוצה חדשה',
   'common.somethingWentWrong': 'משהו השתבש. נסו שוב.',
+  'common.loading': 'טוען…',
+  'common.close': 'סגירה',
+  'common.cancel': 'ביטול',
+
+  'nav.home': 'בית',
+  'nav.primaryLabel': 'ניווט ראשי',
+  'nav.skipToContent': 'דילוג לתוכן',
 
   'teamsNew.title': 'יצירת קבוצה',
   'teamsNew.subtitle': 'תוגדרו כמנהלים הראשונים של הקבוצה.',
@@ -81,7 +102,7 @@ export const he: Record<MessageKey, string> = {
   'login.phoneLabel': 'מספר טלפון',
   'login.sendCode': 'שליחת קוד',
   'login.sending': 'שולח…',
-  'login.codeSentTo': 'שלחנו קוד בן 6 ספרות למספר {phone}.',
+  'login.codeSentTo': 'נשלח קוד בן 6 ספרות למספר {phone}.',
   'login.codeLabel': 'קוד',
   'login.verifyCode': 'אימות קוד',
   'login.verifying': 'מאמת…',
@@ -89,6 +110,7 @@ export const he: Record<MessageKey, string> = {
 
   'invite.loading': 'טוען הזמנה…',
   'invite.notFoundTitle': 'ההזמנה לא נמצאה',
+  'invite.notFoundBody': 'קישור ההזמנה שגוי או שכבר נעשה בו שימוש.',
   'invite.expiredTitle': 'ההזמנה כבר לא בתוקף',
   'invite.expiredBody': 'בקשו ממנהל הקבוצה לשלוח הזמנה חדשה.',
   'invite.joinTitle': 'הצטרפות ל{teamName}',
@@ -107,11 +129,17 @@ export const he: Record<MessageKey, string> = {
 
   'home.welcome': 'ברוכים הבאים, {name}',
   'home.logOut': 'התנתקות',
+  'home.logOutConfirmTitle': 'להתנתק?',
+  'home.logOutConfirmBody': 'תצטרכו להתחבר מחדש כדי לראות את הקבוצות שלכם.',
   'home.yourTeams': 'הקבוצות שלכם',
+  'home.teamSwitcherLabel': 'החלפת קבוצה',
   'home.inviteLabel': 'הזמנת הורה לפי טלפון',
   'home.inviteSubmit': 'הזמנה',
   'home.inviteSubmitting': 'שולח…',
   'home.inviteLinkLabel': 'קישור הזמנה:',
+  'home.copyInviteLinkAriaLabel': 'העתקת קישור ההזמנה',
+  'home.inviteCopied': 'הועתק ללוח',
+  'home.inviteCopyFailed': 'ההעתקה נכשלה — יש להעתיק את הקישור ידנית',
   'home.roleAdmin': 'מנהל/ת',
   'home.roleParent': 'הורה',
 };

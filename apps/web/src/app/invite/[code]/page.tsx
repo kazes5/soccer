@@ -1,16 +1,20 @@
 'use client';
 
 import type { InvitePreview } from '@soccer/contracts';
+import { X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   Field,
+  FormError,
   buttonClassName,
   inputClassName,
   secondaryButtonClassName,
 } from '@/components/form-controls';
 import { LanguageToggle } from '@/components/language-toggle';
 import { useLocale } from '@/components/locale-provider';
+import { IconButton } from '@/components/ui/icon-button';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { ApiError, api } from '@/lib/api';
 
 interface PlayerDraft {
@@ -91,7 +95,7 @@ export default function AcceptInvitePage() {
     return (
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 p-8 text-center">
         <h1 className="text-xl font-semibold tracking-tight">{t('invite.acceptedTitle')}</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('invite.acceptedBody')}</p>
+        <p className="text-sm text-ink-muted">{t('invite.acceptedBody')}</p>
         <button
           onClick={() => router.push(`/login?phone=${encodeURIComponent(acceptedPhone)}`)}
           className={buttonClassName}
@@ -104,28 +108,27 @@ export default function AcceptInvitePage() {
 
   if (previewFailed) {
     return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 p-8 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">{t('invite.notFoundTitle')}</h1>
-        <p className="text-sm text-red-600 dark:text-red-400">
-          {previewErrorDetail ?? t('invite.notFoundTitle')}
-        </p>
+      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-8">
+        <ErrorState
+          title={t('invite.notFoundTitle')}
+          description={previewErrorDetail ?? t('invite.notFoundBody')}
+        />
       </main>
     );
   }
 
   if (!preview) {
     return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 p-8 text-center">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('invite.loading')}</p>
+      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-8">
+        <LoadingState label={t('invite.loading')} />
       </main>
     );
   }
 
   if (preview.status !== 'pending') {
     return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 p-8 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">{t('invite.expiredTitle')}</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('invite.expiredBody')}</p>
+      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-8">
+        <EmptyState title={t('invite.expiredTitle')} description={t('invite.expiredBody')} />
       </main>
     );
   }
@@ -139,7 +142,7 @@ export default function AcceptInvitePage() {
         <h1 className="text-xl font-semibold tracking-tight">
           {t('invite.joinTitle', { teamName: preview.team.name })}
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t('invite.joinSubtitle')}</p>
+        <p className="mt-1 text-sm text-ink-muted">{t('invite.joinSubtitle')}</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field label={t('invite.yourNameLabel')}>
@@ -170,14 +173,12 @@ export default function AcceptInvitePage() {
                 placeholder={t('invite.agePlaceholder')}
                 inputMode="numeric"
               />
-              <button
-                type="button"
+              <IconButton
+                label={t('invite.removePlayerAriaLabel')}
+                icon={<X className="size-4" aria-hidden="true" />}
+                variant="danger"
                 onClick={() => removePlayer(index)}
-                className="px-2 text-zinc-500 hover:text-red-600"
-                aria-label={t('invite.removePlayerAriaLabel')}
-              >
-                ✕
-              </button>
+              />
             </div>
           ))}
           <button
@@ -189,7 +190,7 @@ export default function AcceptInvitePage() {
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <FormError>{error}</FormError>}
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
           {isSubmitting ? t('invite.submitting') : t('invite.submit')}
         </button>
