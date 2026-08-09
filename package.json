@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @soccer/api run db:generate",
     "db:migrate": "pnpm --filter @soccer/api run db:migrate",
+    "db:migrate:deploy": "pnpm --filter @soccer/api run db:migrate:deploy",
     "db:seed": "pnpm --filter @soccer/api run db:seed",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
