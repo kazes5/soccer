@@ -133,4 +133,51 @@ describe('OTP login flow', () => {
 
     expect(fourth.statusCode).toBe(429);
   });
+
+  it('revokes the session on logout so it can no longer authenticate', async () => {
+    const {
+      team: { id: teamId },
+    } = await createTeamWithAdmin('+15551230024');
+
+    const requestResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/otp/request',
+      payload: { phone: '+15551230024' },
+    });
+    const { challengeId } = requestResponse.json();
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/otp/verify',
+      payload: { challengeId, code: otpProvider.lastCode },
+    });
+    const { sessionToken } = verifyResponse.json();
+
+    const beforeLogout = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/invites`,
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { phone: '+15551230025' },
+    });
+    expect(beforeLogout.statusCode).toBe(201);
+
+    const logoutResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    expect(logoutResponse.statusCode).toBe(204);
+
+    const afterLogout = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/invites`,
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { phone: '+15551230026' },
+    });
+    expect(afterLogout.statusCode).toBe(401);
+  });
+
+  it('logging out with no session token is a harmless no-op', async () => {
+    const response = await app.inject({ method: 'POST', url: '/auth/logout' });
+    expect(response.statusCode).toBe(204);
+  });
 });

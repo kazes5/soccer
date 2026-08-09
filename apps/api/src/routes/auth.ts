@@ -123,4 +123,16 @@ export default async function authRoutes(app: FastifyInstance) {
       })),
     });
   });
+
+  app.post('/auth/logout', async (request, reply) => {
+    const header = request.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      const token = header.slice('Bearer '.length);
+      await app.prisma.session.updateMany({
+        where: { tokenHash: hashSecret(token), revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+    reply.status(204).send();
+  });
 }
