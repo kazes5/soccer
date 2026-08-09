@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInviteRequestSchema } from './invite';
+import { acceptInviteRequestSchema, createInviteRequestSchema } from './invite';
 
 describe('createInviteRequestSchema', () => {
   it('defaults expiresInDays to 7', () => {
@@ -12,5 +12,13 @@ describe('createInviteRequestSchema', () => {
     const result = createInviteRequestSchema.safeParse({ expiresInDays: 3 });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('acceptInviteRequestSchema', () => {
+  it('defaults language to en and players to an empty list', () => {
+    const result = acceptInviteRequestSchema.parse({ name: 'Avi Levi' });
+
+    expect(result).toMatchObject({ language: 'en', players: [] });
   });
 });
