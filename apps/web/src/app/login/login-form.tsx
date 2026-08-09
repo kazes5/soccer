@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Field, buttonClassName, inputClassName } from '@/components/form-controls';
+import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
 
@@ -48,9 +48,7 @@ export default function LoginForm() {
   if (challengeId) {
     return (
       <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {t('login.codeSentTo', { phone })}
-        </p>
+        <p className="text-sm text-ink-muted">{t('login.codeSentTo', { phone })}</p>
         <Field label={t('login.codeLabel')}>
           <input
             required
@@ -63,7 +61,7 @@ export default function LoginForm() {
             placeholder="123456"
           />
         </Field>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <FormError>{error}</FormError>}
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
           {isSubmitting ? t('login.verifying') : t('login.verifyCode')}
         </button>
@@ -74,7 +72,7 @@ export default function LoginForm() {
             setCode('');
             setError(null);
           }}
-          className="text-sm text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+          className="min-h-11 text-sm text-ink-muted underline hover:text-ink"
         >
           {t('login.useDifferentPhone')}
         </button>
@@ -95,7 +93,7 @@ export default function LoginForm() {
           placeholder="+15551234567"
         />
       </Field>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <FormError>{error}</FormError>}
       <button type="submit" disabled={isSubmitting} className={buttonClassName}>
         {isSubmitting ? t('login.sending') : t('login.sendCode')}
       </button>

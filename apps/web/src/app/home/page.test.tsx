@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
-import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
+import { fireEvent, renderWithProviders, screen, waitFor, within } from '@/test/render';
 import HomePage from './page';
 
 const replace = vi.fn();
@@ -80,7 +80,12 @@ describe('HomePage', () => {
     renderWithProviders(<HomePage />);
     await screen.findByText('Welcome, Dana Cohen');
 
-    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+    // The shell renders both a mobile header and a desktop sidebar (CSS picks
+    // one per breakpoint), so scope to the banner landmark to avoid ambiguity.
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: /log out/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /log out/i }));
 
     await waitFor(() => expect(api.logout).toHaveBeenCalledWith());
     await waitFor(() => expect(push).toHaveBeenCalledWith('/'));

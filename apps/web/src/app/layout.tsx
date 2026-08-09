@@ -1,14 +1,18 @@
 import { defaultLocale, directionFor, isLocale, type Locale } from '@soccer/i18n';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist_Mono, Heebo } from 'next/font/google';
 import { cookies } from 'next/headers';
 import { LocaleProvider } from '@/components/locale-provider';
+import { ToastProvider } from '@/components/ui/toast';
 import { LOCALE_COOKIE_NAME } from '@/lib/locale-cookie';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
+// Heebo renders both Latin and Hebrew glyphs from one family, so the UI never
+// swaps fonts when the locale switches (CLAUDE.md §3.10).
+const heebo = Heebo({
+  variable: '--font-heebo',
+  subsets: ['latin', 'hebrew'],
+  display: 'swap',
 });
 
 const geistMono = Geist_Mono({
@@ -34,10 +38,12 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
     <html
       lang={locale}
       dir={directionFor(locale)}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${heebo.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+      <body className="min-h-full flex flex-col bg-surface text-ink">
+        <LocaleProvider initialLocale={locale}>
+          <ToastProvider>{children}</ToastProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

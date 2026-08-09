@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Field, buttonClassName, inputClassName } from '@/components/form-controls';
+import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { LanguageToggle } from '@/components/language-toggle';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
@@ -38,7 +38,7 @@ export default function CreateTeamPage() {
       </div>
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{t('teamsNew.title')}</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t('teamsNew.subtitle')}</p>
+        <p className="mt-1 text-sm text-ink-muted">{t('teamsNew.subtitle')}</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field label={t('teamsNew.teamNameLabel')}>
@@ -78,7 +78,7 @@ export default function CreateTeamPage() {
             placeholder="+15551234567"
           />
         </Field>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <FormError>{error}</FormError>}
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
           {isSubmitting ? t('teamsNew.submitting') : t('teamsNew.submit')}
         </button>
