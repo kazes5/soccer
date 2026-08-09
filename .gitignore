@@ -53,3 +53,6 @@ Thumbs.db
 
 # --- Claude Code ---
 .claude/settings.local.json
+
+# --- Manual test session state (scripts/start-manual-tests.sh) ---
+scripts/.manual-test-state/
