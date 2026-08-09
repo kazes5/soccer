@@ -12,7 +12,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 |---|---|---|
 | 0 — Product & Architecture Foundation | Partial, non-blocking | ADRs/threat model/notification-template docs not written yet; nothing here has blocked code so far |
 | 1 — Repo, Environments, Quality Gates | Mostly done | Branch protection still off on `main`; staging/observability blocked on hosting-vendor choice |
-| **2 — Identity/Membership/i18n/Design** | **In progress** | Backend + onboarding UI loop done, tested, and manually verified end-to-end in a real browser; i18n and design system not started |
+| **2 — Identity/Membership/i18n/Design** | **In progress** | Backend + onboarding UI loop done and verified; i18n foundation (catalog, RTL, locale switching) just landed; design tokens/accessible primitives not started |
 | 3 — Schedule & Atomic Shift Core | Not started | |
 | 4 — Swap/Notification/Reminder/Escalation | Not started | |
 | 5 — Admin Ops & Reporting | Not started | |
@@ -31,6 +31,8 @@ Build a responsive, bilingual web application first for the high-frequency coord
   - `POST /auth/otp/request` / `POST /auth/otp/verify` — hashed, rate-limited, expiring OTP login; issues a session token.
 - **Web UI:** `/teams/new`, `/login`, `/invite/[code]`, and `/home` pages, calling the API above through a typed client (`apps/web/src/lib/api.ts`). Component-tested (9 tests) and manually walked through end-to-end in a real Chrome browser: create team → invite a parent → accept invite → OTP login → land on team-aware home, gated correctly by role (only admins see the invite form).
 - **CORS:** `@fastify/cors` is now registered on the API (`WEB_ORIGIN` env var, default `http://localhost:3000`). This was missing and the manual browser walkthrough caught it immediately — every cross-origin request from the web app failed silently into a generic "Something went wrong" message, even though the same requests worked fine over `curl`. A regression test (`apps/api/test/cors.test.ts`) now guards it. This is exactly the failure mode the Checkpoint process's "manual verification" step exists to catch — the full automated gate was green the whole time this bug existed.
+- **i18n foundation:** a new shared package `packages/i18n` holds the message catalog (English + Hebrew, TypeScript-enforced key parity — `he` is typed `Record<MessageKey, string>` against `en`'s keys, so a missing/extra translation is a compile error, not a runtime surprise) plus `Locale`, `isRtl`/`directionFor`, and `Intl`-based `formatDate`/`formatNumber` helpers. `apps/web` wraps the app in a `LocaleProvider` (`apps/web/src/components/locale-provider.tsx`) that persists the choice to `localStorage`, exposes a `t()` function, and syncs `document.documentElement.lang`/`dir` on change — switching languages is instant, no page reload, exactly as `CLAUDE.md` §3.10 requires. All 5 existing pages are converted; a `LanguageToggle` (EN/עב) is on every page. Manually verified in a real browser: toggling to Hebrew correctly mirrors the *entire* layout (button order, alignment, toggle position) via flex + logical CSS (`end-4` instead of `right-4`), with zero extra RTL-specific styling needed beyond what was already flex/gap-based — and the choice persists across page navigation.
+- **Known i18n gaps, explicitly not addressed in this slice:** the Hebrew translations are AI-drafted, not yet reviewed by a native speaker (flagged inline in `packages/i18n/src/messages.ts`); server-generated error messages (e.g. "You haven't been added to a team yet…") are still English-only, since localizing those would mean threading a locale through every API request — a real backend i18n project, not a client-side one; form-field example placeholders ("Dana Cohen", "+15551234567") aren't translated, only labels/headings/buttons; no Hebrew-optimized font (Heebo) yet — that's part of the still-unstarted design-tokens work; date/time formatting helpers exist in `packages/i18n` but nothing in the UI calls them yet since no page currently displays a date.
 
 ### What's missing (Stage 2)
 
@@ -41,18 +43,19 @@ Backend:
 - Browser-push subscription table (for Requirement 5's browser notifications) — not modeled yet.
 
 Frontend:
-- i18n message catalog (English/Hebrew), RTL layout (`dir` attribute, logical CSS), locale persistence.
-- Design tokens (color/spacing/typography/motion) and the accessible primitive components (nav, team switcher, data table, dialog, toast, etc.).
-- Still English-only, no design tokens — tracked debt, not an oversight (see the flagged architecture decision above).
+- Design tokens (color/spacing/typography/motion) and the accessible primitive components (nav, team switcher, data table, dialog, toast, etc.) — not started; pages still use ad hoc Tailwind utility classes.
+- Hebrew-optimized font (Heebo) and tabular numerals for dates/counts.
+- Native-speaker review of the Hebrew catalog (currently AI-drafted).
+- Localized server error messages (currently English-only regardless of user locale).
 
 Process:
 - GitHub branch protection on `main` (require the `ci` status check) — still off, carried over from Stage 1.
 
 ### Immediate next steps
 
-1. Commit and open the PR for the web-onboarding-UI + CORS-fix checkpoint (code review done, findings resolved).
-2. Then pick one: start the i18n/design-system track, or close the backend gaps above (session revoke, per-IP rate limit).
-3. Turn on branch protection on `main` whenever convenient — it's independent of everything else.
+1. Code review pass on the i18n-foundation checkpoint (in progress as of this writing), then PR.
+2. Then pick one: design tokens + accessible primitives (the other half of the i18n/design-system track), or close the backend gaps above (per-IP rate limit, secure-cookie/CSRF session transport).
+3. Branch protection on `main` is done (verified 2026-08-09 — scoped correctly to `main` only, after an initial misconfiguration that accidentally protected every branch was caught and fixed).
 
 ### Always run before calling anything "done"
 
@@ -196,8 +199,8 @@ Depends on Stage 0. Web and API scaffolding can proceed in parallel after the mo
 ### Stage 1 Exit Criteria
 
 - [x] A fresh checkout can start web, API, PostgreSQL, Redis with one documented command sequence (`CONTRIBUTING.md` → "First-time setup"). Seed data now exists for the identity/membership model (`pnpm db:seed`).
-- [ ] Pull requests cannot merge with type, lint, migration, or test failures.
-  - `.github/workflows/ci.yml` enforces this on every push/PR to `main`, but GitHub branch-protection ("require status checks to pass") has not been turned on for the repository yet — that's a repo-settings action, not a code change. **Still open as of 2026-08-09.**
+- [x] Pull requests cannot merge with type, lint, migration, or test failures.
+  - `.github/workflows/ci.yml` enforces the checks; GitHub branch protection on `main` (require the `ci` status check) is now on, verified 2026-08-09 via the GitHub API (`branches/main` reports `protected: true`, and no other branch does). Note for next time: the first attempt used a branch-name pattern that matched every branch, not just `main` — caught by re-verifying after setup rather than assuming the UI did what was intended, then corrected.
 - [ ] Staging deploys are reproducible and production secrets are never exposed to the client.
   - Not started; depends on the hosting vendor decision.
 
@@ -217,9 +220,10 @@ Depends on Stage 1. Identity and design-system work can run in parallel once the
   - **Tests to write when these land:** an integration test hitting the same phone from >1 simulated IP within the rate-limit window.
 - [ ] Implement team switching and server-side authorization helpers that scope every query and command to active membership; add last-active-admin transaction checks for removal and demotion.
   - `requireAuth`/`requireTeamRole` (`apps/api/src/lib/authorization.ts`) scope mutations to an authenticated user's role on a specific team; `verifyOtpResponse` returns all of a user's team memberships (the data team-switching UI needs). Last-active-admin safeguards aren't relevant yet — there's no demote/remove endpoint to guard.
-- [ ] Build a central message catalog using stable message identifiers, `Intl` formatting, Hebrew and English translations, locale persistence, and RTL-aware formatting tests.
-  - **Not started.** The web pages built so far are English-only hardcoded strings — this is tracked debt, not an oversight; see the flagged architecture decision above.
-- [ ] Set document `dir` at the root and build components with logical CSS properties, semantic directional icons, correct focus order, and locale-independent IDs. Verify language switching without a full page reload.
+- [x] Build a central message catalog using stable message identifiers, `Intl` formatting, Hebrew and English translations, locale persistence, and RTL-aware formatting tests.
+  - `packages/i18n`: flat `MessageKey`-keyed catalog with compile-time EN/HE parity (excess-property checking on `Record<MessageKey, string>` — a missing or extra Hebrew key is a `tsc` error), `translate()` with `{param}` interpolation, `isRtl`/`directionFor`, and `Intl`-backed `formatDate`/`formatNumber`. Locale persisted client-side via `localStorage` (`apps/web/src/components/locale-provider.tsx`). Hebrew is AI-drafted, not yet native-reviewed (`CLAUDE.md` §3.10 requires human review before pilot — flagged inline in the source).
+- [x] Set document `dir` at the root and build components with logical CSS properties, semantic directional icons, correct focus order, and locale-independent IDs. Verify language switching without a full page reload.
+  - `LocaleProvider` syncs `document.documentElement.lang`/`dir` on every locale change — no reload. All 5 existing pages use flex/gap layouts with no hardcoded `left`/`right` (confirmed by grep before starting this work), plus one logical-inset utility (`end-4` for the language toggle position) — so RTL mirroring came essentially free once `dir="rtl"` was set. Manually verified in a real browser: full-page mirroring (button order, alignment, toggle position), persisted across navigation. Not yet done: semantic directional icons (none of the current pages have directional icons to worry about) and locale-independent IDs (no IDs used yet either) — both apply once the design-system primitives (icons, forms with `id`/`htmlFor`) land.
 - [ ] Create design tokens for color, spacing, elevation, typography, motion, focus, and status semantics. Use a compact fieldside utility aesthetic: ink and soft neutral surfaces, field green for owned/confirmed assignments, coral for urgent needs, amber for attention, and teal for pending states. Pair every color with text and icon semantics.
   - **Not started.** The pages built so far use ad hoc Tailwind utility classes (`apps/web/src/components/form-controls.tsx`), not tokens from `packages/ui-tokens`. Revisit once real design tokens exist rather than retrofitting later.
 - [ ] Use a Hebrew-capable display/body family such as Heebo across both languages, with tabular numerals for date/time and assignment counts. Do not rely on browser default typography.
@@ -243,10 +247,26 @@ Depends on Stage 1. Identity and design-system work can run in parallel once the
 - **Blocker or risk:** None blocking. Known gaps: (1) the audit-log schema requires a non-null `teamId`, so "login attempt by a non-registered user" (a `CLAUDE.md` §5 loggable event) currently isn't audit-logged — no team to attribute it to; (2) the web UI is English-only with no design tokens, both explicitly deferred rather than accidental; (3) the home page reads `localStorage` via a lazy `useState` initializer on a client-only page with no SSR data — functionally fine, but can produce a one-time React hydration console warning on first authenticated load, not addressed with `useSyncExternalStore` to keep this slice's scope contained.
 - **Next concrete action:** Commit and open the PR for this checkpoint. After that, either start the i18n/design-system track or close the remaining backend gaps (per-IP rate limit, secure-cookie/CSRF session transport).
 
+**Progress (2026-08-09 — i18n foundation):**
+- **Status:** Done for this checkpoint. Message catalog, RTL wiring, and locale switching are built, tested, code-reviewed with findings resolved, and manually verified in a real browser across all 5 existing pages — including the specific reload scenario the review flagged. Design tokens and accessible primitives (the other half of this Stage 2 track) haven't started.
+- **Evidence:** `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (53 tests across all packages), and `pnpm build` all pass from a clean checkout. Manually verified in Chrome twice: (1) toggled English → Hebrew on the landing page, confirmed the *entire* layout mirrors correctly (button order, text alignment, toggle position via `end-4`), navigated to `/login`, confirmed the choice persisted; (2) after the cookie-based fix below, set Hebrew then did a full page **reload** and inspected the console diff Next prints for hydration mismatches — `lang="he" dir="rtl"` had no diff marker (only the pre-existing, unrelated browser-extension-injected attributes did), confirming the fix actually closes the gap rather than just looking right.
+- **Code review:** Ran `/code-review medium`. 3 findings, all addressed:
+  1. **Fixed (real bug, not cosmetic)** — locale was read from `localStorage` inside a `useState` lazy initializer, which runs identically during SSR (always resolving to `'en'`, since `window` is undefined there) and during client hydration (resolving to the real stored value). For any user who'd previously chosen Hebrew, this meant a genuine React hydration **text** mismatch on every `t(...)` call, on every page load — not just a visual flash. Fixed by moving locale resolution to the server: `layout.tsx` is now `async`, reads a `soccer.locale` cookie via `next/headers`'s `cookies()`, and renders `<html lang={locale} dir={directionFor(locale)}>` directly. `LocaleProvider` now takes an `initialLocale` prop (no longer reads storage itself) and `setLocale` writes the cookie (dropped `localStorage` entirely — one source of truth, readable by both server and client). Verified live per the evidence above. **Trade-off accepted knowingly:** `cookies()` in the root layout opts every route out of static prerendering (all pages now build as `ƒ` dynamic instead of `○` static) — acceptable now since Stage 3+ needs per-request auth-aware rendering everywhere anyway.
+  2. **Fixed as part of #1** — the `<html lang="en">` FOUC/flash finding was the other half of the same root cause and is closed by the same server-side fix; there's no longer a client-side correction step needed on first load.
+  3. **Fixed** — the invite-preview fetch effect (`apps/web/src/app/invite/[code]/page.tsx`) called `t()` inside its `.catch` handler while only depending on `[code]`, so a locale switch during a pending request would show the error in the pre-switch language (narrow window, but a real stale-closure bug). Fixed by storing the raw failure state (`previewFailed`, `previewErrorDetail`) and calling `t()` only at render time, which always sees the current locale.
+- **Decisions made during this slice:**
+  - New shared package `packages/i18n` (not `apps/web`-only) since Stage 8's native mobile plan explicitly calls for a "shared translation catalog" — same reasoning as `packages/contracts`.
+  - EN/HE parity is enforced at compile time (excess-property checking on a `Record<MessageKey, string>` assignment), not via a runtime test — a stronger guarantee, since a missing or extra key fails the build immediately rather than needing someone to remember to run a parity test.
+  - No i18n *library* (next-intl, etc.) — CLAUDE.md ties language to the `User.languagePreference` account setting with instant in-place switching, not URL-prefixed routes (`/en/...`, `/he/...`), which is what most Next.js i18n libraries are built around. A plain Context + cookie + `document.documentElement` sync is simpler and a better fit than fighting a routing-oriented library into a non-routing use case.
+  - Locale storage is a plain (non-`httpOnly`) cookie, not `localStorage` — deliberately readable by both the server (for correct SSR) and client JS (for the existing `ApiError`/ `t()` plumbing), read via `document.cookie` on the client and `next/headers` on the server.
+- **Blocker or risk:** None blocking. Every route in `apps/web` is now dynamically rendered (lost static prerendering) as a consequence of reading cookies in the root layout — a deliberate, documented trade-off, not an oversight. Other known gaps are listed above under "What's missing (Stage 2)" — AI-drafted (not native-reviewed) Hebrew, English-only server error messages, untranslated placeholder examples, no Heebo font yet.
+- **Next concrete action:** Commit and open the PR for this checkpoint. After that: design tokens + accessible primitives, or the remaining backend gaps.
+
 ### Stage 2 Exit Criteria
 
 - [ ] Invited parent and admin journeys work on staging with enforced authorization.
 - [ ] A user can change English/Hebrew in place and key shells correctly mirror direction.
+  - Functionally true in dev (see progress note above) — not checked off because "on staging" doesn't apply yet (no staging environment exists) and this criterion is written as a joint claim with the surrounding journeys.
 - [ ] The design system passes keyboard, screen-reader smoke tests, contrast checks, and responsive screenshots.
 
 ## Stage 3: Schedule, Collection Points, and Atomic Shift Core

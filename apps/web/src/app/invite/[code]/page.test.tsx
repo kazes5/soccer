@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
+import { fireEvent, renderWithProviders, screen } from '@/test/render';
 import AcceptInvitePage from './page';
 
 const push = vi.fn();
@@ -48,7 +48,7 @@ describe('AcceptInvitePage', () => {
       players: [{ id: 'player-1', name: 'Yossi Levi', age: 11 }],
     });
 
-    render(<AcceptInvitePage />);
+    renderWithProviders(<AcceptInvitePage />);
 
     expect(await screen.findByText('Join U-12 Wildcats')).toBeInTheDocument();
 
@@ -73,7 +73,7 @@ describe('AcceptInvitePage', () => {
     const { ApiError } = await import('@/lib/api');
     vi.mocked(api.getInvitePreview).mockRejectedValue(new ApiError(404, 'Invite not found.'));
 
-    render(<AcceptInvitePage />);
+    renderWithProviders(<AcceptInvitePage />);
 
     expect(await screen.findByText('Invite not found.')).toBeInTheDocument();
   });
@@ -101,7 +101,7 @@ describe('AcceptInvitePage', () => {
       players: [{ id: 'player-1', name: 'Yossi Levi', age: null }],
     });
 
-    render(<AcceptInvitePage />);
+    renderWithProviders(<AcceptInvitePage />);
     await screen.findByText('Join U-12 Wildcats');
 
     fireEvent.change(screen.getByPlaceholderText('Avi Levi'), { target: { value: 'Avi Levi' } });

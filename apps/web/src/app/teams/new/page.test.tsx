@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
+import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import CreateTeamPage from './page';
 
 const push = vi.fn();
@@ -42,7 +42,7 @@ describe('CreateTeamPage', () => {
       sessionExpiresAt: '2026-09-01T00:00:00.000Z',
     });
 
-    render(<CreateTeamPage />);
+    renderWithProviders(<CreateTeamPage />);
 
     fireEvent.change(screen.getByPlaceholderText('U-12 Wildcats'), {
       target: { value: 'U-12 Wildcats' },
@@ -71,7 +71,7 @@ describe('CreateTeamPage', () => {
       new ApiError(400, 'Provide adminPhone or adminEmail.'),
     );
 
-    render(<CreateTeamPage />);
+    renderWithProviders(<CreateTeamPage />);
     fireEvent.change(screen.getByPlaceholderText('U-12 Wildcats'), {
       target: { value: 'U-12 Wildcats' },
     });

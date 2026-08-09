@@ -81,6 +81,9 @@ importers:
       '@soccer/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@soccer/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@soccer/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
@@ -166,6 +169,24 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@soccer/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      eslint:
+        specifier: ^10.8.0
+        version: 10.8.0(jiti@2.7.0)(supports-color@10.2.2)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.9))
+
+  packages/i18n:
     devDependencies:
       '@soccer/config':
         specifier: workspace:*

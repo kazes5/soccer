@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import { saveSession } from '@/lib/session';
+import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import HomePage from './page';
 
 const replace = vi.fn();
@@ -29,7 +29,7 @@ describe('HomePage', () => {
   });
 
   it('redirects to /login when there is no stored session', () => {
-    render(<HomePage />);
+    renderWithProviders(<HomePage />);
     expect(replace).toHaveBeenCalledWith('/login');
   });
 
@@ -56,7 +56,7 @@ describe('HomePage', () => {
       expiresAt: '2026-08-16T00:00:00.000Z',
     });
 
-    render(<HomePage />);
+    renderWithProviders(<HomePage />);
 
     expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
     expect(screen.getByText('U-12 Wildcats')).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('HomePage', () => {
       teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'admin' }],
     });
 
-    render(<HomePage />);
+    renderWithProviders(<HomePage />);
     await screen.findByText('Welcome, Dana Cohen');
 
     fireEvent.click(screen.getByRole('button', { name: /log out/i }));

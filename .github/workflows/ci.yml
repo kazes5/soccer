@@ -54,17 +54,20 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Validate Prisma schema
+        run: pnpm --filter @soccer/api exec prisma validate
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
       - name: Lint
         run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Validate Prisma schema
-        run: pnpm --filter @soccer/api exec prisma validate
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
+      - name: Run database migrations
+        run: pnpm db:migrate:deploy
 
       - name: Test
         run: pnpm test
