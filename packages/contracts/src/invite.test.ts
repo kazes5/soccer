@@ -1,0 +1,16 @@
+import { describe, expect, it } from 'vitest';
+import { createInviteRequestSchema } from './invite';
+
+describe('createInviteRequestSchema', () => {
+  it('defaults expiresInDays to 7', () => {
+    const result = createInviteRequestSchema.parse({ phone: '+15550000002' });
+
+    expect(result.expiresInDays).toBe(7);
+  });
+
+  it('rejects an invite with neither phone nor email', () => {
+    const result = createInviteRequestSchema.safeParse({ expiresInDays: 3 });
+
+    expect(result.success).toBe(false);
+  });
+});

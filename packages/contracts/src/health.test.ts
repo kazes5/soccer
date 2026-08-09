@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { healthStatusSchema } from './index';
+import { healthStatusSchema } from './health';
 
 describe('healthStatusSchema', () => {
   it('accepts a well-formed health payload', () => {
