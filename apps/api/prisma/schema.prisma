@@ -6,3 +6,206 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum TeamRole {
+  parent
+  admin
+}
+
+enum Language {
+  en
+  he
+}
+
+enum NotificationChannel {
+  push
+  sms
+  email
+}
+
+enum OtpChannel {
+  sms
+  email
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum AuditSource {
+  app
+  ai_chat
+}
+
+model User {
+  id                 String   @id @default(uuid())
+  name               String
+  phone              String?  @unique
+  email              String?  @unique
+  languagePreference Language @default(en) @map("language_preference")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  teamMemberships   TeamMember[]
+  playerLinks       PlayerParent[]
+  sentInvites       Invite[]                 @relation("InvitesCreated")
+  otpChallenges     OtpChallenge[]
+  sessions          Session[]
+  notificationPrefs NotificationPreference[]
+  auditLogEntries   AuditLog[]               @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  season    String
+  timezone  String   @default("Asia/Jerusalem")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members           TeamMember[]
+  players           Player[]
+  invites           Invite[]
+  notificationPrefs NotificationPreference[]
+  auditLogEntries   AuditLog[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(uuid())
+  teamId   String   @map("team_id")
+  userId   String   @map("user_id")
+  role     TeamRole @default(parent)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Player {
+  id        String   @id @default(uuid())
+  teamId    String   @map("team_id")
+  name      String
+  age       Int?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  team    Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parents PlayerParent[]
+
+  @@index([teamId])
+  @@map("players")
+}
+
+model PlayerParent {
+  id           String @id @default(uuid())
+  playerId     String @map("player_id")
+  userId       String @map("user_id")
+  relationship String @default("parent")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, userId])
+  @@index([userId])
+  @@map("player_parents")
+}
+
+model Invite {
+  id              String       @id @default(uuid())
+  teamId          String       @map("team_id")
+  code            String       @unique
+  phone           String?
+  email           String?
+  status          InviteStatus @default(pending)
+  createdByUserId String       @map("created_by_user_id")
+  expiresAt       DateTime     @map("expires_at")
+  acceptedAt      DateTime?    @map("accepted_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation("InvitesCreated", fields: [createdByUserId], references: [id])
+
+  @@index([teamId])
+  @@map("invites")
+}
+
+model OtpChallenge {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  channel     OtpChannel
+  destination String
+  codeHash    String     @map("code_hash")
+  attempts    Int        @default(0)
+  expiresAt   DateTime   @map("expires_at")
+  consumedAt  DateTime?  @map("consumed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_challenges")
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model NotificationPreference {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  teamId    String              @map("team_id")
+  eventType String              @map("event_type")
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId, eventType, channel])
+  @@index([teamId])
+  @@map("notification_preferences")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  teamId       String      @map("team_id")
+  actorId      String?     @map("actor_id")
+  actionType   String      @map("action_type")
+  targetEntity String      @map("target_entity")
+  targetId     String?     @map("target_id")
+  beforeState  Json?       @map("before_state")
+  afterState   Json?       @map("after_state")
+  source       AuditSource @default(app)
+  aiContext    Json?       @map("ai_context")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([actorId])
+  @@index([actionType])
+  @@map("audit_logs")
+}
