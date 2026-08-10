@@ -1,6 +1,11 @@
 'use client';
 
-import type { CollectionPoint, CollectionPointType, CurrentUserResponse } from '@soccer/contracts';
+import type {
+  CollectionPoint,
+  CollectionPointType,
+  CurrentUserResponse,
+  TeamMembership,
+} from '@soccer/contracts';
 import { Calendar, Home, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -26,10 +31,23 @@ interface PointFormState {
 
 const emptyForm: PointFormState = { name: '', address: '', type: 'pickup', gpsLat: '', gpsLng: '' };
 
-function toRequestBody(form: PointFormState) {
-  const gpsLat = form.gpsLat.trim() === '' ? undefined : Number(form.gpsLat);
-  const gpsLng = form.gpsLng.trim() === '' ? undefined : Number(form.gpsLng);
-  return { name: form.name, address: form.address, type: form.type, gpsLat, gpsLng };
+/** Only `admin` memberships apply to this page — kept as one helper so the
+ * initial-team-pick effect and the render-time filter can never disagree. */
+function adminMembershipsOf(memberships: TeamMembership[]): TeamMembership[] {
+  return memberships.filter((m) => m.role === 'admin');
+}
+
+/** Exported for direct unit testing — jsdom's `<input type="number">` value
+ * sanitization doesn't reliably reproduce every overflow/invalid case a real
+ * browser (or a pasted/autofilled value) could still hand this function.
+ *
+ * `undefined` for blank; `null` for present-but-not-a-finite-number, so the
+ * caller can show a field-specific error instead of letting a NaN silently
+ * become JSON `null` and fail the server's `z.number().optional()` schema. */
+export function parseOptionalCoordinate(value: string): number | null | undefined {
+  if (value.trim() === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export default function AdminCollectionPointsPage() {
@@ -47,7 +65,7 @@ export default function AdminCollectionPointsPage() {
       .then((data) => {
         if (cancelled) return;
         setSession(data);
-        const adminMemberships = data.teamMemberships.filter((m) => m.role === 'admin');
+        const adminMemberships = adminMembershipsOf(data.teamMemberships);
         const requested = adminMemberships.find((m) => m.teamId === requestedTeamId);
         setActiveTeamId(requested?.teamId ?? adminMemberships[0]?.teamId ?? null);
         setAuthStatus('ready');
@@ -72,7 +90,7 @@ export default function AdminCollectionPointsPage() {
     if (
       authStatus === 'ready' &&
       session &&
-      !session.teamMemberships.some((m) => m.role === 'admin')
+      adminMembershipsOf(session.teamMemberships).length === 0
     ) {
       router.replace('/home');
     }
@@ -82,7 +100,7 @@ export default function AdminCollectionPointsPage() {
     return null;
   }
 
-  const adminMemberships = session.teamMemberships.filter((m) => m.role === 'admin');
+  const adminMemberships = adminMembershipsOf(session.teamMemberships);
   if (adminMemberships.length === 0) {
     return null;
   }
@@ -122,38 +140,55 @@ function CollectionPointsWorkspace({ teamId }: { teamId: string }) {
   const [editingPoint, setEditingPoint] = useState<CollectionPoint | 'new' | null>(null);
   const [deletingPoint, setDeletingPoint] = useState<CollectionPoint | null>(null);
 
-  const load = useCallback(() => {
-    return api.listCollectionPoints(teamId).then((data) => {
-      setPoints(data.points);
-      setLoadState('ready');
-    });
-  }, [teamId]);
+  const fetchPoints = useCallback(() => api.listCollectionPoints(teamId), [teamId]);
 
   useEffect(() => {
     let cancelled = false;
-    load().catch(() => {
-      if (!cancelled) setLoadState('error');
-    });
+    fetchPoints()
+      .then((data) => {
+        if (cancelled) return;
+        setPoints(data.points);
+        setLoadState('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState('error');
+      });
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [fetchPoints]);
 
   const reload = useCallback(() => {
     setLoadState('loading');
-    load().catch(() => setLoadState('error'));
-  }, [load]);
+    fetchPoints()
+      .then((data) => {
+        setPoints(data.points);
+        setLoadState('ready');
+      })
+      .catch(() => setLoadState('error'));
+  }, [fetchPoints]);
 
   async function handleDelete() {
     if (!deletingPoint) return;
     try {
       await api.deleteCollectionPoint(teamId, deletingPoint.id);
+      setPoints((prev) => (prev ? prev.filter((p) => p.id !== deletingPoint.id) : prev));
       setDeletingPoint(null);
-      reload();
     } catch (err) {
       setDeletingPoint(null);
       showToast(err instanceof ApiError ? err.message : t('common.somethingWentWrong'), 'error');
     }
+  }
+
+  function handleSaved(saved: CollectionPoint) {
+    setPoints((prev) => {
+      if (!prev) return prev;
+      const next = prev.some((p) => p.id === saved.id)
+        ? prev.map((p) => (p.id === saved.id ? saved : p))
+        : [...prev, saved];
+      return next.sort((a, b) => a.name.localeCompare(b.name));
+    });
+    setEditingPoint(null);
   }
 
   if (loadState === 'loading') {
@@ -220,10 +255,7 @@ function CollectionPointsWorkspace({ teamId }: { teamId: string }) {
           teamId={teamId}
           point={editingPoint === 'new' ? null : editingPoint}
           onClose={() => setEditingPoint(null)}
-          onSaved={() => {
-            setEditingPoint(null);
-            reload();
-          }}
+          onSaved={handleSaved}
         />
       )}
 
@@ -251,7 +283,7 @@ function PointFormDialog({
   teamId: string;
   point: CollectionPoint | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved: CollectionPoint) => void;
 }) {
   const { t } = useLocale();
   const [form, setForm] = useState<PointFormState>(
@@ -271,15 +303,25 @@ function PointFormDialog({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+
+    const gpsLat = parseOptionalCoordinate(form.gpsLat);
+    const gpsLng = parseOptionalCoordinate(form.gpsLng);
+    if (gpsLat === null) {
+      setError(t('adminCollectionPoints.invalidLatitude'));
+      return;
+    }
+    if (gpsLng === null) {
+      setError(t('adminCollectionPoints.invalidLongitude'));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const body = toRequestBody(form);
-      if (point) {
-        await api.updateCollectionPoint(teamId, point.id, body);
-      } else {
-        await api.createCollectionPoint(teamId, body);
-      }
-      onSaved();
+      const body = { name: form.name, address: form.address, type: form.type, gpsLat, gpsLng };
+      const saved = point
+        ? await api.updateCollectionPoint(teamId, point.id, body)
+        : await api.createCollectionPoint(teamId, body);
+      onSaved(saved);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
     } finally {

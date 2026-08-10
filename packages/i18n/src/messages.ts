@@ -118,6 +118,8 @@ export const en = {
   'adminCollectionPoints.gpsLngLabel': 'Longitude (optional)',
   'adminCollectionPoints.save': 'Save',
   'adminCollectionPoints.saving': 'Saving…',
+  'adminCollectionPoints.invalidLatitude': 'Enter a valid latitude, or leave it blank.',
+  'adminCollectionPoints.invalidLongitude': 'Enter a valid longitude, or leave it blank.',
 
   'schedule.title': 'Schedule',
   'schedule.loading': 'Loading the schedule…',
@@ -264,6 +266,8 @@ export const he: Record<MessageKey, string> = {
   'adminCollectionPoints.gpsLngLabel': 'קו אורך (לא חובה)',
   'adminCollectionPoints.save': 'שמירה',
   'adminCollectionPoints.saving': 'שומר…',
+  'adminCollectionPoints.invalidLatitude': 'הזינו קו רוחב תקין, או השאירו ריק.',
+  'adminCollectionPoints.invalidLongitude': 'הזינו קו אורך תקין, או השאירו ריק.',
 
   'schedule.title': 'לוח זמנים',
   'schedule.loading': 'טוען את לוח הזמנים…',

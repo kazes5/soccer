@@ -2,7 +2,25 @@ import type { CollectionPoint } from '@soccer/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
-import AdminCollectionPointsPage from './page';
+import AdminCollectionPointsPage, { parseOptionalCoordinate } from './page';
+
+describe('parseOptionalCoordinate', () => {
+  it('treats a blank string as absent', () => {
+    expect(parseOptionalCoordinate('')).toBeUndefined();
+    expect(parseOptionalCoordinate('   ')).toBeUndefined();
+  });
+
+  it('parses a valid coordinate', () => {
+    expect(parseOptionalCoordinate('32.5')).toBe(32.5);
+  });
+
+  it('flags a syntactically-valid but non-finite value (e.g. an overflowing exponent) as invalid', () => {
+    // Real browsers accept "1e400" as a syntactically valid <input type="number">
+    // value even though it numerically overflows to Infinity — this is the exact
+    // shape of value that must not silently become `null` on the wire.
+    expect(parseOptionalCoordinate('1e400')).toBeNull();
+  });
+});
 
 const replace = vi.fn();
 
@@ -98,11 +116,9 @@ describe('AdminCollectionPointsPage', () => {
     expect(screen.getByText('Pickup')).toBeInTheDocument();
   });
 
-  it('lets an admin add a new collection point', async () => {
+  it('lets an admin add a new collection point, patching it into the list from the create response', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
-    vi.mocked(api.listCollectionPoints)
-      .mockResolvedValueOnce({ points: [] })
-      .mockResolvedValueOnce({ points: [oakSt] });
+    vi.mocked(api.listCollectionPoints).mockResolvedValue({ points: [] });
     vi.mocked(api.createCollectionPoint).mockResolvedValue(oakSt);
 
     renderWithProviders(<AdminCollectionPointsPage />);
@@ -124,6 +140,8 @@ describe('AdminCollectionPointsPage', () => {
       }),
     );
     expect(await screen.findByText('Oak St')).toBeInTheDocument();
+    // No refetch — the new row comes straight from the create response.
+    expect(api.listCollectionPoints).toHaveBeenCalledTimes(1);
   });
 
   it("lets an admin edit an existing point's details", async () => {
@@ -148,13 +166,14 @@ describe('AdminCollectionPointsPage', () => {
         gpsLng: undefined,
       }),
     );
+    expect(await screen.findByText('Oak Street')).toBeInTheDocument();
+    // No refetch — the patched row comes straight from the update response.
+    expect(api.listCollectionPoints).toHaveBeenCalledTimes(1);
   });
 
   it('lets an admin delete a point after confirming', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
-    vi.mocked(api.listCollectionPoints)
-      .mockResolvedValueOnce({ points: [oakSt] })
-      .mockResolvedValueOnce({ points: [] });
+    vi.mocked(api.listCollectionPoints).mockResolvedValue({ points: [oakSt] });
     vi.mocked(api.deleteCollectionPoint).mockResolvedValue(undefined);
 
     renderWithProviders(<AdminCollectionPointsPage />);
@@ -166,6 +185,9 @@ describe('AdminCollectionPointsPage', () => {
     await waitFor(() =>
       expect(api.deleteCollectionPoint).toHaveBeenCalledWith('team-1', 'point-1'),
     );
+    await waitFor(() => expect(screen.queryByText('Oak St')).not.toBeInTheDocument());
+    // No refetch — the row is removed from local state directly.
+    expect(api.listCollectionPoints).toHaveBeenCalledTimes(1);
   });
 
   it('shows the server conflict message when deleting a point that has scheduled sessions', async () => {
