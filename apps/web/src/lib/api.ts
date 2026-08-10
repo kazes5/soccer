@@ -12,6 +12,7 @@ import {
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
   type SessionListResponse,
+  type ShiftStatsResponse,
   type ShiftSummary,
   acceptInviteResponseSchema,
   authSessionResponseSchema,
@@ -21,6 +22,7 @@ import {
   inviteSummarySchema,
   passkeyChallengeResponseSchema,
   sessionListResponseSchema,
+  shiftStatsResponseSchema,
   shiftSummarySchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
@@ -180,4 +182,9 @@ export const api = {
       `/teams/${encodeURIComponent(teamId)}/shifts/${encodeURIComponent(shiftId)}/release`,
       { method: 'POST', responseSchema: shiftSummarySchema },
     ),
+
+  getShiftStats: (teamId: string) =>
+    request<ShiftStatsResponse>(`/teams/${encodeURIComponent(teamId)}/shifts/stats`, {
+      responseSchema: shiftStatsResponseSchema,
+    }),
 };
