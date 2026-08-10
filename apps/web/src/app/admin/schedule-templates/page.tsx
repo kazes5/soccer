@@ -13,7 +13,13 @@ import { focusRingClassName } from '@soccer/ui-tokens';
 import { Calendar, Home, Pencil, Plus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
+import {
+  Field,
+  FieldsetGroup,
+  FormError,
+  buttonClassName,
+  inputClassName,
+} from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { Dialog } from '@/components/ui/dialog';
@@ -427,7 +433,7 @@ function TemplateFormDialog({
       <form onSubmit={handleSubmit} className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
         {isRecurrenceEditable ? (
           <>
-            <Field label={t('adminScheduleTemplates.frequencyLabel')}>
+            <FieldsetGroup legend={t('adminScheduleTemplates.frequencyLabel')}>
               <div className="flex gap-4">
                 <label className="inline-flex min-h-11 items-center gap-2 text-sm">
                   <input
@@ -450,8 +456,8 @@ function TemplateFormDialog({
                   {t('adminScheduleTemplates.frequencyBiweekly')}
                 </label>
               </div>
-            </Field>
-            <Field label={t('adminScheduleTemplates.daysLabel')}>
+            </FieldsetGroup>
+            <FieldsetGroup legend={t('adminScheduleTemplates.daysLabel')}>
               <div className="flex flex-wrap gap-3">
                 {WEEKDAY_CODES.map((code) => (
                   <label key={code} className="inline-flex min-h-11 items-center gap-2 text-sm">
@@ -465,7 +471,7 @@ function TemplateFormDialog({
                   </label>
                 ))}
               </div>
-            </Field>
+            </FieldsetGroup>
           </>
         ) : (
           <p className="text-sm text-ink-muted">{t('adminScheduleTemplates.customRuleNotice')}</p>
@@ -521,7 +527,7 @@ function TemplateFormDialog({
           />
         </Field>
 
-        <Field label={t('adminScheduleTemplates.collectionPointsLabel')}>
+        <FieldsetGroup legend={t('adminScheduleTemplates.collectionPointsLabel')}>
           <div className="flex flex-col gap-2">
             {points.map((point) => (
               <label key={point.id} className="inline-flex min-h-11 items-center gap-2 text-sm">
@@ -535,7 +541,7 @@ function TemplateFormDialog({
               </label>
             ))}
           </div>
-        </Field>
+        </FieldsetGroup>
 
         {error && <FormError>{error}</FormError>}
         <button type="submit" disabled={isSubmitting} className={`${buttonClassName} self-end`}>
