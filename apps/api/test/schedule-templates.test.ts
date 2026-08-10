@@ -449,5 +449,27 @@ describe('schedule templates', () => {
       });
       expect(auditEntries).toHaveLength(1);
     });
+
+    it('records a real before/after diff when only collectionPointIds changes (no other field)', async () => {
+      const { adminToken, teamId, pickupPointId, bothPointId } = await setUpTeamWithPoints();
+      const created = await createTemplate(teamId, adminToken, {
+        collectionPointIds: [pickupPointId],
+      });
+
+      await app.inject({
+        method: 'PATCH',
+        url: `/teams/${teamId}/schedule-templates/${created.template.id}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { collectionPointIds: [bothPointId] },
+      });
+
+      const auditEntry = await app.prisma.auditLog.findFirstOrThrow({
+        where: { teamId, actionType: 'schedule_template_updated' },
+      });
+      const before = auditEntry.beforeState as { collectionPointIds: string[] };
+      const after = auditEntry.afterState as { collectionPointIds: string[] };
+      expect(before.collectionPointIds).toEqual([pickupPointId]);
+      expect(after.collectionPointIds).toEqual([bothPointId]);
+    });
   });
 });

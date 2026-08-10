@@ -50,6 +50,21 @@ function directionsFor(
   return type === 'pickup' ? ['to_practice'] : ['from_practice'];
 }
 
+async function loadAndValidateCollectionPoints(
+  prisma: FastifyInstance['prisma'],
+  teamId: string,
+  collectionPointIds: string[],
+) {
+  const uniquePointIds = [...new Set(collectionPointIds)];
+  const points = await prisma.collectionPoint.findMany({
+    where: { id: { in: uniquePointIds }, teamId },
+  });
+  if (points.length !== uniquePointIds.length) {
+    throw new HttpError(400, 'One or more collection points were not found on this team.');
+  }
+  return points;
+}
+
 export default async function scheduleTemplateRoutes(app: FastifyInstance) {
   app.get('/teams/:teamId/schedule-templates', async (request) => {
     const params = teamParamsSchema.parse(request.params);
@@ -70,13 +85,11 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
-    const uniquePointIds = [...new Set(body.collectionPointIds)];
-    const points = await app.prisma.collectionPoint.findMany({
-      where: { id: { in: uniquePointIds }, teamId: params.teamId },
-    });
-    if (points.length !== uniquePointIds.length) {
-      throw new HttpError(400, 'One or more collection points were not found on this team.');
-    }
+    const points = await loadAndValidateCollectionPoints(
+      app.prisma,
+      params.teamId,
+      body.collectionPointIds,
+    );
 
     const startDate = new Date(`${body.startDate}T00:00:00.000Z`);
     const dtstart = combineDateAndTime(startDate, body.defaultTime);
@@ -162,19 +175,9 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'Schedule template not found.');
     }
 
-    let points: Array<{ id: string; type: 'pickup' | 'dropoff' | 'both' }>;
-    if (body.collectionPointIds) {
-      const uniquePointIds = [...new Set(body.collectionPointIds)];
-      const found = await app.prisma.collectionPoint.findMany({
-        where: { id: { in: uniquePointIds }, teamId: params.teamId },
-      });
-      if (found.length !== uniquePointIds.length) {
-        throw new HttpError(400, 'One or more collection points were not found on this team.');
-      }
-      points = found;
-    } else {
-      points = existing.collectionPoints.map((assignment) => assignment.point);
-    }
+    const points = body.collectionPointIds
+      ? await loadAndValidateCollectionPoints(app.prisma, params.teamId, body.collectionPointIds)
+      : existing.collectionPoints.map((assignment) => assignment.point);
 
     const effective = {
       recurrenceRule: body.recurrenceRule ?? existing.recurrenceRule,
@@ -243,8 +246,15 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
           defaultTime: existing.defaultTime,
           defaultFieldLocation: existing.defaultFieldLocation,
           horizonWeeks: existing.horizonWeeks,
+          // Recorded even when unchanged, so a collection-point-only edit (the one
+          // change this shape wouldn't otherwise show) still produces a real diff.
+          collectionPointIds: existing.collectionPoints.map((assignment) => assignment.pointId),
         },
-        afterState: { ...effective, sessionsCreated },
+        afterState: {
+          ...effective,
+          collectionPointIds: points.map((point) => point.id),
+          sessionsCreated,
+        },
       });
 
       return { template: updated, sessionsCreated };
