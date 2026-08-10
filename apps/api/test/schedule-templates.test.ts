@@ -190,6 +190,37 @@ describe('schedule templates', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('includes collectionPointIds on create and in the list response', async () => {
+    const { adminToken, teamId, pickupPointId, bothPointId } = await setUpTeamWithPoints();
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-templates`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+        startDate: '2026-08-10',
+        defaultTime: '18:00',
+        defaultFieldLocation: 'Central Field',
+        horizonWeeks: 1,
+        collectionPointIds: [pickupPointId, bothPointId],
+      },
+    });
+    expect(new Set(createResponse.json().template.collectionPointIds)).toEqual(
+      new Set([pickupPointId, bothPointId]),
+    );
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/schedule-templates`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const [listedTemplate] = listResponse.json().templates;
+    expect(new Set(listedTemplate.collectionPointIds)).toEqual(
+      new Set([pickupPointId, bothPointId]),
+    );
+  });
+
   describe('PATCH /teams/:teamId/schedule-templates/:templateId', () => {
     async function createTemplate(
       teamId: string,
@@ -321,6 +352,9 @@ describe('schedule templates', () => {
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().sessionsCreated).toBeGreaterThan(0);
+      expect(new Set(response.json().template.collectionPointIds)).toEqual(
+        new Set([pickupPointId, bothPointId]),
+      );
 
       const sessionsResponse = await app.inject({
         method: 'GET',

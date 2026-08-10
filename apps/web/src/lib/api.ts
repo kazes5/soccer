@@ -11,24 +11,32 @@ import {
   type CurrentUserResponse,
   type InvitePreview,
   type InviteSummary,
+  type CreateScheduleTemplateRequest,
+  type CreateScheduleTemplateResponse,
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
+  type ScheduleTemplateListResponse,
   type SessionListResponse,
   type ShiftStatsResponse,
   type ShiftSummary,
+  type UpdateScheduleTemplateRequest,
+  type UpdateScheduleTemplateResponse,
   acceptInviteResponseSchema,
   authSessionResponseSchema,
   collectionPointListResponseSchema,
   collectionPointSchema,
+  createScheduleTemplateResponseSchema,
   createTeamResponseSchema,
   currentUserResponseSchema,
   invitePreviewSchema,
   inviteSummarySchema,
   passkeyChallengeResponseSchema,
+  scheduleTemplateListResponseSchema,
   sessionListResponseSchema,
   shiftStatsResponseSchema,
   shiftSummarySchema,
+  updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
 import { env } from '../env';
@@ -215,5 +223,29 @@ export const api = {
     request<unknown>(
       `/teams/${encodeURIComponent(teamId)}/collection-points/${encodeURIComponent(pointId)}`,
       { method: 'DELETE', responseSchema: z.unknown() },
+    ),
+
+  listScheduleTemplates: (teamId: string) =>
+    request<ScheduleTemplateListResponse>(
+      `/teams/${encodeURIComponent(teamId)}/schedule-templates`,
+      {
+        responseSchema: scheduleTemplateListResponseSchema,
+      },
+    ),
+
+  createScheduleTemplate: (teamId: string, body: CreateScheduleTemplateRequest) =>
+    request<CreateScheduleTemplateResponse>(
+      `/teams/${encodeURIComponent(teamId)}/schedule-templates`,
+      { method: 'POST', body, responseSchema: createScheduleTemplateResponseSchema },
+    ),
+
+  updateScheduleTemplate: (
+    teamId: string,
+    templateId: string,
+    body: UpdateScheduleTemplateRequest,
+  ) =>
+    request<UpdateScheduleTemplateResponse>(
+      `/teams/${encodeURIComponent(teamId)}/schedule-templates/${encodeURIComponent(templateId)}`,
+      { method: 'PATCH', body, responseSchema: updateScheduleTemplateResponseSchema },
     ),
 };

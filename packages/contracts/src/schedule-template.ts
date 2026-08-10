@@ -35,6 +35,7 @@ export const scheduleTemplateSchema = z.object({
   defaultTime: z.string(),
   defaultFieldLocation: z.string(),
   horizonWeeks: z.number().int(),
+  collectionPointIds: z.array(z.string().uuid()),
   createdByUserId: z.string().uuid(),
   createdAt: z.string().datetime(),
 });

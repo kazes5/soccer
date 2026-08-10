@@ -532,12 +532,20 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
       )}
 
       {membership.role === 'admin' && (
-        <Link
-          href={`/admin/collection-points?team=${encodeURIComponent(membership.teamId)}`}
-          className="mt-4 inline-block text-sm font-medium text-status-mine-on hover:underline"
-        >
-          {t('home.manageCollectionPoints')}
-        </Link>
+        <div className="mt-4 flex flex-col gap-1">
+          <Link
+            href={`/admin/collection-points?team=${encodeURIComponent(membership.teamId)}`}
+            className="text-sm font-medium text-status-mine-on hover:underline"
+          >
+            {t('home.manageCollectionPoints')}
+          </Link>
+          <Link
+            href={`/admin/schedule-templates?team=${encodeURIComponent(membership.teamId)}`}
+            className="text-sm font-medium text-status-mine-on hover:underline"
+          >
+            {t('home.manageScheduleTemplates')}
+          </Link>
+        </div>
       )}
     </DataListItem>
   );
