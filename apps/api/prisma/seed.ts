@@ -8,6 +8,11 @@ import { createSessionWithShifts } from '../src/routes/schedule-templates';
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+// Local demo invites are intentionally long-lived. They are only created by the
+// seed script and are reset to pending on each reseed, so this avoids making a
+// developer regenerate test links while keeping the normal invite TTL unchanged.
+const TEST_INVITE_EXPIRY = new Date('9999-12-31T23:59:59.999Z');
+
 async function main() {
   // One-time cleanup for local databases seeded before this id was fixed to be a
   // schema-valid UUID (see below) — without this, re-running seed against such a
@@ -171,6 +176,224 @@ async function main() {
   console.log(
     `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, ${players.length} players, 2 collection points, and ${sessionsCreated || 'no new'} sessions.`,
   );
+
+  const hebrewDemo = await seedHebrewDemoData();
+  console.log(
+    `Seeded Hebrew demo team "${hebrewDemo.team.name}" with passkey setup invites:\n` +
+      hebrewDemo.invites
+        .map(({ label, code }) => `  ${label}: http://localhost:3000/invite/${code}`)
+        .join('\n'),
+  );
+}
+
+async function seedHebrewDemoData() {
+  const team = await prisma.team.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000002' },
+    update: { name: 'נבחרת אריות U-12', season: 'סתיו 2026', timezone: 'Asia/Jerusalem' },
+    create: {
+      id: '00000000-0000-4000-8000-000000000002',
+      name: 'נבחרת אריות U-12',
+      season: 'סתיו 2026',
+      timezone: 'Asia/Jerusalem',
+    },
+  });
+
+  const admin = await prisma.user.upsert({
+    where: { phone: '+972501234567' },
+    update: {
+      name: 'יעל כהן',
+      email: 'yael@example.test',
+      languagePreference: 'he',
+      isActive: true,
+    },
+    create: {
+      name: 'יעל כהן',
+      phone: '+972501234567',
+      email: 'yael@example.test',
+      languagePreference: 'he',
+    },
+  });
+
+  const parents = await Promise.all(
+    [
+      {
+        name: 'אבי לוי',
+        phone: '+972502345678',
+        email: 'avi.he@example.test',
+      },
+      {
+        name: 'שרה כץ',
+        phone: '+972503456789',
+        email: 'sarah.he@example.test',
+      },
+    ].map((parent) =>
+      prisma.user.upsert({
+        where: { phone: parent.phone },
+        update: {
+          name: parent.name,
+          email: parent.email,
+          languagePreference: 'he',
+          isActive: true,
+        },
+        create: { ...parent, languagePreference: 'he' },
+      }),
+    ),
+  );
+
+  await Promise.all(
+    [
+      { userId: admin.id, role: 'admin' as const },
+      { userId: parents[0]!.id, role: 'parent' as const },
+      { userId: parents[1]!.id, role: 'parent' as const },
+    ].map(({ userId, role }) =>
+      prisma.teamMember.upsert({
+        where: { teamId_userId: { teamId: team.id, userId } },
+        update: { role },
+        create: { teamId: team.id, userId, role },
+      }),
+    ),
+  );
+
+  const playerDefinitions = [
+    {
+      id: '00000000-0000-4000-8000-000000000201',
+      name: 'יואב לוי',
+      age: 11,
+      parentUserId: parents[0]!.id,
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000202',
+      name: 'נועה כץ',
+      age: 12,
+      parentUserId: parents[1]!.id,
+    },
+  ];
+
+  for (const player of playerDefinitions) {
+    await prisma.player.upsert({
+      where: { id: player.id },
+      update: { teamId: team.id, name: player.name, age: player.age },
+      create: {
+        id: player.id,
+        teamId: team.id,
+        name: player.name,
+        age: player.age,
+        parents: {
+          create: { userId: player.parentUserId, relationship: 'parent' },
+        },
+      },
+    });
+
+    await prisma.playerParent.upsert({
+      where: { playerId_userId: { playerId: player.id, userId: player.parentUserId } },
+      update: { relationship: 'parent' },
+      create: { playerId: player.id, userId: player.parentUserId, relationship: 'parent' },
+    });
+  }
+
+  const neighborhoodPoint = await prisma.collectionPoint.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000201' },
+    update: {
+      teamId: team.id,
+      name: 'רחוב האלון',
+      address: 'רחוב האלון 12, תל אביב',
+      type: 'pickup',
+    },
+    create: {
+      id: '00000000-0000-4000-8000-000000000201',
+      teamId: team.id,
+      name: 'רחוב האלון',
+      address: 'רחוב האלון 12, תל אביב',
+      type: 'pickup',
+    },
+  });
+  const centralPoint = await prisma.collectionPoint.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000202' },
+    update: {
+      teamId: team.id,
+      name: 'הפארק המרכזי',
+      address: 'שדרות העצמאות 8, תל אביב',
+      type: 'both',
+    },
+    create: {
+      id: '00000000-0000-4000-8000-000000000202',
+      teamId: team.id,
+      name: 'הפארק המרכזי',
+      address: 'שדרות העצמאות 8, תל אביב',
+      type: 'both',
+    },
+  });
+
+  const existingTemplate = await prisma.scheduleTemplate.findFirst({ where: { teamId: team.id } });
+  let sessionsCreated = 0;
+  if (!existingTemplate) {
+    const recurrenceRule = 'FREQ=WEEKLY;BYDAY=SU,TU,TH';
+    const startDate = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const defaultTime = '17:30';
+    const dtstart = combineDateAndTime(startDate, defaultTime);
+
+    const template = await prisma.scheduleTemplate.create({
+      data: {
+        id: '00000000-0000-4000-8000-000000000203',
+        teamId: team.id,
+        recurrenceRule,
+        startDate,
+        defaultTime,
+        defaultFieldLocation: 'מגרש מרכזי',
+        createdByUserId: admin.id,
+        collectionPoints: {
+          create: [{ pointId: neighborhoodPoint.id }, { pointId: centralPoint.id }],
+        },
+      },
+    });
+
+    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks);
+    for (const startsAt of occurrences) {
+      await createSessionWithShifts(prisma, {
+        teamId: team.id,
+        templateId: template.id,
+        startsAt,
+        fieldLocation: 'מגרש מרכזי',
+        points: [neighborhoodPoint, centralPoint],
+      });
+      sessionsCreated += 1;
+    }
+  }
+
+  const inviteDefinitions = [
+    { code: 'hebrew-admin-demo', label: 'admin', user: admin },
+    { code: 'hebrew-parent-1-demo', label: 'parent 1', user: parents[0]! },
+    { code: 'hebrew-parent-2-demo', label: 'parent 2', user: parents[1]! },
+  ];
+  for (const invite of inviteDefinitions) {
+    await prisma.invite.upsert({
+      where: { code: invite.code },
+      update: {
+        teamId: team.id,
+        phone: invite.user.phone,
+        email: invite.user.email,
+        status: 'pending',
+        acceptedByUserId: null,
+        acceptedAt: null,
+        createdByUserId: admin.id,
+        expiresAt: TEST_INVITE_EXPIRY,
+      },
+      create: {
+        teamId: team.id,
+        code: invite.code,
+        phone: invite.user.phone,
+        email: invite.user.email,
+        createdByUserId: admin.id,
+        expiresAt: TEST_INVITE_EXPIRY,
+      },
+    });
+  }
+
+  return {
+    team,
+    sessionsCreated,
+    invites: inviteDefinitions.map(({ code, label }) => ({ code, label })),
+  };
 }
 
 main()
