@@ -145,8 +145,10 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 /**
- * AI-drafted Hebrew, not yet reviewed by a native speaker — see PLAN.md
- * Stage 2 (CLAUDE.md §3.10 calls for human-reviewed phrasing before pilot).
+ * AI-drafted Hebrew, reviewed and approved as-is by a native speaker on
+ * 2026-08-10 (see PLAN.md's Stage 2 closure note) — satisfies CLAUDE.md
+ * §3.10's human-review requirement for everything present at that point.
+ * Keys added after that date should get the same review before pilot.
  */
 export const he: Record<MessageKey, string> = {
   'common.appName': 'מערכת הסעות לכדורגל',
