@@ -106,6 +106,72 @@ describe('shifts', () => {
     };
   }
 
+  // A 'both'-type point over two sessions/week yields both a to_practice and a
+  // from_practice shift per session — needed to exercise per-direction stats,
+  // unlike setUpTeamWithShift's single 'pickup' point (to_practice only).
+  async function setUpTeamWithBothDirectionShifts() {
+    const teamResponse = await app.inject({
+      method: 'POST',
+      url: '/teams',
+      payload: {
+        teamName: 'U-12 Wildcats',
+        season: 'Fall 2026',
+        adminName: 'Dana Cohen',
+        adminPhone: `+1555170${Math.floor(Math.random() * 9000 + 1000)}`,
+      },
+    });
+    const teamBody = teamResponse.json();
+    createdTeamIds.push(teamBody.team.id);
+    createdUserIds.push(teamBody.admin.id);
+    const adminToken = teamBody.sessionToken as string;
+    const teamId = teamBody.team.id as string;
+
+    const point = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/collection-points`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: 'Oak St', address: '123 Oak St', type: 'both' },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-templates`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE',
+        startDate: '2026-08-10',
+        defaultTime: '18:00',
+        defaultFieldLocation: 'Central Field',
+        horizonWeeks: 1,
+        collectionPointIds: [point.json().id],
+      },
+    });
+
+    const sessionsResponse = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const sessions = sessionsResponse.json().sessions as Array<{
+      id: string;
+      points: Array<{ shift: { id: string; direction: string } }>;
+    }>;
+
+    return { adminToken, teamId, sessions };
+  }
+
+  function shiftIdFor(
+    sessions: Array<{ id: string; points: Array<{ shift: { id: string; direction: string } }> }>,
+    sessionIndex: number,
+    direction: string,
+  ) {
+    const shift = sessions[sessionIndex]!.points.map((p) => p.shift).find(
+      (s) => s.direction === direction,
+    );
+    if (!shift) throw new Error(`No ${direction} shift on session ${sessionIndex}`);
+    return shift.id;
+  }
+
   it('lets a parent claim an open shift', async () => {
     const { adminToken, teamId, shiftId } = await setUpTeamWithShift();
     const parent = await addParent(teamId, adminToken);
@@ -245,5 +311,122 @@ describe('shifts', () => {
       where: { teamId, actionType: 'shift_claimed', targetId: shiftId },
     });
     expect(auditEntries).toHaveLength(1);
+  });
+
+  describe('GET /teams/:teamId/shifts/stats', () => {
+    it("reports the caller's own counts by direction and the team average", async () => {
+      const { adminToken, teamId, sessions } = await setUpTeamWithBothDirectionShifts();
+      const parent = await addParent(teamId, adminToken);
+
+      // Team has 2 members (admin + parent). Parent claims one to_practice and
+      // one from_practice shift; nobody else claims anything.
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 0, 'to_practice')}/claim`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 0, 'from_practice')}/claim`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/shifts/stats`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.mine).toEqual({ toPractice: 1, fromPractice: 1, total: 2 });
+      // 2 claimed shifts total / 2 team members = 1 average, per direction.
+      expect(body.teamAverage).toEqual({ toPractice: 0.5, fromPractice: 0.5, total: 1 });
+    });
+
+    it("does not count another parent's claims toward the caller's own stats", async () => {
+      const { adminToken, teamId, sessions } = await setUpTeamWithBothDirectionShifts();
+      const parentA = await addParent(teamId, adminToken);
+      const parentB = await addParent(teamId, adminToken);
+
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 0, 'to_practice')}/claim`,
+        headers: { authorization: `Bearer ${parentA.sessionToken}` },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 0, 'from_practice')}/claim`,
+        headers: { authorization: `Bearer ${parentB.sessionToken}` },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/shifts/stats`,
+        headers: { authorization: `Bearer ${parentA.sessionToken}` },
+      });
+
+      const body = response.json();
+      expect(body.mine).toEqual({ toPractice: 1, fromPractice: 0, total: 1 });
+      // 2 claimed shifts total / 3 team members (admin + 2 parents).
+      expect(body.teamAverage.total).toBeCloseTo(2 / 3);
+    });
+
+    it('excludes shifts belonging to cancelled sessions from both mine and teamAverage', async () => {
+      const { adminToken, teamId, sessions } = await setUpTeamWithBothDirectionShifts();
+      const parent = await addParent(teamId, adminToken);
+
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 0, 'to_practice')}/claim`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/shifts/${shiftIdFor(sessions, 1, 'to_practice')}/claim`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/sessions/${sessions[1]!.id}/cancel`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/shifts/stats`,
+        headers: { authorization: `Bearer ${parent.sessionToken}` },
+      });
+
+      const body = response.json();
+      expect(body.mine).toEqual({ toPractice: 1, fromPractice: 0, total: 1 });
+      expect(body.teamAverage.toPractice).toBeCloseTo(1 / 2);
+    });
+
+    it('rejects a caller who is not a member of the team', async () => {
+      const { teamId } = await setUpTeamWithBothDirectionShifts();
+      const { teamId: otherTeamId, adminToken: otherAdminToken } =
+        await setUpTeamWithBothDirectionShifts();
+      expect(otherTeamId).not.toBe(teamId);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/shifts/stats`,
+        headers: { authorization: `Bearer ${otherAdminToken}` },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('rejects an unauthenticated caller', async () => {
+      const { teamId } = await setUpTeamWithBothDirectionShifts();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/shifts/stats`,
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
   });
 });
