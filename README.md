@@ -18,5 +18,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, everyday commands, and the P
 
 ## Docs
 
+- [Documentation](./docs/README.md) - architecture, testing, installation, and user guides.
 - [CLAUDE.md](./CLAUDE.md) — full product requirements document.
 - [PLAN.md](./PLAN.md) — staged delivery plan; source of truth for what's built vs. what's next.
