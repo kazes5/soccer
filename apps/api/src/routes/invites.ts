@@ -1,16 +1,36 @@
 import {
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
+  authSessionResponseSchema,
   createInviteRequestSchema,
   invitePreviewSchema,
   inviteSummarySchema,
+  passkeyChallengeResponseSchema,
+  passkeyVerifyRequestSchema,
 } from '@soccer/contracts';
+import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { env } from '../env';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
-import { generateInviteCode } from '../lib/crypto';
+import { setSessionCookies } from '../lib/cookies';
+import { generateInviteCode, generateSessionToken, hashSecret } from '../lib/crypto';
 import { HttpError } from '../lib/errors';
+import {
+  createRegistrationChallenge,
+  verifyRegistrationChallenge,
+} from '../lib/passkey-registration';
+
+const codeParamsSchema = z.object({ code: z.string().min(1) });
+
+/**
+ * How long after an invite is accepted its code can still be used to register
+ * a passkey. Without a bound, capturing an already-used invite code would let
+ * someone attach a new credential to that account indefinitely — the invite
+ * is meant to authorize one onboarding sitting, not standing account access.
+ */
+const PASSKEY_REGISTRATION_WINDOW_MINUTES = 15;
 
 export default async function inviteRoutes(app: FastifyInstance) {
   app.post('/teams/:teamId/invites', async (request, reply) => {
@@ -57,7 +77,7 @@ export default async function inviteRoutes(app: FastifyInstance) {
   });
 
   app.get('/invites/:code', async (request) => {
-    const params = z.object({ code: z.string().min(1) }).parse(request.params);
+    const params = codeParamsSchema.parse(request.params);
     const invite = await app.prisma.invite.findUnique({
       where: { code: params.code },
       include: { team: true },
@@ -75,7 +95,7 @@ export default async function inviteRoutes(app: FastifyInstance) {
   });
 
   app.post('/invites/:code/accept', async (request, reply) => {
-    const params = z.object({ code: z.string().min(1) }).parse(request.params);
+    const params = codeParamsSchema.parse(request.params);
     const body = acceptInviteRequestSchema.parse(request.body);
 
     const invite = await app.prisma.invite.findUnique({ where: { code: params.code } });
@@ -96,6 +116,10 @@ export default async function inviteRoutes(app: FastifyInstance) {
     const contactWhere = invite.phone ? { phone: invite.phone } : { email: invite.email as string };
 
     const result = await app.prisma.$transaction(async (tx) => {
+      // Guarded on the invite's own status first (not the user lookup below) so
+      // a double-accept race is resolved here: only the winner proceeds to
+      // touch the User table, so two concurrent requests can never both try to
+      // create a user with the same phone/email.
       const claimed = await tx.invite.updateMany({
         where: { id: invite.id, status: 'pending' },
         data: { status: 'accepted', acceptedAt: new Date() },
@@ -116,36 +140,52 @@ export default async function inviteRoutes(app: FastifyInstance) {
         });
       }
 
+      await tx.invite.update({
+        where: { id: invite.id },
+        data: { acceptedByUserId: user.id },
+      });
+
       const existingMembership = await tx.teamMember.findUnique({
         where: { teamId_userId: { teamId: invite.teamId, userId: user.id } },
       });
-      if (existingMembership) {
-        throw new HttpError(409, "You're already on this team.");
+
+      // Recovery path: this invite was generated for someone already on the
+      // team — e.g. an admin re-inviting a user whose device/passkey was lost,
+      // per the recovery model in CLAUDE.md §9.1. Don't create a duplicate
+      // membership or duplicate players; just re-anchor the invite to this
+      // user (done above) so the passkey-registration step below can issue
+      // them a fresh credential. A hard 409 here would make that recovery
+      // path — an admin's only lever for a locked-out user — permanently
+      // unreachable.
+      const players = existingMembership
+        ? await tx.player.findMany({
+            where: { teamId: invite.teamId, parents: { some: { userId: user.id } } },
+          })
+        : await Promise.all(
+            body.players.map((player) =>
+              tx.player.create({
+                data: {
+                  teamId: invite.teamId,
+                  name: player.name,
+                  age: player.age,
+                  parents: { create: { userId: user.id, relationship: 'parent' } },
+                },
+              }),
+            ),
+          );
+
+      if (!existingMembership) {
+        await tx.teamMember.create({
+          data: { teamId: invite.teamId, userId: user.id, role: 'parent' },
+        });
       }
-
-      await tx.teamMember.create({
-        data: { teamId: invite.teamId, userId: user.id, role: 'parent' },
-      });
-
-      const players = await Promise.all(
-        body.players.map((player) =>
-          tx.player.create({
-            data: {
-              teamId: invite.teamId,
-              name: player.name,
-              age: player.age,
-              parents: { create: { userId: user.id, relationship: 'parent' } },
-            },
-          }),
-        ),
-      );
 
       const team = await tx.team.findUniqueOrThrow({ where: { id: invite.teamId } });
 
       await recordAuditLog(tx, {
         teamId: invite.teamId,
         actorId: user.id,
-        actionType: 'invite_accepted',
+        actionType: existingMembership ? 'invite_accepted_for_recovery' : 'invite_accepted',
         targetEntity: 'invite',
         targetId: invite.id,
         afterState: { userId: user.id, playerCount: players.length },
@@ -176,4 +216,84 @@ export default async function inviteRoutes(app: FastifyInstance) {
       })),
     });
   });
+
+  app.post('/invites/:code/passkey/register/options', async (request, reply) => {
+    const params = codeParamsSchema.parse(request.params);
+    const invite = await loadAcceptedInvite(app, params.code);
+
+    const user = await app.prisma.user.findUniqueOrThrow({
+      where: { id: invite.acceptedByUserId! },
+      include: { passkeys: true },
+    });
+
+    const { challengeId, options } = await createRegistrationChallenge(
+      app.prisma,
+      app.webauthnVerifier,
+      user,
+      request.ip,
+    );
+
+    reply.status(201);
+    return passkeyChallengeResponseSchema.parse({ challengeId, options });
+  });
+
+  app.post('/invites/:code/passkey/register/verify', async (request, reply) => {
+    const params = codeParamsSchema.parse(request.params);
+    const body = passkeyVerifyRequestSchema.parse(request.body);
+    const invite = await loadAcceptedInvite(app, params.code);
+
+    await verifyRegistrationChallenge(app.prisma, app.webauthnVerifier, {
+      challengeId: body.challengeId,
+      expectedUserId: invite.acceptedByUserId!,
+      response: body.response as RegistrationResponseJSON,
+    });
+
+    // Registration alone doesn't grant a session (unlike the authenticated
+    // `/auth/passkey/register/*` pair) — this is a brand-new parent's first
+    // credential, so it also needs to establish their first session.
+    const user = await app.prisma.user.findUniqueOrThrow({
+      where: { id: invite.acceptedByUserId! },
+      include: { teamMemberships: { include: { team: true } } },
+    });
+
+    const token = generateSessionToken();
+    const sessionExpiresAt = new Date(Date.now() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await app.prisma.session.create({
+      data: { userId: user.id, tokenHash: hashSecret(token), expiresAt: sessionExpiresAt },
+    });
+
+    setSessionCookies(reply, token, sessionExpiresAt);
+
+    return authSessionResponseSchema.parse({
+      sessionToken: token,
+      expiresAt: sessionExpiresAt.toISOString(),
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        languagePreference: user.languagePreference,
+      },
+      teamMemberships: user.teamMemberships.map((membership) => ({
+        teamId: membership.teamId,
+        teamName: membership.team.name,
+        role: membership.role,
+      })),
+    });
+  });
+}
+
+async function loadAcceptedInvite(app: FastifyInstance, code: string) {
+  const invite = await app.prisma.invite.findUnique({ where: { code } });
+  if (!invite || invite.status !== 'accepted' || !invite.acceptedByUserId || !invite.acceptedAt) {
+    throw new HttpError(404, 'Invite not found or not yet accepted.');
+  }
+  const windowMs = PASSKEY_REGISTRATION_WINDOW_MINUTES * 60 * 1000;
+  if (Date.now() - invite.acceptedAt.getTime() > windowMs) {
+    throw new HttpError(
+      409,
+      'This invite link can no longer be used to set up a passkey. Ask your team admin for a new one.',
+    );
+  }
+  return invite;
 }

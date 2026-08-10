@@ -39,8 +39,9 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
       lang={locale}
       dir={directionFor(locale)}
       className={`${heebo.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-surface text-ink">
+      <body className="min-h-full flex flex-col bg-surface text-ink" suppressHydrationWarning>
         <LocaleProvider initialLocale={locale}>
           <ToastProvider>{children}</ToastProvider>
         </LocaleProvider>

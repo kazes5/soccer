@@ -19,17 +19,19 @@ or production-provider coverage.
 | API pure logic       | `apps/api/src/lib/*.test.ts`           | Vitest                                       | RRULE parsing and recurrence generation                                                    |
 | Web components/pages | `apps/web/src/**/*.test.tsx`           | Vitest, React Testing Library, jsdom         | Rendered states, user actions, API success/error handling, and localization shell behavior |
 
-The API test provider is injected through `buildApp({ otpProvider })`, so tests
-never call an SMS or email network provider. API tests use the configured
-PostgreSQL database and clean up their created records; the current setup is not
-a disposable database per test run.
+The API's WebAuthn verifier is injected through `buildApp({ webauthnVerifier })`,
+so tests never need a real browser/authenticator to complete a passkey ceremony.
+API tests use the configured PostgreSQL database and clean up their created
+records; the current setup is not a disposable database per test run.
 
 ## Covered API scenarios
 
 - Health and readiness responses, including a live database readiness check.
 - Team creation with the first admin and session creation.
-- OTP request and verification, invalid/expired codes, attempt limits, request
-  limits, IP limits, and session behavior.
+- Invite-scoped passkey registration (including the not-yet-accepted and
+  past-the-registration-window rejections), authenticated passkey registration
+  for an already-logged-in user, identifier-first passkey login, mismatched
+  and reused-challenge rejection, and session behavior.
 - httpOnly session cookies, CSRF enforcement, bearer compatibility, `/auth/me`,
   logout, and cookie clearing.
 - CORS behavior for the configured web origin and rejection of unsafe origins.
@@ -59,7 +61,10 @@ Web tests cover:
 
 - Landing page and route-level content.
 - Team creation form success and validation/error states.
-- OTP login form request, verify, loading, and failure states.
+- Passkey login form: options request, ceremony, loading, unrecognized-contact,
+  and cancelled-ceremony states.
+- Team creation and invite-acceptance passkey setup, including retry after a
+  cancelled ceremony without re-creating the team or re-accepting the invite.
 - Invite preview, acceptance, not-found, and error states.
 - Home authentication, team selection, admin invite creation, copy-link and
   logout interactions, and parent/admin visibility differences.

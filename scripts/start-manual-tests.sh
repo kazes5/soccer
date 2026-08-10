@@ -80,11 +80,15 @@ Ready for manual testing:
   Web:  http://localhost:3000
   API:  http://localhost:4000/health
 
-Seeded demo team "U-12 Wildcats" — log in with any of these phones
-(the OTP code is written to $LOG_DIR/api.log, not actually texted):
-  Admin:  Dana Cohen   +15550000001
-  Parent: Avi Levi     +15550000002
-  Parent: Sarah Katz   +15550000003
+Seeded demo team "U-12 Wildcats" has data to look at (schedule, players,
+collection points) via Dana Cohen (+15550000001), Avi Levi (+15550000002),
+and Sarah Katz (+15550000003) — but none of them have a registered passkey.
+Passkeys are tied to a real device credential and can't be pre-seeded, so to
+click through the logged-in app yourself:
+  - Create a new team at /teams/new (prompts you to register a real passkey
+    on this device right after), or
+  - Generate an invite link from an existing session and accept it at
+    /invite/<code> (same real passkey prompt, right after joining).
 
 Logs: $LOG_DIR/api.log , $LOG_DIR/web.log
 When done: scripts/stop-manual-tests.sh

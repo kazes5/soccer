@@ -22,17 +22,23 @@ export const en = {
   'teamsNew.phoneLabel': 'Your phone number',
   'teamsNew.submit': 'Create team',
   'teamsNew.submitting': 'Creating…',
+  'teamsNew.passkeyTitle': 'Set up your passkey',
+  'teamsNew.passkeySubtitle':
+    "Your passkey lets you log back in without a password, using your device's built-in security (fingerprint, face, or screen lock).",
+  'teamsNew.passkeySettingUp': 'Setting up…',
+  'teamsNew.passkeyNotSupported':
+    "Passkeys aren't supported in this browser. Please switch to a supported browser (Chrome, Safari, Edge, or Firefox) to finish setting up your account.",
+  'teamsNew.passkeyCancelled':
+    'Passkey setup was cancelled. Try again to finish creating your account.',
 
   'login.title': 'Log in',
-  'login.subtitle': "We'll text you a one-time code — no password needed.",
+  'login.subtitle': 'Log in with your passkey — no password needed.',
   'login.phoneLabel': 'Phone number',
-  'login.sendCode': 'Send code',
-  'login.sending': 'Sending…',
-  'login.codeSentTo': 'We sent a 6-digit code to {phone}.',
-  'login.codeLabel': 'Code',
-  'login.verifyCode': 'Verify code',
-  'login.verifying': 'Verifying…',
-  'login.useDifferentPhone': 'Use a different phone number',
+  'login.continueWithPasskey': 'Continue with passkey',
+  'login.authenticating': 'Waiting for your passkey…',
+  'login.notSupported':
+    "Passkeys aren't supported in this browser. Try a different browser or device.",
+  'login.cancelled': 'Passkey login was cancelled. Try again.',
 
   'invite.loading': 'Loading invite…',
   'invite.notFoundTitle': 'Invite not found',
@@ -50,8 +56,12 @@ export const en = {
   'invite.submit': 'Join team',
   'invite.submitting': 'Joining…',
   'invite.acceptedTitle': "You're on the team!",
-  'invite.acceptedBody': 'Next, log in with your phone number to see the schedule.',
-  'invite.continueToLogin': 'Continue to login',
+  'invite.acceptedBody':
+    "Now set up your passkey — it lets you log back in without a password, using your device's built-in security.",
+  'invite.passkeySettingUp': 'Setting up…',
+  'invite.passkeyNotSupported':
+    "Passkeys aren't supported in this browser. Please switch to a supported browser (Chrome, Safari, Edge, or Firefox) to finish joining the team.",
+  'invite.passkeyCancelled': 'Passkey setup was cancelled. Try again to finish joining the team.',
 
   'home.welcome': 'Welcome, {name}',
   'home.logOut': 'Log out',
@@ -120,17 +130,21 @@ export const he: Record<MessageKey, string> = {
   'teamsNew.phoneLabel': 'מספר הטלפון שלכם',
   'teamsNew.submit': 'יצירת קבוצה',
   'teamsNew.submitting': 'יוצר…',
+  'teamsNew.passkeyTitle': 'הגדרת מפתח גישה',
+  'teamsNew.passkeySubtitle':
+    'מפתח הגישה מאפשר להתחבר מחדש בלי סיסמה, באמצעות אמצעי האבטחה המובנים במכשיר שלכם (טביעת אצבע, זיהוי פנים או קוד נעילה).',
+  'teamsNew.passkeySettingUp': 'מגדיר…',
+  'teamsNew.passkeyNotSupported':
+    'מפתחות גישה אינם נתמכים בדפדפן זה. עברו לדפדפן נתמך (כרום, ספארי, edge או פיירפוקס) כדי לסיים את הגדרת החשבון.',
+  'teamsNew.passkeyCancelled': 'הגדרת מפתח הגישה בוטלה. נסו שוב כדי לסיים את יצירת החשבון.',
 
   'login.title': 'התחברות',
-  'login.subtitle': 'נשלח לכם קוד חד־פעמי בסמס — בלי צורך בסיסמה.',
+  'login.subtitle': 'התחברות באמצעות מפתח גישה — בלי צורך בסיסמה.',
   'login.phoneLabel': 'מספר טלפון',
-  'login.sendCode': 'שליחת קוד',
-  'login.sending': 'שולח…',
-  'login.codeSentTo': 'נשלח קוד בן 6 ספרות למספר {phone}.',
-  'login.codeLabel': 'קוד',
-  'login.verifyCode': 'אימות קוד',
-  'login.verifying': 'מאמת…',
-  'login.useDifferentPhone': 'שימוש במספר טלפון אחר',
+  'login.continueWithPasskey': 'המשך עם מפתח גישה',
+  'login.authenticating': 'ממתין למפתח הגישה שלכם…',
+  'login.notSupported': 'מפתחות גישה אינם נתמכים בדפדפן זה. נסו דפדפן או מכשיר אחר.',
+  'login.cancelled': 'ההתחברות באמצעות מפתח הגישה בוטלה. נסו שוב.',
 
   'invite.loading': 'טוען הזמנה…',
   'invite.notFoundTitle': 'ההזמנה לא נמצאה',
@@ -148,8 +162,12 @@ export const he: Record<MessageKey, string> = {
   'invite.submit': 'הצטרפות לקבוצה',
   'invite.submitting': 'מצטרף…',
   'invite.acceptedTitle': 'אתם בקבוצה!',
-  'invite.acceptedBody': 'עכשיו התחברו עם מספר הטלפון שלכם כדי לראות את לוח הזמנים.',
-  'invite.continueToLogin': 'המשך להתחברות',
+  'invite.acceptedBody':
+    'עכשיו הגדירו מפתח גישה — הוא מאפשר להתחבר מחדש בלי סיסמה, באמצעות אמצעי האבטחה המובנים במכשיר שלכם.',
+  'invite.passkeySettingUp': 'מגדיר…',
+  'invite.passkeyNotSupported':
+    'מפתחות גישה אינם נתמכים בדפדפן זה. עברו לדפדפן נתמך (כרום, ספארי, edge או פיירפוקס) כדי לסיים את ההצטרפות לקבוצה.',
+  'invite.passkeyCancelled': 'הגדרת מפתח הגישה בוטלה. נסו שוב כדי לסיים את ההצטרפות לקבוצה.',
 
   'home.welcome': 'ברוכים הבאים, {name}',
   'home.logOut': 'התנתקות',

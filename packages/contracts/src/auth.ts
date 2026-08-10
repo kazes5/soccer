@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { teamMembershipSchema, userSummarySchema } from './user';
 
-export const requestOtpRequestSchema = z
+export const passkeyLoginOptionsRequestSchema = z
   .object({
     phone: z.string().min(1).max(20).optional(),
     email: z.string().email().optional(),
@@ -10,27 +10,36 @@ export const requestOtpRequestSchema = z
     message: 'Provide phone or email.',
     path: ['phone'],
   });
-export type RequestOtpRequest = z.infer<typeof requestOtpRequestSchema>;
+export type PasskeyLoginOptionsRequest = z.input<typeof passkeyLoginOptionsRequestSchema>;
 
-export const requestOtpResponseSchema = z.object({
+/**
+ * Shared by every "start a WebAuthn ceremony" response (registration or
+ * authentication) — `options` is the JSON options object handed straight to
+ * `@simplewebauthn/browser`'s `startRegistration`/`startAuthentication`. Its
+ * exact shape is owned by that library, not our own domain data, so it isn't
+ * re-validated field-by-field here.
+ */
+export const passkeyChallengeResponseSchema = z.object({
   challengeId: z.string().uuid(),
-  expiresAt: z.string().datetime(),
+  options: z.unknown(),
 });
-export type RequestOtpResponse = z.infer<typeof requestOtpResponseSchema>;
+export type PasskeyChallengeResponse = z.infer<typeof passkeyChallengeResponseSchema>;
 
-export const verifyOtpRequestSchema = z.object({
+/** Shared by every "complete a WebAuthn ceremony" request. */
+export const passkeyVerifyRequestSchema = z.object({
   challengeId: z.string().uuid(),
-  code: z.string().length(6),
+  response: z.unknown(),
 });
-export type VerifyOtpRequest = z.infer<typeof verifyOtpRequestSchema>;
+export type PasskeyVerifyRequest = z.infer<typeof passkeyVerifyRequestSchema>;
 
-export const verifyOtpResponseSchema = z.object({
+/** Returned by any endpoint that establishes a new session (passkey login or registration). */
+export const authSessionResponseSchema = z.object({
   sessionToken: z.string(),
   expiresAt: z.string().datetime(),
   user: userSummarySchema,
   teamMemberships: z.array(teamMembershipSchema),
 });
-export type VerifyOtpResponse = z.infer<typeof verifyOtpResponseSchema>;
+export type AuthSessionResponse = z.infer<typeof authSessionResponseSchema>;
 
 export const currentUserResponseSchema = z.object({
   user: userSummarySchema,

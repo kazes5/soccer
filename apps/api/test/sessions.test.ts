@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
-import { RecordingOtpProvider } from './support/recording-otp-provider';
 
 describe('sessions', () => {
-  const otpProvider = new RecordingOtpProvider();
-  const app = buildApp({ otpProvider });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 

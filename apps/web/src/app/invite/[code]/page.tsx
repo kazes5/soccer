@@ -1,6 +1,8 @@
 'use client';
 
 import type { InvitePreview } from '@soccer/contracts';
+import { WebAuthnError, browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -43,7 +45,7 @@ export default function AcceptInvitePage() {
   const [players, setPlayers] = useState<PlayerDraft[]>([{ name: '', age: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [acceptedPhone, setAcceptedPhone] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     api
@@ -69,12 +71,39 @@ export default function AcceptInvitePage() {
     setPlayers((current) => current.filter((_, i) => i !== index));
   }
 
+  async function registerPasskey() {
+    setError(null);
+    if (!browserSupportsWebAuthn()) {
+      setError(t('invite.passkeyNotSupported'));
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { challengeId, options } = await api.getInvitePasskeyRegisterOptions(code);
+      const response = await startRegistration({
+        optionsJSON: options as PublicKeyCredentialCreationOptionsJSON,
+      });
+      await api.verifyInvitePasskeyRegister(code, { challengeId, response });
+      router.push('/home');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err instanceof WebAuthnError) {
+        setError(t('invite.passkeyCancelled'));
+      } else {
+        setError(t('common.somethingWentWrong'));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await api.acceptInvite(code, {
+      await api.acceptInvite(code, {
         name,
         players: players
           .filter((player) => player.name.trim().length > 0)
@@ -83,24 +112,29 @@ export default function AcceptInvitePage() {
             age: parsePlayerAge(player.age),
           })),
       });
-      setAcceptedPhone(response.user.phone);
+      // The account now exists — from here on, failure only affects passkey
+      // setup, never re-accepts the invite.
+      setAccepted(true);
+      await registerPasskey();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
-    } finally {
       setIsSubmitting(false);
     }
   }
 
-  if (acceptedPhone) {
+  if (accepted) {
     return (
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 p-8 text-center">
         <h1 className="text-xl font-semibold tracking-tight">{t('invite.acceptedTitle')}</h1>
         <p className="text-sm text-ink-muted">{t('invite.acceptedBody')}</p>
+        {error && <FormError>{error}</FormError>}
         <button
-          onClick={() => router.push(`/login?phone=${encodeURIComponent(acceptedPhone)}`)}
+          type="button"
+          disabled={isSubmitting}
+          onClick={registerPasskey}
           className={buttonClassName}
         >
-          {t('invite.continueToLogin')}
+          {isSubmitting ? t('invite.passkeySettingUp') : t('common.retry')}
         </button>
       </main>
     );

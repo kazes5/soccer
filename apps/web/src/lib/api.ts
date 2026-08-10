@@ -1,27 +1,27 @@
 import {
   type AcceptInviteRequest,
   type AcceptInviteResponse,
+  type AuthSessionResponse,
   type CreateInviteRequest,
   type CreateTeamRequest,
   type CreateTeamResponse,
   type CurrentUserResponse,
   type InvitePreview,
   type InviteSummary,
-  type RequestOtpRequest,
-  type RequestOtpResponse,
+  type PasskeyChallengeResponse,
+  type PasskeyLoginOptionsRequest,
+  type PasskeyVerifyRequest,
   type SessionListResponse,
   type ShiftSummary,
-  type VerifyOtpRequest,
-  type VerifyOtpResponse,
   acceptInviteResponseSchema,
+  authSessionResponseSchema,
   createTeamResponseSchema,
   currentUserResponseSchema,
   invitePreviewSchema,
   inviteSummarySchema,
-  requestOtpResponseSchema,
+  passkeyChallengeResponseSchema,
   sessionListResponseSchema,
   shiftSummarySchema,
-  verifyOtpResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
 import { env } from '../env';
@@ -95,18 +95,50 @@ export const api = {
       responseSchema: createTeamResponseSchema,
     }),
 
-  requestOtp: (body: RequestOtpRequest) =>
-    request<RequestOtpResponse>('/auth/otp/request', {
+  // Log in on a device that already has a registered passkey.
+  getPasskeyLoginOptions: (body: PasskeyLoginOptionsRequest) =>
+    request<PasskeyChallengeResponse>('/auth/passkey/login/options', {
       method: 'POST',
       body,
-      responseSchema: requestOtpResponseSchema,
+      responseSchema: passkeyChallengeResponseSchema,
+    }),
+  verifyPasskeyLogin: (body: PasskeyVerifyRequest) =>
+    request<AuthSessionResponse>('/auth/passkey/login/verify', {
+      method: 'POST',
+      body,
+      responseSchema: authSessionResponseSchema,
     }),
 
-  verifyOtp: (body: VerifyOtpRequest) =>
-    request<VerifyOtpResponse>('/auth/otp/verify', {
+  // Register an additional passkey for the *currently authenticated* user —
+  // used right after `createTeam` (which issues a session with no invite
+  // involved) and for adding a second device later.
+  getPasskeyRegisterOptions: () =>
+    request<PasskeyChallengeResponse>('/auth/passkey/register/options', {
+      method: 'POST',
+      responseSchema: passkeyChallengeResponseSchema,
+    }),
+  verifyPasskeyRegister: (body: PasskeyVerifyRequest) =>
+    request<unknown>('/auth/passkey/register/verify', {
       method: 'POST',
       body,
-      responseSchema: verifyOtpResponseSchema,
+      responseSchema: z.unknown(),
+    }),
+
+  // Register a brand-new parent's first passkey, scoped by the invite code
+  // they just accepted — no session exists yet at this point.
+  getInvitePasskeyRegisterOptions: (code: string) =>
+    request<PasskeyChallengeResponse>(
+      `/invites/${encodeURIComponent(code)}/passkey/register/options`,
+      {
+        method: 'POST',
+        responseSchema: passkeyChallengeResponseSchema,
+      },
+    ),
+  verifyInvitePasskeyRegister: (code: string, body: PasskeyVerifyRequest) =>
+    request<AuthSessionResponse>(`/invites/${encodeURIComponent(code)}/passkey/register/verify`, {
+      method: 'POST',
+      body,
+      responseSchema: authSessionResponseSchema,
     }),
 
   me: () => request<CurrentUserResponse>('/auth/me', { responseSchema: currentUserResponseSchema }),

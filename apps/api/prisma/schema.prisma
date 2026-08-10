@@ -23,9 +23,9 @@ enum NotificationChannel {
   email
 }
 
-enum OtpChannel {
-  sms
-  email
+enum WebauthnChallengeType {
+  registration
+  authentication
 }
 
 enum InviteStatus {
@@ -73,16 +73,18 @@ model User {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  teamMemberships   TeamMember[]
-  playerLinks       PlayerParent[]
-  sentInvites       Invite[]                 @relation("InvitesCreated")
-  otpChallenges     OtpChallenge[]
-  sessions          Session[]
-  notificationPrefs NotificationPreference[]
-  auditLogEntries   AuditLog[]               @relation("AuditActor")
-  pushSubscriptions PushSubscription[]
-  scheduleTemplates ScheduleTemplate[]       @relation("ScheduleTemplatesCreated")
-  assignedShifts    Shift[]                  @relation("ShiftsAssigned")
+  teamMemberships    TeamMember[]
+  playerLinks        PlayerParent[]
+  sentInvites        Invite[]                 @relation("InvitesCreated")
+  acceptedInvites    Invite[]                 @relation("InvitesAccepted")
+  passkeys           Passkey[]
+  webauthnChallenges WebauthnChallenge[]
+  sessions           Session[]
+  notificationPrefs  NotificationPreference[]
+  auditLogEntries    AuditLog[]               @relation("AuditActor")
+  pushSubscriptions  PushSubscription[]
+  scheduleTemplates  ScheduleTemplate[]       @relation("ScheduleTemplatesCreated")
+  assignedShifts     Shift[]                  @relation("ShiftsAssigned")
 
   @@map("users")
 }
@@ -151,41 +153,59 @@ model PlayerParent {
 }
 
 model Invite {
-  id              String       @id @default(uuid())
-  teamId          String       @map("team_id")
-  code            String       @unique
-  phone           String?
-  email           String?
-  status          InviteStatus @default(pending)
-  createdByUserId String       @map("created_by_user_id")
-  expiresAt       DateTime     @map("expires_at")
-  acceptedAt      DateTime?    @map("accepted_at")
-  createdAt       DateTime     @default(now()) @map("created_at")
+  id               String       @id @default(uuid())
+  teamId           String       @map("team_id")
+  code             String       @unique
+  phone            String?
+  email            String?
+  status           InviteStatus @default(pending)
+  createdByUserId  String       @map("created_by_user_id")
+  acceptedByUserId String?      @map("accepted_by_user_id")
+  expiresAt        DateTime     @map("expires_at")
+  acceptedAt       DateTime?    @map("accepted_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
 
-  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  createdBy User @relation("InvitesCreated", fields: [createdByUserId], references: [id])
+  team           Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy      User  @relation("InvitesCreated", fields: [createdByUserId], references: [id])
+  acceptedByUser User? @relation("InvitesAccepted", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@index([teamId])
   @@map("invites")
 }
 
-model OtpChallenge {
-  id          String     @id @default(uuid())
-  userId      String     @map("user_id")
-  channel     OtpChannel
-  destination String
-  codeHash    String     @map("code_hash")
-  attempts    Int        @default(0)
-  requestIp   String?    @map("request_ip")
-  expiresAt   DateTime   @map("expires_at")
-  consumedAt  DateTime?  @map("consumed_at")
-  createdAt   DateTime   @default(now()) @map("created_at")
+model Passkey {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  credentialId String   @unique @map("credential_id")
+  publicKey    Bytes    @map("public_key")
+  counter      Int
+  transports   String[]
+  deviceType   String   @map("device_type")
+  backedUp     Boolean  @map("backed_up")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastUsedAt   DateTime @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+model WebauthnChallenge {
+  id         String                @id @default(uuid())
+  userId     String                @map("user_id")
+  type       WebauthnChallengeType
+  challenge  String
+  requestIp  String?               @map("request_ip")
+  expiresAt  DateTime              @map("expires_at")
+  consumedAt DateTime?             @map("consumed_at")
+  createdAt  DateTime              @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([requestIp, createdAt])
-  @@map("otp_challenges")
+  @@map("webauthn_challenges")
 }
 
 model Session {

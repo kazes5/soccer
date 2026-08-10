@@ -33,11 +33,11 @@ schedule when the database has not already been seeded.
 The root `.env` configures Docker services. Application settings live in the
 app-specific files:
 
-| File                  | Key settings                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `.env`                | `POSTGRES_*` and `REDIS_PORT` used by Docker Compose                                        |
-| `apps/api/.env`       | `DATABASE_URL`, `REDIS_URL`, `PORT`, OTP/session/invite limits, `WEB_ORIGIN`, `TRUST_PROXY` |
-| `apps/web/.env.local` | `NEXT_PUBLIC_API_URL`                                                                       |
+| File                  | Key settings                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `.env`                | `POSTGRES_*` and `REDIS_PORT` used by Docker Compose                                                          |
+| `apps/api/.env`       | `DATABASE_URL`, `REDIS_URL`, `PORT`, session/invite limits, WebAuthn RP settings, `WEB_ORIGIN`, `TRUST_PROXY` |
+| `apps/web/.env.local` | `NEXT_PUBLIC_API_URL`                                                                                         |
 
 The default local addresses are:
 
@@ -77,9 +77,10 @@ only when you intentionally want to discard local database and Redis data.
 
 ## Local login and demo data
 
-The default API uses `ConsoleOtpProvider`, so no SMS or email vendor is needed
-for local development. Request an OTP for a seeded user's phone number through
-the web login flow, then copy the code from the API log. Seeded users include:
+Login and registration use WebAuthn passkeys, which are bound to a real device
+credential and can't be pre-seeded into the database. The seeded demo team has
+data to look at (schedule, players, collection points) via these accounts, but
+none of them have a registered passkey:
 
 | Role   | Phone          |
 | ------ | -------------- |
@@ -87,9 +88,13 @@ the web login flow, then copy the code from the API log. Seeded users include:
 | Parent | `+15550000002` |
 | Parent | `+15550000003` |
 
-The console provider is a development substitute only. Production OTP delivery
-has not been selected and must be added behind the existing `OtpProvider`
-interface.
+To click through the logged-in app yourself, either create a new team at
+`/teams/new` or accept a fresh invite at `/invite/<code>` — both prompt you to
+register a real passkey on your device immediately afterward, using your
+platform's built-in authenticator (Face ID, Touch ID, Windows Hello) or a
+security key. There is no vendor to configure; the real WebAuthn ceremony
+(`@simplewebauthn/server`) runs against `WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in
+`apps/api/.env`, defaulted for local development against `localhost`.
 
 ## Database changes
 
@@ -127,8 +132,10 @@ the configured database and is not an isolated disposable database per run.
   health checks to pass.
 - Web requests fail with CORS errors: make `WEB_ORIGIN` exactly match the web
   origin, including scheme and port.
-- Login code is missing: inspect the API process log; the default provider logs
-  the code instead of sending it.
+- The browser's passkey prompt never appears: confirm the browser supports
+  WebAuthn and that `WEBAUTHN_RP_ID` matches the hostname you're actually
+  browsing on (`localhost` by default) — a mismatch fails the ceremony
+  silently in some browsers.
 - Session mutations return `403`: use the web client or send the `x-csrf-token`
   matching the `soccer_csrf` cookie.
 - Prisma client errors after schema changes: run `pnpm db:generate` again.

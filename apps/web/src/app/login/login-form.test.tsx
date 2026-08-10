@@ -1,3 +1,4 @@
+import { WebAuthnError } from '@simplewebauthn/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
@@ -10,27 +11,40 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock('@simplewebauthn/browser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@simplewebauthn/browser')>();
+  return {
+    ...actual,
+    browserSupportsWebAuthn: () => true,
+    startAuthentication: vi.fn(),
+  };
+});
+
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return {
     ...actual,
-    api: { ...actual.api, requestOtp: vi.fn(), verifyOtp: vi.fn() },
+    api: { ...actual.api, getPasskeyLoginOptions: vi.fn(), verifyPasskeyLogin: vi.fn() },
   };
 });
 
 describe('LoginForm', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     push.mockClear();
-    vi.mocked(api.requestOtp).mockReset();
-    vi.mocked(api.verifyOtp).mockReset();
+    vi.mocked(api.getPasskeyLoginOptions).mockReset();
+    vi.mocked(api.verifyPasskeyLogin).mockReset();
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    vi.mocked(startAuthentication).mockReset();
   });
 
-  it('requests a code, then verifies it and redirects to /home', async () => {
-    vi.mocked(api.requestOtp).mockResolvedValue({
+  it('requests login options, completes the passkey ceremony, and redirects to /home', async () => {
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    vi.mocked(api.getPasskeyLoginOptions).mockResolvedValue({
       challengeId: 'challenge-1',
-      expiresAt: '2026-08-09T08:00:00.000Z',
+      options: { challenge: 'server-challenge' },
     });
-    vi.mocked(api.verifyOtp).mockResolvedValue({
+    vi.mocked(startAuthentication).mockResolvedValue({ id: 'credential-1' } as never);
+    vi.mocked(api.verifyPasskeyLogin).mockResolvedValue({
       sessionToken: 'token-abc',
       expiresAt: '2026-09-01T00:00:00.000Z',
       user: {
@@ -48,21 +62,21 @@ describe('LoginForm', () => {
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15550002222' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /send code/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue with passkey/i }));
 
-    expect(api.requestOtp).toHaveBeenCalledWith({ phone: '+15550002222' });
-    await screen.findByPlaceholderText('123456');
-
-    fireEvent.change(screen.getByPlaceholderText('123456'), { target: { value: '295392' } });
-    fireEvent.click(screen.getByRole('button', { name: /verify code/i }));
-
+    await waitFor(() =>
+      expect(api.getPasskeyLoginOptions).toHaveBeenCalledWith({ phone: '+15550002222' }),
+    );
     await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
-    expect(api.verifyOtp).toHaveBeenCalledWith({ challengeId: 'challenge-1', code: '295392' });
+    expect(api.verifyPasskeyLogin).toHaveBeenCalledWith({
+      challengeId: 'challenge-1',
+      response: { id: 'credential-1' },
+    });
   });
 
   it('shows an error when the phone is not recognized', async () => {
     const { ApiError } = await import('@/lib/api');
-    vi.mocked(api.requestOtp).mockRejectedValue(
+    vi.mocked(api.getPasskeyLoginOptions).mockRejectedValue(
       new ApiError(404, "You haven't been added to a team yet. Ask your team admin for an invite."),
     );
 
@@ -70,12 +84,35 @@ describe('LoginForm', () => {
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15559990000' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /send code/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue with passkey/i }));
 
     expect(
       await screen.findByText(
         "You haven't been added to a team yet. Ask your team admin for an invite.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows a friendly message when the passkey ceremony is cancelled', async () => {
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    vi.mocked(api.getPasskeyLoginOptions).mockResolvedValue({
+      challengeId: 'challenge-1',
+      options: { challenge: 'server-challenge' },
+    });
+    vi.mocked(startAuthentication).mockRejectedValue(
+      new WebAuthnError({
+        message: 'The operation either timed out or was not allowed',
+        code: 'ERROR_CEREMONY_ABORTED',
+        cause: new Error('AbortError'),
+      }),
+    );
+
+    renderWithProviders(<LoginForm />);
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
+      target: { value: '+15550002222' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /continue with passkey/i }));
+
+    expect(await screen.findByText(/passkey login was cancelled/i)).toBeInTheDocument();
   });
 });

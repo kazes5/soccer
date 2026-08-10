@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { FakeWebauthnVerifier } from './support/fake-webauthn-verifier';
 
 async function createTeamWithAdmin(app: FastifyInstance, adminPhone: string) {
   const response = await app.inject({
@@ -33,11 +34,11 @@ async function createInvite(
     headers: { authorization: `Bearer ${sessionToken}` },
     payload: { phone },
   });
-  return response.json() as { code: string };
+  return response.json() as { id: string; code: string };
 }
 
 describe('POST /invites/:code/accept', () => {
-  const app = buildApp();
+  const app = buildApp({ webauthnVerifier: new FakeWebauthnVerifier() });
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -79,7 +80,7 @@ describe('POST /invites/:code/accept', () => {
     expect(updatedInvite?.status).toBe('accepted');
   });
 
-  it('lets the newly registered parent log in via OTP afterward', async () => {
+  it('lets the newly registered parent complete passkey registration afterward', async () => {
     const { teamId, adminId, sessionToken } = await createTeamWithAdmin(app, '+15551230102');
     createdTeamIds.push(teamId);
     createdUserIds.push(adminId);
@@ -92,13 +93,20 @@ describe('POST /invites/:code/accept', () => {
     });
     createdUserIds.push(acceptResponse.json().user.id);
 
-    const otpResponse = await app.inject({
+    const optionsResponse = await app.inject({
       method: 'POST',
-      url: '/auth/otp/request',
-      payload: { phone: '+15551230103' },
+      url: `/invites/${invite.code}/passkey/register/options`,
     });
+    expect(optionsResponse.statusCode).toBe(201);
+    const { challengeId } = optionsResponse.json();
 
-    expect(otpResponse.statusCode).toBe(201);
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/verify`,
+      payload: { challengeId, response: { id: 'credential-sarah-katz' } },
+    });
+    expect(verifyResponse.statusCode).toBe(200);
+    expect(typeof verifyResponse.json().sessionToken).toBe('string');
   });
 
   it('rejects accepting the same invite twice', async () => {
@@ -121,6 +129,62 @@ describe('POST /invites/:code/accept', () => {
     });
 
     expect(second.statusCode).toBe(409);
+  });
+
+  it('lets an admin re-invite an existing member for account recovery, without duplicating membership or players', async () => {
+    const { teamId, adminId, sessionToken } = await createTeamWithAdmin(app, '+15551230106');
+    createdTeamIds.push(teamId);
+    createdUserIds.push(adminId);
+
+    const firstInvite = await createInvite(app, teamId, sessionToken, '+15551230107');
+    const firstAccept = await app.inject({
+      method: 'POST',
+      url: `/invites/${firstInvite.code}/accept`,
+      payload: { name: 'Avi Levi', players: [{ name: 'Yossi Levi', age: 11 }] },
+    });
+    const userId = firstAccept.json().user.id as string;
+    createdUserIds.push(userId);
+
+    // Simulate a lost device: the admin generates a *second*, fresh invite
+    // for the same phone number, per the recovery model in CLAUDE.md §9.1.
+    const recoveryInvite = await createInvite(app, teamId, sessionToken, '+15551230107');
+    const recoveryAccept = await app.inject({
+      method: 'POST',
+      url: `/invites/${recoveryInvite.code}/accept`,
+      payload: { name: 'Avi Levi', players: [{ name: 'Someone Else', age: 9 }] },
+    });
+
+    expect(recoveryAccept.statusCode).toBe(201);
+    const body = recoveryAccept.json();
+    expect(body.user.id).toBe(userId);
+    // The submitted "Someone Else" player is ignored — recovery re-anchors the
+    // existing account, it doesn't create new players.
+    expect(body.players).toEqual([expect.objectContaining({ name: 'Yossi Levi', age: 11 })]);
+
+    const memberships = await app.prisma.teamMember.findMany({ where: { teamId, userId } });
+    expect(memberships).toHaveLength(1);
+    const players = await app.prisma.player.findMany({ where: { teamId, name: 'Someone Else' } });
+    expect(players).toHaveLength(0);
+
+    const updatedRecoveryInvite = await app.prisma.invite.findUniqueOrThrow({
+      where: { code: recoveryInvite.code },
+    });
+    expect(updatedRecoveryInvite.status).toBe('accepted');
+    expect(updatedRecoveryInvite.acceptedByUserId).toBe(userId);
+
+    // The recovery accept lets the same user complete passkey registration
+    // again, scoped to the new invite code — this is the actual point of the
+    // recovery flow (a fresh credential on a new/current device).
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${recoveryInvite.code}/passkey/register/options`,
+    });
+    expect(optionsResponse.statusCode).toBe(201);
+
+    const auditEntries = await app.prisma.auditLog.findMany({
+      where: { teamId, actionType: 'invite_accepted_for_recovery', targetId: recoveryInvite.id },
+    });
+    expect(auditEntries).toHaveLength(1);
   });
 
   it('rejects an unknown invite code', async () => {
