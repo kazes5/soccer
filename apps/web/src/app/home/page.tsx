@@ -530,6 +530,15 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
           )}
         </form>
       )}
+
+      {membership.role === 'admin' && (
+        <Link
+          href={`/admin/collection-points?team=${encodeURIComponent(membership.teamId)}`}
+          className="mt-4 inline-block text-sm font-medium text-status-mine-on hover:underline"
+        >
+          {t('home.manageCollectionPoints')}
+        </Link>
+      )}
     </DataListItem>
   );
 }

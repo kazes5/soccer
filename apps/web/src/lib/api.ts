@@ -2,6 +2,9 @@ import {
   type AcceptInviteRequest,
   type AcceptInviteResponse,
   type AuthSessionResponse,
+  type CollectionPoint,
+  type CollectionPointListResponse,
+  type CollectionPointRequest,
   type CreateInviteRequest,
   type CreateTeamRequest,
   type CreateTeamResponse,
@@ -16,6 +19,8 @@ import {
   type ShiftSummary,
   acceptInviteResponseSchema,
   authSessionResponseSchema,
+  collectionPointListResponseSchema,
+  collectionPointSchema,
   createTeamResponseSchema,
   currentUserResponseSchema,
   invitePreviewSchema,
@@ -187,4 +192,28 @@ export const api = {
     request<ShiftStatsResponse>(`/teams/${encodeURIComponent(teamId)}/shifts/stats`, {
       responseSchema: shiftStatsResponseSchema,
     }),
+
+  listCollectionPoints: (teamId: string) =>
+    request<CollectionPointListResponse>(`/teams/${encodeURIComponent(teamId)}/collection-points`, {
+      responseSchema: collectionPointListResponseSchema,
+    }),
+
+  createCollectionPoint: (teamId: string, body: CollectionPointRequest) =>
+    request<CollectionPoint>(`/teams/${encodeURIComponent(teamId)}/collection-points`, {
+      method: 'POST',
+      body,
+      responseSchema: collectionPointSchema,
+    }),
+
+  updateCollectionPoint: (teamId: string, pointId: string, body: CollectionPointRequest) =>
+    request<CollectionPoint>(
+      `/teams/${encodeURIComponent(teamId)}/collection-points/${encodeURIComponent(pointId)}`,
+      { method: 'PATCH', body, responseSchema: collectionPointSchema },
+    ),
+
+  deleteCollectionPoint: (teamId: string, pointId: string) =>
+    request<unknown>(
+      `/teams/${encodeURIComponent(teamId)}/collection-points/${encodeURIComponent(pointId)}`,
+      { method: 'DELETE', responseSchema: z.unknown() },
+    ),
 };
