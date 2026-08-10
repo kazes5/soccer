@@ -26,7 +26,8 @@ pnpm db:seed
 
 The seed is intended for local development. It creates a sample `U-12 Wildcats`
 team, one admin, two parents, two players, two collection points, and a recurring
-schedule when the database has not already been seeded.
+schedule. It also creates a Hebrew demo team, Hebrew users and players, Hebrew
+collection-point names, and a recurring schedule for RTL testing.
 
 ## Configuration
 
@@ -78,23 +79,38 @@ only when you intentionally want to discard local database and Redis data.
 ## Local login and demo data
 
 Login and registration use WebAuthn passkeys, which are bound to a real device
-credential and can't be pre-seeded into the database. The seeded demo team has
-data to look at (schedule, players, collection points) via these accounts, but
-none of them have a registered passkey:
+credential and can't be pre-seeded into the database. The seeded demo teams have
+data to look at (schedule, players, collection points), but none of the accounts
+have a registered passkey initially.
 
-| Role   | Phone          |
-| ------ | -------------- |
-| Admin  | `+15550000001` |
-| Parent | `+15550000002` |
-| Parent | `+15550000003` |
+| Demo user       | Role   | Phone           | Credential status                       |
+| --------------- | ------ | --------------- | --------------------------------------- |
+| English admin   | Admin  | `+15550000001`  | No password; passkey must be registered |
+| English parent  | Parent | `+15550000002`  | No password; passkey must be registered |
+| English parent  | Parent | `+15550000003`  | No password; passkey must be registered |
+| Hebrew admin    | Admin  | `+972501234567` | No password; passkey must be registered |
+| Hebrew parent 1 | Parent | `+972502345678` | No password; passkey must be registered |
+| Hebrew parent 2 | Parent | `+972503456789` | No password; passkey must be registered |
 
 To click through the logged-in app yourself, either create a new team at
-`/teams/new` or accept a fresh invite at `/invite/<code>` — both prompt you to
-register a real passkey on your device immediately afterward, using your
-platform's built-in authenticator (Face ID, Touch ID, Windows Hello) or a
-security key. There is no vendor to configure; the real WebAuthn ceremony
-(`@simplewebauthn/server`) runs against `WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in
-`apps/api/.env`, defaulted for local development against `localhost`.
+`/teams/new` or open one of the Hebrew demo invite links below. Each invite
+prompts you to register a real passkey on your device immediately afterward,
+using your platform's built-in authenticator (Face ID, Touch ID, Windows Hello)
+or a security key:
+
+| User            | Invite URL                                          |
+| --------------- | --------------------------------------------------- |
+| Hebrew admin    | `http://localhost:3000/invite/hebrew-admin-demo`    |
+| Hebrew parent 1 | `http://localhost:3000/invite/hebrew-parent-1-demo` |
+| Hebrew parent 2 | `http://localhost:3000/invite/hebrew-parent-2-demo` |
+
+These seed-only invites use a far-future expiry and will not expire during local
+testing. Re-running `pnpm db:seed` resets them to `pending`, so you can repeat
+passkey onboarding. Use a separate browser profile or device for each user when
+testing multiple accounts. There is no vendor to configure; the real WebAuthn
+ceremony (`@simplewebauthn/server`) runs against
+`WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in `apps/api/.env`, defaulted for local
+development against `localhost`.
 
 ## Database changes
 
