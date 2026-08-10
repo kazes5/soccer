@@ -1,10 +1,10 @@
 'use client';
 
 import type { CurrentUserResponse, PracticeSession, ShiftSummary } from '@soccer/contracts';
-import { formatDate, type Locale } from '@soccer/i18n';
+import type { Locale } from '@soccer/i18n';
 import type { StatusTone } from '@soccer/ui-tokens';
 import { Calendar, Home } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClassName, secondaryButtonClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
@@ -15,19 +15,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { ApiError, api } from '@/lib/api';
-
-function updateShiftInSessions(
-  sessions: PracticeSession[],
-  shiftId: string,
-  updated: ShiftSummary,
-): PracticeSession[] {
-  return sessions.map((session) => ({
-    ...session,
-    points: session.points.map((point) =>
-      point.shift.id === shiftId ? { ...point, shift: updated } : point,
-    ),
-  }));
-}
+import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   if (shift.status === 'open') return 'open';
@@ -36,6 +24,10 @@ function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
 
 export default function SchedulePage() {
   const router = useRouter();
+  // Lets a link from another page (e.g. Home's "+N more" under a specific
+  // team's help-needed list) open the schedule already scoped to that team,
+  // instead of always defaulting to the user's first membership.
+  const requestedTeamId = useSearchParams().get('team');
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -48,7 +40,10 @@ export default function SchedulePage() {
       .then((data) => {
         if (cancelled) return;
         setSession(data);
-        setActiveTeamId(data.teamMemberships[0]?.teamId ?? null);
+        const requestedMembership = data.teamMemberships.find(
+          (membership) => membership.teamId === requestedTeamId,
+        );
+        setActiveTeamId(requestedMembership?.teamId ?? data.teamMemberships[0]?.teamId ?? null);
         setAuthStatus('ready');
       })
       .catch(() => {
@@ -58,7 +53,7 @@ export default function SchedulePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestedTeamId]);
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
@@ -251,22 +246,7 @@ function SessionCard({
   onRelease: (shiftId: string) => void;
 }) {
   const { t } = useLocale();
-  const startsAt = new Date(practiceSession.startsAt);
-  const formatted = formatDate(locale, startsAt, {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    // `startsAt` is stored as literal wall-clock numbers, not a true
-    // timezone-aware instant (see PLAN.md's Stage 3 recurrence note) — pinning
-    // the formatter to UTC displays exactly what was entered/generated,
-    // regardless of the viewer's own browser timezone. Real per-team
-    // IANA-timezone conversion is Stage 4's job (reminders/escalation).
-    timeZone: 'UTC',
-  });
+  const formatted = formatSessionStartsAt(locale, practiceSession.startsAt);
 
   return (
     <DataListItem className="flex flex-col gap-4">

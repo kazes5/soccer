@@ -1,18 +1,57 @@
 'use client';
 
-import type { CurrentUserResponse, TeamMembership } from '@soccer/contracts';
+import type {
+  CurrentUserResponse,
+  PracticeSession,
+  SessionPoint,
+  ShiftStatsResponse,
+  TeamMembership,
+} from '@soccer/contracts';
+import type { Locale } from '@soccer/i18n';
 import { Calendar, Copy, Home, LogOut } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
-import { FormError, buttonClassName, inputClassName } from '@/components/form-controls';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  FormError,
+  buttonClassName,
+  inputClassName,
+  secondaryButtonClassName,
+} from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { IconButton } from '@/components/ui/icon-button';
 import { AppShell, type ShellNavItem } from '@/components/ui/shell';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { ApiError, api } from '@/lib/api';
+import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
+
+interface UpcomingShift {
+  session: PracticeSession;
+  point: SessionPoint;
+}
+
+const HELP_NEEDED_DISPLAY_CAP = 5;
+
+function flattenUpcoming(sessions: PracticeSession[]): UpcomingShift[] {
+  const now = Date.now();
+  return sessions
+    .filter(
+      (session) => session.status === 'scheduled' && new Date(session.startsAt).getTime() >= now,
+    )
+    .flatMap((session) => session.points.map((point) => ({ session, point })))
+    .sort(
+      (a, b) => new Date(a.session.startsAt).getTime() - new Date(b.session.startsAt).getTime(),
+    );
+}
+
+function formatAverage(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -98,6 +137,12 @@ export default function HomePage() {
           onChange={setActiveTeamId}
         />
 
+        {/* Keyed on team so switching teams remounts this subtree and fetches
+            fresh — avoids a synchronous setState-on-dependency-change effect. */}
+        {activeTeamId && (
+          <HomeWorkspace key={activeTeamId} teamId={activeTeamId} currentUserId={session.user.id} />
+        )}
+
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
             {t('home.yourTeams')}
@@ -121,6 +166,290 @@ export default function HomePage() {
         onCancel={() => setConfirmingLogOut(false)}
       />
     </AppShell>
+  );
+}
+
+function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserId: string }) {
+  const { t, locale } = useLocale();
+  const { showToast } = useToast();
+  const [sessions, setSessions] = useState<PracticeSession[] | null>(null);
+  const [sessionsState, setSessionsState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [stats, setStats] = useState<ShiftStatsResponse | null>(null);
+  const [statsState, setStatsState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [pendingShiftId, setPendingShiftId] = useState<string | null>(null);
+
+  const loadSessions = useCallback(() => {
+    return api.listSessions(teamId).then((data) => {
+      setSessions(data.sessions);
+      setSessionsState('ready');
+    });
+  }, [teamId]);
+
+  const loadStats = useCallback(() => {
+    return api.getShiftStats(teamId).then((data) => {
+      setStats(data);
+      setStatsState('ready');
+    });
+  }, [teamId]);
+
+  // Initial fetch: `sessionsState`/`statsState` already start as 'loading' via
+  // useState, so there's nothing to reset here — every setState happens inside
+  // the promise continuation, not synchronously in the effect body.
+  useEffect(() => {
+    let cancelled = false;
+    loadSessions().catch(() => {
+      if (!cancelled) setSessionsState('error');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSessions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadStats().catch(() => {
+      if (!cancelled) setStatsState('error');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadStats]);
+
+  // Only used to resync after a claim/release conflict, where the local list is
+  // known-stale — a normal success patches the one changed shift in place
+  // instead (see handleClaim/handleRelease below), so the rest of the
+  // workspace never flashes back to a full loading state.
+  const reloadSessions = useCallback(() => {
+    setSessionsState('loading');
+    loadSessions().catch(() => setSessionsState('error'));
+  }, [loadSessions]);
+
+  async function handleClaim(shiftId: string) {
+    setPendingShiftId(shiftId);
+    try {
+      const updated = await api.claimShift(teamId, shiftId);
+      setSessions((prev) => (prev ? updateShiftInSessions(prev, shiftId, updated) : prev));
+      loadStats().catch(() => setStatsState('error'));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const holderName =
+          typeof err.details?.holderName === 'string' ? err.details.holderName : null;
+        showToast(
+          holderName
+            ? t('schedule.claimConflictWithName', { name: holderName })
+            : t('schedule.claimConflictUnknown'),
+          'error',
+        );
+        reloadSessions();
+      } else {
+        showToast(t('common.somethingWentWrong'), 'error');
+      }
+    } finally {
+      setPendingShiftId(null);
+    }
+  }
+
+  async function handleRelease(shiftId: string) {
+    setPendingShiftId(shiftId);
+    try {
+      const updated = await api.releaseShift(teamId, shiftId);
+      setSessions((prev) => (prev ? updateShiftInSessions(prev, shiftId, updated) : prev));
+      loadStats().catch(() => setStatsState('error'));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        showToast(t('schedule.releaseConflict'), 'error');
+        reloadSessions();
+      } else {
+        showToast(t('common.somethingWentWrong'), 'error');
+      }
+    } finally {
+      setPendingShiftId(null);
+    }
+  }
+
+  if (sessionsState === 'loading') {
+    return <LoadingState label={t('home.workspaceLoading')} />;
+  }
+
+  if (sessionsState === 'error' || !sessions) {
+    return (
+      <ErrorState
+        title={t('home.workspaceError')}
+        action={
+          <button type="button" className={secondaryButtonClassName} onClick={reloadSessions}>
+            {t('common.retry')}
+          </button>
+        }
+      />
+    );
+  }
+
+  const upcoming = flattenUpcoming(sessions);
+  const myAssignments = upcoming.filter(
+    (entry) => entry.point.shift.assignedUserId === currentUserId,
+  );
+  const openShifts = upcoming.filter((entry) => entry.point.shift.status === 'open');
+  const visibleOpenShifts = openShifts.slice(0, HELP_NEEDED_DISPLAY_CAP);
+  const remainingOpenCount = openShifts.length - visibleOpenShifts.length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge
+          tone="mine"
+          label={t('home.upcomingShiftsCount', { count: myAssignments.length })}
+        />
+        <StatusBadge tone="open" label={t('home.openShiftsCount', { count: openShifts.length })} />
+      </div>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+          {t('home.myAssignmentsTitle')}
+        </h2>
+        {myAssignments.length === 0 ? (
+          <EmptyState title={t('home.myAssignmentsEmpty')} />
+        ) : (
+          <DataList ariaLabel={t('home.myAssignmentsTitle')}>
+            {myAssignments.map((entry) => (
+              <ShiftRow
+                key={entry.point.shift.id}
+                entry={entry}
+                locale={locale}
+                variant="secondary"
+                actionLabel={t('schedule.release')}
+                actionPendingLabel={t('schedule.releasing')}
+                isPending={pendingShiftId === entry.point.shift.id}
+                onAction={() => handleRelease(entry.point.shift.id)}
+              />
+            ))}
+          </DataList>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+          {t('home.helpNeededTitle')}
+        </h2>
+        {visibleOpenShifts.length === 0 ? (
+          <EmptyState title={t('home.helpNeededEmpty')} />
+        ) : (
+          <>
+            <DataList ariaLabel={t('home.helpNeededTitle')}>
+              {visibleOpenShifts.map((entry) => (
+                <ShiftRow
+                  key={entry.point.shift.id}
+                  entry={entry}
+                  locale={locale}
+                  variant="primary"
+                  actionLabel={t('schedule.claim')}
+                  actionPendingLabel={t('schedule.claiming')}
+                  isPending={pendingShiftId === entry.point.shift.id}
+                  onAction={() => handleClaim(entry.point.shift.id)}
+                />
+              ))}
+            </DataList>
+            {remainingOpenCount > 0 && (
+              <Link
+                href={`/schedule?team=${encodeURIComponent(teamId)}`}
+                className="text-sm font-medium text-status-mine-on hover:underline"
+              >
+                {t('home.helpNeededMore', { count: remainingOpenCount })}
+              </Link>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+          {t('home.pendingSwapsTitle')}
+        </h2>
+        <DataList ariaLabel={t('home.pendingSwapsTitle')}>
+          <DataListItem>
+            <span className="text-sm text-ink-muted">{t('home.pendingSwapsPlaceholder')}</span>
+          </DataListItem>
+        </DataList>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+          {t('home.statsTitle')}
+        </h2>
+        {statsState === 'error' && <ErrorState title={t('home.statsError')} />}
+        {statsState === 'ready' && stats && (
+          <DataList ariaLabel={t('home.statsTitle')}>
+            <DataListItem>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-ink-muted">{t('home.statsMineLabel')}</p>
+                  <p className="mt-1 text-sm">
+                    {t('schedule.toPractice')}: {stats.mine.toPractice}
+                  </p>
+                  <p className="text-sm">
+                    {t('schedule.fromPractice')}: {stats.mine.fromPractice}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-ink-muted">
+                    {t('home.statsTeamAverageLabel')}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {t('schedule.toPractice')}: {formatAverage(stats.teamAverage.toPractice)}
+                  </p>
+                  <p className="text-sm">
+                    {t('schedule.fromPractice')}: {formatAverage(stats.teamAverage.fromPractice)}
+                  </p>
+                </div>
+              </div>
+            </DataListItem>
+          </DataList>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ShiftRow({
+  entry,
+  locale,
+  variant,
+  actionLabel,
+  actionPendingLabel,
+  isPending,
+  onAction,
+}: {
+  entry: UpcomingShift;
+  locale: Locale;
+  variant: 'primary' | 'secondary';
+  actionLabel: string;
+  actionPendingLabel: string;
+  isPending: boolean;
+  onAction: () => void;
+}) {
+  const { t } = useLocale();
+  const formatted = formatSessionStartsAt(locale, entry.session.startsAt);
+
+  return (
+    <DataListItem className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium">{formatted}</p>
+        <p className="text-xs text-ink-muted">
+          {entry.point.direction === 'to_practice'
+            ? t('schedule.toPractice')
+            : t('schedule.fromPractice')}
+          {' · '}
+          {entry.point.pointName}
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled={isPending}
+        className={`${variant === 'primary' ? buttonClassName : secondaryButtonClassName} text-sm`}
+        onClick={onAction}
+      >
+        {isPending ? actionPendingLabel : actionLabel}
+      </button>
+    </DataListItem>
   );
 }
 

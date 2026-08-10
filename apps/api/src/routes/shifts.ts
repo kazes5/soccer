@@ -1,10 +1,11 @@
-import { shiftSummarySchema } from '@soccer/contracts';
+import { shiftStatsResponseSchema, shiftSummarySchema } from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 
+const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
 
 function toDto(shift: {
@@ -30,6 +31,52 @@ function toDto(shift: {
 }
 
 export default async function shiftRoutes(app: FastifyInstance) {
+  // Any team member (not admin-only) — CLAUDE.md's Requirement 13 keeps
+  // individual member stats admin-only but lets every parent see the team
+  // average for self-comparison, computed here so the caller never needs the
+  // roster itself.
+  app.get('/teams/:teamId/shifts/stats', async (request) => {
+    const params = teamParamsSchema.parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
+
+    const notCancelled = {
+      session: { teamId: params.teamId, status: { not: 'cancelled' as const } },
+    };
+
+    const [myToPractice, myFromPractice, teamToPractice, teamFromPractice, teamMemberCount] =
+      await Promise.all([
+        app.prisma.shift.count({
+          where: { ...notCancelled, assignedUserId: currentUser.id, direction: 'to_practice' },
+        }),
+        app.prisma.shift.count({
+          where: { ...notCancelled, assignedUserId: currentUser.id, direction: 'from_practice' },
+        }),
+        app.prisma.shift.count({
+          where: { ...notCancelled, assignedUserId: { not: null }, direction: 'to_practice' },
+        }),
+        app.prisma.shift.count({
+          where: { ...notCancelled, assignedUserId: { not: null }, direction: 'from_practice' },
+        }),
+        app.prisma.teamMember.count({ where: { teamId: params.teamId } }),
+      ]);
+
+    const average = (count: number) => (teamMemberCount > 0 ? count / teamMemberCount : 0);
+
+    return shiftStatsResponseSchema.parse({
+      mine: {
+        toPractice: myToPractice,
+        fromPractice: myFromPractice,
+        total: myToPractice + myFromPractice,
+      },
+      teamAverage: {
+        toPractice: average(teamToPractice),
+        fromPractice: average(teamFromPractice),
+        total: average(teamToPractice + teamFromPractice),
+      },
+    });
+  });
+
   app.post('/teams/:teamId/shifts/:shiftId/claim', async (request) => {
     const params = shiftParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
