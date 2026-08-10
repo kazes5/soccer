@@ -412,17 +412,18 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 **Requirement: Invite-Only Access**
 - The app is closed-roster — no open self-signup. Someone can only log in if an Admin has added them to the team.
+- Authentication is passwordless via WebAuthn passkeys, not SMS/email one-time codes — see §9.1 for why and how this replaces the originally-specified OTP flow.
 - Login flow:
   1. User enters phone number or email.
-  2. System checks if they exist in the team roster.
-  3. If yes: proceed to SMS/email OTP verification.
-  4. If no: show "You haven't been added to this team yet — ask your team admin" message.
-- Unrecognized users cannot create an account; they must be invited by an Admin first.
+  2. System checks if they exist in the team roster **and have a registered passkey**.
+  3. If yes: prompt the browser's passkey ceremony (Face ID, Touch ID, Windows Hello, or a security key) for that device.
+  4. If no: show "You haven't been added to this team yet — ask your team admin" message (the same message whether the contact is unrecognized or recognized-but-passkey-less, so the latter case isn't a distinguishable oracle).
+- Unrecognized users cannot create an account; they must be invited by an Admin first. Accepting an invite immediately prompts passkey registration on that device, completing onboarding in one sitting — there's no separate "log in afterward" step.
 
 **Acceptance Criteria:**
 - Login form accepts phone or email
 - Unrecognized input rejected with clear message (not a generic error)
-- OTP sent only to recognized users
+- The browser's native passkey prompt appears only for recognized, passkey-registered contacts
 - No public roster or user directory (privacy)
 
 ---
@@ -611,7 +612,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 **Cache:** Redis (optional, for schedule/shift caching)
 **Push Notifications:** FCM (Android) + APNs (iOS)
 **AI Integration:** Claude API (Anthropic)
-**Authentication:** Phone OTP (SMS) + optional email/password fallback
+**Authentication:** WebAuthn passkeys, identifier-first (phone/email lookup, then a device passkey ceremony) — see §8.2 decision 6 and §9.1
 **Version Control:** Git (GitHub, GitLab, or Bitbucket)
 
 ### 8.2 Open Questions Resolution
@@ -623,9 +624,11 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | 3 | Escalation timing? | **X hours before the scheduled practice start time.** Default X=2 (configurable by admin). Example: practice at 6 PM → escalation at 4 PM. |
 | 4 | Non-driving parents? | **Not supported in v1.** All users are drivers; no observer-only role. |
 | 5 | Multi-team scope? | **Yes — support multi-team households.** Parent account can belong to multiple teams; team switcher in home screen. |
-| 6 | Login method? | **Phone OTP (SMS)** — lowest friction, no password to forget. Fallback: email/password. |
+| 6 | Login method? | **WebAuthn passkeys** (revised from the original Phone OTP decision — see 2026-08-10 note below). No password to forget, no SMS/email vendor dependency to procure or pay for. |
 | 7 | Audit log retention? | **Indefinite, with end-of-season archival option.** Admins can export logs by season; system retains raw data long-term. |
 | 8 | AI chat provider? | **Claude API (Anthropic)** — permission-scoped, reliable, integrates cleanly with team/shift/user context. |
+
+**2026-08-10 revision note:** Decision 6 originally chose Phone OTP (SMS). It was replaced with WebAuthn passkeys to remove the SMS vendor dependency Stage 0 had left open (no OTP provider had been procured — `ConsoleOtpProvider` just logged codes) and because the closed-roster invite already establishes identity, making a second "prove you own this phone" step redundant. The invite code itself (single-use, admin-issued) is now the proof of identity at registration time; phone/email remain contact fields, not verified login credentials. See §9.1 for the mechanics and §4.1 for the revised login flow.
 
 ---
 
@@ -633,11 +636,13 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 ### 9.1 Authentication
 
-- Phone OTP (SMS) is the primary login method (lowest friction, suitable for busy parents).
-- OTP is valid for 10 minutes; rate-limited to 3 attempts per phone number per hour (prevents brute-force).
-- Optional email/password for users without SMS access.
-- Session tokens (e.g., JWT) expire after 30 days of inactivity.
+- WebAuthn passkeys are the only login method — no password, no SMS/email one-time code, no separate vendor to procure. Login is identifier-first: enter phone or email, and if that contact has a registered passkey, the browser's own passkey ceremony (Face ID, Touch ID, Windows Hello, or a security key) authenticates the device.
+- A brand-new parent registers their first passkey immediately after accepting their invite — scoped to that specific invite code (not a bare user ID), bounded to a short window after acceptance, so a captured invite link can't be used to attach a rogue credential to the account indefinitely.
+- The very first team admin (who bootstraps via team creation, with no invite involved) registers a passkey the same way, immediately after the team is created, using their already-issued session rather than an invite code.
+- Any already-authenticated user can register an additional passkey for a second device through the same authenticated pair of endpoints.
+- Session tokens expire after 30 days of inactivity (unchanged from the original OTP-era design).
 - Force re-authentication for sensitive actions (admin user removal, schedule template changes).
+- Recovery model: a lost/inaccessible device has no self-service password reset (there is no password). An admin re-invites the affected person, exactly as for a brand-new parent; accepting the new invite registers a fresh passkey on their new/current device.
 
 ### 9.2 Authorization
 
@@ -724,7 +729,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | **Escalation** | Urgent broadcast when a shift remains unclaimed X hours before practice, or when a parent flags "can't make it". |
 | **Audit Log** | Comprehensive record of all system actions (claims, swaps, admin changes, escalations, etc.). |
 | **Collection Point Assignment** | Mapping of players to a collection point for a given session and direction. |
-| **OTP** | One-Time Passcode (SMS or email); used for login authentication. |
+| **Passkey** | A WebAuthn credential bound to a specific device's built-in security (Face ID, Touch ID, Windows Hello, or a security key); used for login authentication instead of a password or SMS code. |
 
 ---
 

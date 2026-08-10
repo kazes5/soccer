@@ -1,27 +1,78 @@
 import {
-  requestOtpRequestSchema,
-  requestOtpResponseSchema,
-  verifyOtpRequestSchema,
-  verifyOtpResponseSchema,
+  authSessionResponseSchema,
   currentUserResponseSchema,
+  passkeyChallengeResponseSchema,
+  passkeyLoginOptionsRequestSchema,
+  passkeyVerifyRequestSchema,
 } from '@soccer/contracts';
+import type {
+  AuthenticationResponseJSON,
+  AuthenticatorTransportFuture,
+  RegistrationResponseJSON,
+  WebAuthnCredential,
+} from '@simplewebauthn/server';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../env';
-import { clearSessionCookies, resolveSessionToken, setSessionCookies } from '../lib/cookies';
-import { generateOtpCode, generateSessionToken, hashSecret, secretsMatch } from '../lib/crypto';
-import { HttpError } from '../lib/errors';
 import { requireAuth } from '../lib/authorization';
-import type { OtpChannel } from '../lib/otp-provider';
+import { clearSessionCookies, resolveSessionToken, setSessionCookies } from '../lib/cookies';
+import { generateSessionToken, hashSecret } from '../lib/crypto';
+import { HttpError } from '../lib/errors';
+import {
+  createRegistrationChallenge,
+  verifyRegistrationChallenge,
+} from '../lib/passkey-registration';
 
-const INVALID_OR_EXPIRED_CODE = 'Invalid or expired code.';
+const NOT_REGISTERED_MESSAGE =
+  "You haven't been added to a team yet. Ask your team admin for an invite.";
+const INVALID_CHALLENGE_MESSAGE = 'Invalid or expired login attempt. Please try again.';
 
 export default async function authRoutes(app: FastifyInstance) {
-  app.post('/auth/otp/request', async (request, reply) => {
-    const body = requestOtpRequestSchema.parse(request.body);
-    const channel: OtpChannel = body.phone ? 'sms' : 'email';
-    const destination = body.phone ?? body.email;
-    if (!destination) {
-      throw new HttpError(400, 'Provide phone or email.');
+  // Register an additional passkey for the *currently authenticated* user —
+  // covers both a fresh admin right after `POST /teams` (which issues a
+  // session directly, with no invite in the picture) and any already-logged-in
+  // user adding a second device later. The invite-scoped pair in
+  // `invites.ts` is only for a brand-new parent's very first passkey, before
+  // any session exists to gate on.
+  app.post('/auth/passkey/register/options', async (request, reply) => {
+    const currentUser = requireAuth(request);
+    const user = await app.prisma.user.findUniqueOrThrow({
+      where: { id: currentUser.id },
+      include: { passkeys: true },
+    });
+
+    const { challengeId, options } = await createRegistrationChallenge(
+      app.prisma,
+      app.webauthnVerifier,
+      user,
+      request.ip,
+    );
+
+    reply.status(201);
+    return passkeyChallengeResponseSchema.parse({ challengeId, options });
+  });
+
+  app.post('/auth/passkey/register/verify', async (request, reply) => {
+    const currentUser = requireAuth(request);
+    const body = passkeyVerifyRequestSchema.parse(request.body);
+
+    await verifyRegistrationChallenge(app.prisma, app.webauthnVerifier, {
+      challengeId: body.challengeId,
+      expectedUserId: currentUser.id,
+      response: body.response as RegistrationResponseJSON,
+    });
+
+    reply.status(204).send();
+  });
+
+  app.post('/auth/passkey/login/options', async (request, reply) => {
+    const body = passkeyLoginOptionsRequestSchema.parse(request.body);
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentRequestCountForIp = await app.prisma.webauthnChallenge.count({
+      where: { requestIp: request.ip, createdAt: { gte: oneHourAgo } },
+    });
+    if (recentRequestCountForIp >= env.WEBAUTHN_LOGIN_MAX_REQUESTS_PER_IP_PER_HOUR) {
+      throw new HttpError(429, 'Too many login attempts from this network. Try again later.');
     }
 
     const user = await app.prisma.user.findFirst({
@@ -29,89 +80,104 @@ export default async function authRoutes(app: FastifyInstance) {
         isActive: true,
         ...(body.phone ? { phone: body.phone } : { email: body.email }),
       },
+      include: { passkeys: true },
     });
 
-    if (!user) {
+    // Same generic message whether the contact isn't registered at all or is
+    // registered but somehow has no passkey (e.g. onboarding was abandoned
+    // before registration completed) — both mean "ask your admin," and using
+    // one message avoids a distinct oracle for the latter, rarer case.
+    if (!user || user.passkeys.length === 0) {
       reply.status(404);
-      return {
-        message: "You haven't been added to a team yet. Ask your team admin for an invite.",
-      };
+      return { message: NOT_REGISTERED_MESSAGE };
     }
 
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const recentRequestCount = await app.prisma.otpChallenge.count({
-      where: { userId: user.id, createdAt: { gte: oneHourAgo } },
+    const options = await app.webauthnVerifier.generateAuthenticationOptions({
+      rpID: env.WEBAUTHN_RP_ID,
+      allowCredentials: user.passkeys.map((passkey) => ({
+        id: passkey.credentialId,
+        transports: passkey.transports as AuthenticatorTransportFuture[],
+      })),
     });
-    if (recentRequestCount >= env.OTP_MAX_REQUESTS_PER_HOUR) {
-      throw new HttpError(429, 'Too many code requests. Try again later.');
-    }
 
-    const requestIp = request.ip;
-    const recentRequestCountForIp = await app.prisma.otpChallenge.count({
-      where: { requestIp, createdAt: { gte: oneHourAgo } },
-    });
-    if (recentRequestCountForIp >= env.OTP_MAX_REQUESTS_PER_IP_PER_HOUR) {
-      throw new HttpError(429, 'Too many code requests from this network. Try again later.');
-    }
+    // Opportunistic cleanup — see the same note in lib/passkey-registration.ts.
+    await app.prisma.webauthnChallenge.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 
-    const code = generateOtpCode();
-    const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
-    const challenge = await app.prisma.otpChallenge.create({
+    const challenge = await app.prisma.webauthnChallenge.create({
       data: {
         userId: user.id,
-        channel,
-        destination,
-        codeHash: hashSecret(code),
-        requestIp,
-        expiresAt,
+        type: 'authentication',
+        challenge: options.challenge,
+        requestIp: request.ip,
+        expiresAt: new Date(Date.now() + env.WEBAUTHN_CHALLENGE_TTL_MINUTES * 60 * 1000),
       },
     });
 
-    await app.otpProvider.send({ destination, channel, code });
-
     reply.status(201);
-    return requestOtpResponseSchema.parse({
-      challengeId: challenge.id,
-      expiresAt: expiresAt.toISOString(),
-    });
+    return passkeyChallengeResponseSchema.parse({ challengeId: challenge.id, options });
   });
 
-  app.post('/auth/otp/verify', async (request, reply) => {
-    const body = verifyOtpRequestSchema.parse(request.body);
+  app.post('/auth/passkey/login/verify', async (request, reply) => {
+    const body = passkeyVerifyRequestSchema.parse(request.body);
+    const response = body.response as AuthenticationResponseJSON;
 
-    const challenge = await app.prisma.otpChallenge.findUnique({
+    const challenge = await app.prisma.webauthnChallenge.findUnique({
       where: { id: body.challengeId },
-      include: { user: { include: { teamMemberships: { include: { team: true } } } } },
+      include: {
+        user: { include: { passkeys: true, teamMemberships: { include: { team: true } } } },
+      },
     });
 
     if (
       !challenge ||
+      challenge.type !== 'authentication' ||
       challenge.consumedAt !== null ||
-      challenge.expiresAt.getTime() < Date.now() ||
-      challenge.attempts >= env.OTP_MAX_VERIFY_ATTEMPTS
+      challenge.expiresAt.getTime() < Date.now()
     ) {
-      throw new HttpError(401, INVALID_OR_EXPIRED_CODE);
+      throw new HttpError(401, INVALID_CHALLENGE_MESSAGE);
     }
 
-    if (!secretsMatch(hashSecret(body.code), challenge.codeHash)) {
-      await app.prisma.otpChallenge.update({
-        where: { id: challenge.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new HttpError(401, INVALID_OR_EXPIRED_CODE);
+    const passkey = challenge.user.passkeys.find(
+      (candidate) => candidate.credentialId === response.id,
+    );
+    if (!passkey) {
+      throw new HttpError(401, 'This passkey is not recognized.');
+    }
+
+    const credential: WebAuthnCredential = {
+      id: passkey.credentialId,
+      publicKey: new Uint8Array(passkey.publicKey),
+      counter: passkey.counter,
+      transports: passkey.transports as AuthenticatorTransportFuture[],
+    };
+
+    const result = await app.webauthnVerifier.verifyAuthentication({
+      response,
+      expectedChallenge: challenge.challenge,
+      expectedOrigin: env.WEB_ORIGIN,
+      expectedRPID: env.WEBAUTHN_RP_ID,
+      credential,
+    });
+
+    if (!result.verified) {
+      throw new HttpError(401, 'Passkey verification failed.');
     }
 
     const token = generateSessionToken();
     const sessionExpiresAt = new Date(Date.now() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
     await app.prisma.$transaction([
-      app.prisma.otpChallenge.update({
+      app.prisma.webauthnChallenge.update({
         where: { id: challenge.id },
         data: { consumedAt: new Date() },
       }),
+      app.prisma.passkey.update({
+        where: { id: passkey.id },
+        data: { counter: result.authenticationInfo.newCounter, lastUsedAt: new Date() },
+      }),
       app.prisma.session.create({
         data: {
-          userId: challenge.user.id,
+          userId: challenge.userId,
           tokenHash: hashSecret(token),
           expiresAt: sessionExpiresAt,
         },
@@ -120,7 +186,7 @@ export default async function authRoutes(app: FastifyInstance) {
 
     setSessionCookies(reply, token, sessionExpiresAt);
 
-    return verifyOtpResponseSchema.parse({
+    return authSessionResponseSchema.parse({
       sessionToken: token,
       expiresAt: sessionExpiresAt.toISOString(),
       user: {

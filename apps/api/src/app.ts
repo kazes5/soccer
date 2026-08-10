@@ -6,7 +6,7 @@ import { env } from './env';
 import { Prisma } from '../generated/prisma/client';
 import { assertCsrfSafe } from './lib/cookies';
 import { HttpError } from './lib/errors';
-import { ConsoleOtpProvider, type OtpProvider } from './lib/otp-provider';
+import { SimpleWebauthnVerifier, type WebauthnVerifier } from './lib/webauthn';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import authRoutes from './routes/auth';
@@ -22,13 +22,14 @@ import teamRoutes from './routes/teams';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    otpProvider: OtpProvider;
+    webauthnVerifier: WebauthnVerifier;
   }
 }
 
 export interface BuildAppOptions {
-  /** Overrides the default (log-only) OTP delivery provider — used in tests. */
-  otpProvider?: OtpProvider;
+  /** Overrides the default (`@simplewebauthn/server`-backed) verifier — used in tests, since a
+   *  real WebAuthn ceremony needs actual browser/authenticator crypto Vitest can't produce. */
+  webauthnVerifier?: WebauthnVerifier;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -37,10 +38,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     trustProxy: env.TRUST_PROXY,
   });
 
-  app.decorate(
-    'otpProvider',
-    options.otpProvider ?? new ConsoleOtpProvider((msg) => app.log.info(msg)),
-  );
+  app.decorate('webauthnVerifier', options.webauthnVerifier ?? new SimpleWebauthnVerifier());
 
   app.register(cors, {
     origin: env.WEB_ORIGIN,

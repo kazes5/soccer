@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
     "@soccer/contracts": "workspace:*",
     "@soccer/i18n": "workspace:*",
     "@soccer/ui-tokens": "workspace:*",

@@ -17,7 +17,9 @@ A user can belong to multiple teams. Their role is independent in each team.
 
 1. Open `/teams/new`.
 2. Enter the team name, season, timezone, and first admin details.
-3. Submit the form. The new admin is signed in and taken to the team workspace.
+3. Submit the form. The new admin is signed in and immediately prompted to
+   register a passkey on this device (Face ID, Touch ID, Windows Hello, or a
+   security key), then taken to the team workspace.
 4. On `/home`, use the invite form to create an invitation for a parent by phone
    or email.
 5. Copy the generated invite link and send it to the parent through the team's
@@ -32,12 +34,15 @@ does not require the parent to already have an account.
 2. Confirm the team preview.
 3. Enter the requested parent details and any linked players.
 4. Submit the form to join the team.
-5. Open `/login`, enter the invited phone number, and request an OTP.
-6. Enter the OTP. In local development, the code appears in the API log; a
-   production delivery provider is not connected yet.
+5. Register a passkey on this device when prompted — this happens
+   automatically right after joining and completes onboarding in one sitting;
+   there's no separate login step for a first-time parent.
 
-After successful login, the user lands in the team-aware workspace. An existing
-user can accept another team's invite and keep their existing account.
+After passkey setup succeeds, the user lands in the team-aware workspace. An
+existing user can accept another team's invite and keep their existing
+account; returning on a device that already has a registered passkey uses
+`/login` (enter the phone or email on file, then complete the passkey
+prompt) instead of the invite flow.
 
 ## Schedule and shifts
 

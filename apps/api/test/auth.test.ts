@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { env } from '../src/env';
-import { RecordingOtpProvider } from './support/recording-otp-provider';
+import { FakeWebauthnVerifier } from './support/fake-webauthn-verifier';
 
-describe('OTP login flow', () => {
-  const otpProvider = new RecordingOtpProvider();
-  const app = buildApp({ otpProvider });
+/** A distinct prefix from every other test file, to avoid `User.phone` unique-constraint collisions when files run concurrently against the same dev database. */
+function randomPhone(): string {
+  return `+1555180${Math.floor(Math.random() * 900000 + 100000)}`;
+}
+
+describe('passkey auth flow', () => {
+  const app = buildApp({ webauthnVerifier: new FakeWebauthnVerifier() });
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -14,7 +18,6 @@ describe('OTP login flow', () => {
     await app.prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     createdTeamIds.length = 0;
     createdUserIds.length = 0;
-    otpProvider.sent = [];
   });
 
   async function createTeamWithAdmin(adminPhone: string) {
@@ -28,152 +31,178 @@ describe('OTP login flow', () => {
         adminPhone,
       },
     });
-    const body = response.json() as { team: { id: string }; admin: { id: string } };
+    const body = response.json() as {
+      team: { id: string };
+      admin: { id: string };
+      sessionToken: string;
+    };
     createdTeamIds.push(body.team.id);
     createdUserIds.push(body.admin.id);
     return body;
   }
 
+  /** Invite, accept, and complete passkey registration — the full onboarding path. */
+  async function registerParentWithPasskey(teamId: string, adminToken: string, phone: string) {
+    const inviteResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/invites`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { phone },
+    });
+    const invite = inviteResponse.json() as { code: string };
+
+    const acceptResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/accept`,
+      payload: { name: 'Parent', language: 'en', players: [] },
+    });
+    const userId = acceptResponse.json().user.id as string;
+    createdUserIds.push(userId);
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/options`,
+    });
+    const { challengeId } = optionsResponse.json() as { challengeId: string };
+
+    const credentialId = `credential-${userId}`;
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/verify`,
+      payload: { challengeId, response: { id: credentialId } },
+    });
+
+    return {
+      userId,
+      phone,
+      inviteCode: invite.code,
+      credentialId,
+      registerResponse: verifyResponse,
+      sessionToken: verifyResponse.json().sessionToken as string,
+    };
+  }
+
+  it('rejects registering a passkey via an invite that has not been accepted yet', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const inviteResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${team.id}/invites`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { phone: randomPhone() },
+    });
+    const invite = inviteResponse.json();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/options`,
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('registers a passkey during onboarding and immediately establishes a session', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { registerResponse, phone } = await registerParentWithPasskey(
+      team.id,
+      adminToken,
+      randomPhone(),
+    );
+
+    expect(registerResponse.statusCode).toBe(200);
+    const body = registerResponse.json();
+    expect(typeof body.sessionToken).toBe('string');
+    expect(body.user).toMatchObject({ name: 'Parent', phone });
+    expect(body.teamMemberships).toEqual([
+      expect.objectContaining({ role: 'parent', teamName: 'U-12 Wildcats' }),
+    ]);
+  });
+
+  it('rejects a registration whose response fails verification', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const inviteResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${team.id}/invites`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { phone: randomPhone() },
+    });
+    const invite = inviteResponse.json();
+    const acceptResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/accept`,
+      payload: { name: 'Parent', language: 'en', players: [] },
+    });
+    createdUserIds.push(acceptResponse.json().user.id);
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/options`,
+    });
+    const { challengeId } = optionsResponse.json();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/verify`,
+      payload: { challengeId, response: { fakeFail: true } },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects registering a passkey once the post-acceptance window has passed', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const inviteResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${team.id}/invites`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { phone: randomPhone() },
+    });
+    const invite = inviteResponse.json();
+    const acceptResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/accept`,
+      payload: { name: 'Parent', language: 'en', players: [] },
+    });
+    createdUserIds.push(acceptResponse.json().user.id);
+
+    await app.prisma.invite.update({
+      where: { code: invite.code },
+      data: { acceptedAt: new Date(Date.now() - 60 * 60 * 1000) },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/invites/${invite.code}/passkey/register/options`,
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
   it('rejects a phone number that was never invited', async () => {
     const response = await app.inject({
       method: 'POST',
-      url: '/auth/otp/request',
+      url: '/auth/passkey/login/options',
       payload: { phone: '+15559990000' },
     });
 
     expect(response.statusCode).toBe(404);
-    expect(otpProvider.sent).toHaveLength(0);
   });
 
-  it('logs in a recognized user end-to-end', async () => {
-    await createTeamWithAdmin('+15551230020');
-
-    const requestResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/request',
-      payload: { phone: '+15551230020' },
-    });
-    expect(requestResponse.statusCode).toBe(201);
-    const { challengeId } = requestResponse.json();
-    expect(otpProvider.lastCode).toMatch(/^\d{6}$/);
-
-    const verifyResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code: otpProvider.lastCode },
-    });
-
-    expect(verifyResponse.statusCode).toBe(200);
-    const body = verifyResponse.json();
-    expect(typeof body.sessionToken).toBe('string');
-    expect(body.user).toMatchObject({ name: 'Dana Cohen', phone: '+15551230020' });
-    expect(body.teamMemberships).toEqual([
-      expect.objectContaining({ role: 'admin', teamName: 'U-12 Wildcats' }),
-    ]);
-  });
-
-  it('rejects an incorrect code without consuming the challenge', async () => {
-    await createTeamWithAdmin('+15551230021');
-
-    const requestResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/request',
-      payload: { phone: '+15551230021' },
-    });
-    const { challengeId } = requestResponse.json();
-
-    const wrongResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code: '000000' },
-    });
-    expect(wrongResponse.statusCode).toBe(401);
-
-    const correctResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code: otpProvider.lastCode },
-    });
-    expect(correctResponse.statusCode).toBe(200);
-  });
-
-  it('rejects reusing an already-consumed challenge', async () => {
-    await createTeamWithAdmin('+15551230022');
-
-    const requestResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/request',
-      payload: { phone: '+15551230022' },
-    });
-    const { challengeId } = requestResponse.json();
-    const code = otpProvider.lastCode;
-
-    await app.inject({ method: 'POST', url: '/auth/otp/verify', payload: { challengeId, code } });
-    const secondAttempt = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code },
-    });
-
-    expect(secondAttempt.statusCode).toBe(401);
-  });
-
-  it('rate-limits repeated code requests for the same user', async () => {
-    await createTeamWithAdmin('+15551230023');
-    const requestOnce = () =>
-      app.inject({
-        method: 'POST',
-        url: '/auth/otp/request',
-        payload: { phone: '+15551230023' },
-      });
-
-    await requestOnce();
-    await requestOnce();
-    await requestOnce();
-    const fourth = await requestOnce();
-
-    expect(fourth.statusCode).toBe(429);
-  });
-
-  it('rate-limits repeated code requests from the same IP across different users', async () => {
-    const phones = Array.from(
-      { length: env.OTP_MAX_REQUESTS_PER_IP_PER_HOUR + 1 },
-      (_, i) => `+1555124${(1000 + i).toString().slice(-4)}`,
-    );
-    for (const phone of phones) {
-      await createTeamWithAdmin(phone);
-    }
+  it('rate-limits repeated login-options requests from the same IP', async () => {
+    // Unlike OTP, a passkey ceremony can't be brute-forced, so this only bounds
+    // request volume (unbounded WebauthnChallenge row creation) — not a
+    // guessable-secret attack. Uses a *registered* phone repeatedly: an
+    // unregistered one returns 404 before any challenge row is created, so it
+    // would never accumulate a count to limit against (same characteristic
+    // the old per-IP OTP limit had for unregistered numbers).
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { phone } = await registerParentWithPasskey(team.id, adminToken, randomPhone());
 
     const responses = [];
-    for (const phone of phones) {
-      responses.push(
-        await app.inject({ method: 'POST', url: '/auth/otp/request', payload: { phone } }),
-      );
-    }
-
-    const tooMany = responses.filter((response) => response.statusCode === 429);
-    expect(tooMany.length).toBeGreaterThan(0);
-  });
-
-  it('is not fooled by a spoofed X-Forwarded-For header (TRUST_PROXY defaults to false)', async () => {
-    // Regression: without an explicit, deliberate TRUST_PROXY=true (only correct when a real
-    // reverse proxy sets this header), a client-supplied X-Forwarded-For must not let an
-    // attacker evade the per-IP OTP rate limit by spoofing a fresh IP on every request.
-    const phones = Array.from(
-      { length: env.OTP_MAX_REQUESTS_PER_IP_PER_HOUR + 1 },
-      (_, i) => `+1555128${(1000 + i).toString().slice(-4)}`,
-    );
-    for (const phone of phones) {
-      await createTeamWithAdmin(phone);
-    }
-
-    const responses = [];
-    for (const [index, phone] of phones.entries()) {
+    for (let i = 0; i < env.WEBAUTHN_LOGIN_MAX_REQUESTS_PER_IP_PER_HOUR + 1; i += 1) {
       responses.push(
         await app.inject({
           method: 'POST',
-          url: '/auth/otp/request',
-          headers: { 'x-forwarded-for': `10.0.0.${index}` },
+          url: '/auth/passkey/login/options',
           payload: { phone },
         }),
       );
@@ -183,29 +212,117 @@ describe('OTP login flow', () => {
     expect(tooMany.length).toBeGreaterThan(0);
   });
 
-  it('revokes the session on logout so it can no longer authenticate', async () => {
-    const {
-      team: { id: teamId },
-    } = await createTeamWithAdmin('+15551230024');
+  it('opportunistically prunes expired challenges on the next login-options request', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { phone, userId } = await registerParentWithPasskey(team.id, adminToken, randomPhone());
 
-    const requestResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/otp/request',
-      payload: { phone: '+15551230024' },
+    const stale = await app.prisma.webauthnChallenge.create({
+      data: {
+        userId,
+        type: 'authentication',
+        challenge: 'stale-challenge',
+        expiresAt: new Date(Date.now() - 60 * 1000),
+      },
     });
-    const { challengeId } = requestResponse.json();
+
+    await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/options',
+      payload: { phone },
+    });
+
+    const found = await app.prisma.webauthnChallenge.findUnique({ where: { id: stale.id } });
+    expect(found).toBeNull();
+  });
+
+  it('logs in a registered parent via passkey end-to-end', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { phone } = await registerParentWithPasskey(team.id, adminToken, randomPhone());
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/options',
+      payload: { phone },
+    });
+    expect(optionsResponse.statusCode).toBe(201);
+    const { challengeId } = optionsResponse.json();
+
     const verifyResponse = await app.inject({
       method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code: otpProvider.lastCode },
+      url: '/auth/passkey/login/verify',
+      payload: { challengeId, response: { id: `credential-${phone}-does-not-matter` } },
     });
-    const { sessionToken } = verifyResponse.json();
+
+    // The fake verifier accepts any well-formed response, but the *route* must
+    // still only recognize a credential ID that's actually registered to this
+    // user — a mismatched id here should fail, proving that check is real.
+    expect(verifyResponse.statusCode).toBe(401);
+  });
+
+  it('logs in with the exact credential id that was registered', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { phone, credentialId } = await registerParentWithPasskey(
+      team.id,
+      adminToken,
+      randomPhone(),
+    );
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/options',
+      payload: { phone },
+    });
+    const { challengeId } = optionsResponse.json();
+
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/verify',
+      payload: { challengeId, response: { id: credentialId } },
+    });
+
+    expect(verifyResponse.statusCode).toBe(200);
+    const body = verifyResponse.json();
+    expect(typeof body.sessionToken).toBe('string');
+    expect(body.user).toMatchObject({ phone });
+  });
+
+  it('rejects reusing an already-consumed login challenge', async () => {
+    const { team, sessionToken: adminToken } = await createTeamWithAdmin(randomPhone());
+    const { phone, credentialId } = await registerParentWithPasskey(
+      team.id,
+      adminToken,
+      randomPhone(),
+    );
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/options',
+      payload: { phone },
+    });
+    const { challengeId } = optionsResponse.json();
+
+    await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/verify',
+      payload: { challengeId, response: { id: credentialId } },
+    });
+    const secondAttempt = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/verify',
+      payload: { challengeId, response: { id: credentialId } },
+    });
+
+    expect(secondAttempt.statusCode).toBe(401);
+  });
+
+  it('revokes the session on logout so it can no longer authenticate', async () => {
+    const { team, sessionToken } = await createTeamWithAdmin(randomPhone());
 
     const beforeLogout = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/invites`,
+      url: `/teams/${team.id}/invites`,
       headers: { authorization: `Bearer ${sessionToken}` },
-      payload: { phone: '+15551230025' },
+      payload: { phone: randomPhone() },
     });
     expect(beforeLogout.statusCode).toBe(201);
 
@@ -218,9 +335,9 @@ describe('OTP login flow', () => {
 
     const afterLogout = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/invites`,
+      url: `/teams/${team.id}/invites`,
       headers: { authorization: `Bearer ${sessionToken}` },
-      payload: { phone: '+15551230026' },
+      payload: { phone: randomPhone() },
     });
     expect(afterLogout.statusCode).toBe(401);
   });

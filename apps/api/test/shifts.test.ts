@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { generateSessionToken, hashSecret } from '../src/lib/crypto';
-import { RecordingOtpProvider } from './support/recording-otp-provider';
 
 describe('shifts', () => {
-  const otpProvider = new RecordingOtpProvider();
-  const app = buildApp({ otpProvider });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -16,13 +14,13 @@ describe('shifts', () => {
     createdUserIds.length = 0;
   });
 
-  // Accepting an invite creates the account but, per the real login flow, does not
-  // by itself grant a session — a parent must separately complete OTP login. That
-  // endpoint is rate-limited (10 requests/IP/hour by default), which `app.inject()`
-  // would blow through immediately if used to log in every parent this file needs
-  // (up to 10 at once, for the concurrency test below). So a session is created
-  // directly here, exactly as `POST /auth/otp/verify` does internally, bypassing
-  // only the rate-limited OTP step — not the session/auth mechanism itself.
+  // Accepting an invite creates the account but, per the real onboarding flow, does
+  // not by itself grant a session — a parent must separately complete passkey
+  // registration. That requires an actual browser/authenticator ceremony this file
+  // has no need to simulate (it's exercised directly in auth.test.ts via
+  // FakeWebauthnVerifier), so a session is created directly here — up to 10 at
+  // once, for the concurrency test below — exactly as the real registration/login
+  // endpoints do internally, bypassing only the ceremony, not the session mechanism.
   async function addParent(teamId: string, adminToken: string) {
     const inviteResponse = await app.inject({
       method: 'POST',

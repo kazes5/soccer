@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { generateSessionToken, hashSecret } from '../src/lib/crypto';
-import { RecordingOtpProvider } from './support/recording-otp-provider';
 
 describe('team member management', () => {
-  const otpProvider = new RecordingOtpProvider();
-  const app = buildApp({ otpProvider });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -14,7 +12,6 @@ describe('team member management', () => {
     await app.prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     createdTeamIds.length = 0;
     createdUserIds.length = 0;
-    otpProvider.sent = [];
   });
 
   async function setUpTeamWithParent() {

@@ -32,7 +32,7 @@ flowchart LR
     Prisma --> Postgres[(PostgreSQL)]
     API -.-> Redis[(Redis, provisioned for planned jobs)]
     API --> Audit[Audit log in PostgreSQL]
-    API -.-> Provider[OTP provider interface]
+    API -.-> Provider[WebAuthn verifier interface]
 ```
 
 ### Applications and packages
@@ -64,18 +64,18 @@ for unrelated registrable domains.
 
 Fastify registers the following route modules in `apps/api/src/app.ts`:
 
-| Module             | Main responsibilities                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| Health             | Liveness and database readiness checks                                          |
-| Teams              | Team bootstrap and basic team lookup                                            |
-| Auth               | OTP request/verify, session inspection, logout                                  |
-| Invites            | Admin invite creation, preview, and atomic acceptance                           |
-| Members            | Team member list, role changes, and removal with last-admin protection          |
-| Push subscriptions | Browser push subscription registration/removal; delivery is not yet implemented |
-| Collection points  | Team collection-point CRUD                                                      |
-| Schedule templates | RRULE parsing, horizon generation, and session/shift creation                   |
-| Sessions           | Schedule listing, admin session updates/cancellation, point player assignments  |
-| Shifts             | Version-gated claim and release                                                 |
+| Module             | Main responsibilities                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Health             | Liveness and database readiness checks                                                                                                           |
+| Teams              | Team bootstrap and basic team lookup                                                                                                             |
+| Auth               | Passkey login (identifier-first) and registration (for an already-authenticated user), session inspection, logout                                |
+| Invites            | Admin invite creation, preview, atomic acceptance, and the invite-scoped passkey registration a brand-new parent completes right after accepting |
+| Members            | Team member list, role changes, and removal with last-admin protection                                                                           |
+| Push subscriptions | Browser push subscription registration/removal; delivery is not yet implemented                                                                  |
+| Collection points  | Team collection-point CRUD                                                                                                                       |
+| Schedule templates | RRULE parsing, horizon generation, and session/shift creation                                                                                    |
+| Sessions           | Schedule listing, admin session updates/cancellation, point player assignments                                                                   |
+| Shifts             | Version-gated claim and release                                                                                                                  |
 
 All route inputs are validated with Zod. Team-scoped routes authorize the current
 user through `requireTeamRole` before reading or mutating team data.
@@ -88,7 +88,7 @@ The Prisma schema in `apps/api/prisma/schema.prisma` is the system of record.
 User
   -> TeamMember -> Team
   -> PlayerParent -> Player -> Team
-  -> Session / OtpChallenge / PushSubscription
+  -> Session / Passkey / WebauthnChallenge / PushSubscription
 
 Team
   -> CollectionPoint
@@ -143,19 +143,22 @@ an older request winning after a release-and-reclaim cycle.
 
 ## Security and operational controls
 
-- OTP codes are stored hashed, expire, and have a maximum verification-attempt
-  count.
-- OTP requests are rate-limited per destination and per IP. `TRUST_PROXY` must
-  only be enabled when a real reverse proxy is configured to provide the client
-  address.
+- Login and registration use WebAuthn passkeys, not a password or an SMS/email
+  one-time code — no external delivery vendor is required.
+- A brand-new parent's first passkey registration is scoped to their specific
+  invite code (not a bare user ID) and bounded to a short window after
+  acceptance, so a captured invite link can't be used to attach a credential
+  to the account indefinitely.
 - Browser sessions use an httpOnly cookie plus double-submit CSRF protection.
 - Authorization is checked at the team boundary and admin-only commands are
   explicit.
 - Removing a team's last admin is rejected.
 - Invite acceptance, membership changes, team creation, schedule changes, and
   shift claim/release write audit records.
-- Local development uses a console OTP provider. A production SMS/email vendor
-  has not been selected and must remain behind `OtpProvider`.
+- The real WebAuthn ceremony (`@simplewebauthn/server`) sits behind an
+  injectable `WebauthnVerifier` interface, the same pattern used for any
+  external provider — tests substitute a fake verifier since a real ceremony
+  needs actual browser/authenticator crypto.
 
 ## Planned architecture
 

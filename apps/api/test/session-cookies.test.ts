@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { getCookie } from './support/cookies';
-import { RecordingOtpProvider } from './support/recording-otp-provider';
+import { FakeWebauthnVerifier } from './support/fake-webauthn-verifier';
 
 describe('cookie-based sessions and CSRF', () => {
-  const otpProvider = new RecordingOtpProvider();
-  const app = buildApp({ otpProvider });
+  const app = buildApp({ webauthnVerifier: new FakeWebauthnVerifier() });
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -14,7 +13,6 @@ describe('cookie-based sessions and CSRF', () => {
     await app.prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     createdTeamIds.length = 0;
     createdUserIds.length = 0;
-    otpProvider.sent = [];
   });
 
   it('sets an httpOnly session cookie and a readable CSRF cookie on team creation', async () => {
@@ -54,17 +52,35 @@ describe('cookie-based sessions and CSRF', () => {
     createdTeamIds.push(teamBody.team.id);
     createdUserIds.push(teamBody.admin.id);
 
-    const requestResponse = await app.inject({
+    // Team creation issues a bearer session directly (no invite involved for
+    // the very first admin) — register a passkey on it via the authenticated
+    // pair of endpoints, then log in with that passkey to exercise the real
+    // cookie-issuing path under test here.
+    const registerOptions = await app.inject({
       method: 'POST',
-      url: '/auth/otp/request',
+      url: '/auth/passkey/register/options',
+      headers: { authorization: `Bearer ${teamBody.sessionToken}` },
+    });
+    const { challengeId: registerChallengeId } = registerOptions.json();
+    const credentialId = `credential-${teamBody.admin.id}`;
+    await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/register/verify',
+      headers: { authorization: `Bearer ${teamBody.sessionToken}` },
+      payload: { challengeId: registerChallengeId, response: { id: credentialId } },
+    });
+
+    const loginOptions = await app.inject({
+      method: 'POST',
+      url: '/auth/passkey/login/options',
       payload: { phone },
     });
-    const { challengeId } = requestResponse.json();
+    const { challengeId } = loginOptions.json();
 
     const verifyResponse = await app.inject({
       method: 'POST',
-      url: '/auth/otp/verify',
-      payload: { challengeId, code: otpProvider.lastCode },
+      url: '/auth/passkey/login/verify',
+      payload: { challengeId, response: { id: credentialId } },
     });
 
     const sessionToken = getCookie(verifyResponse, 'soccer_session')!;
