@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createScheduleTemplateRequestSchema } from './schedule-template';
+import {
+  createScheduleTemplateRequestSchema,
+  updateScheduleTemplateRequestSchema,
+} from './schedule-template';
 
 describe('createScheduleTemplateRequestSchema', () => {
   const base = {
@@ -39,6 +42,34 @@ describe('createScheduleTemplateRequestSchema', () => {
       ...base,
       horizonWeeks: 53,
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('updateScheduleTemplateRequestSchema', () => {
+  it('accepts an empty object (no fields changed)', () => {
+    const result = updateScheduleTemplateRequestSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a partial update of just one field', () => {
+    const result = updateScheduleTemplateRequestSchema.safeParse({ horizonWeeks: 12 });
+    expect(result.success).toBe(true);
+  });
+
+  it('strips an explicit startDate field — it is not part of the editable shape', () => {
+    const result = updateScheduleTemplateRequestSchema.safeParse({
+      startDate: '2026-09-01',
+      horizonWeeks: 12,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ horizonWeeks: 12 });
+    }
+  });
+
+  it('rejects an invalid time the same way the create schema does', () => {
+    const result = updateScheduleTemplateRequestSchema.safeParse({ defaultTime: '6:00pm' });
     expect(result.success).toBe(false);
   });
 });
