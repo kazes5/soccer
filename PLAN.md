@@ -461,6 +461,7 @@ Starts only after the web API and interaction patterns are stable. It must reuse
 │   ├── contracts/           # Shared schemas, DTOs, API client types, i18n IDs
 │   ├── config/              # Shared lint, TypeScript, and build configuration
 │   └── ui-tokens/           # Cross-platform visual tokens
+├── docs/                    # Architecture, testing, installation, and user guides
 ├── .github/workflows/       # CI quality gates
 ├── CLAUDE.md                # Approved product requirements
 ├── PLAN.md                  # This living delivery plan
@@ -484,3 +485,13 @@ Starts only after the web API and interaction patterns are stable. It must reuse
 - [ ] Confirm whether web push plus in-app alerts is sufficient for the pilot or whether SMS is mandatory for urgent coverage on day one.
 - [ ] Confirm the planned pilot team size, team timezone, and whether Hebrew must be the default initial locale.
 - [x] Confirm the GitHub repository visibility and branch-protection policy before the first push. *(Repository is public on GitHub; branch protection on `main` is enabled, verified 2026-08-09 — see Stage 1 Exit Criteria.)*
+
+## Documentation Update (2026-08-10)
+
+- **Stage / item:** Project documentation foundation
+- **Status:** Complete for the current MVP; future capabilities remain explicitly marked as planned
+- **Evidence:** Added [`docs/README.md`](./docs/README.md), [`docs/architecture.md`](./docs/architecture.md), [`docs/testing.md`](./docs/testing.md), [`docs/installation.md`](./docs/installation.md), and [`docs/user-guide.md`](./docs/user-guide.md). The root README now links to the documentation index, and the planned project layout includes `docs/`.
+- **Coverage:** Documented current and planned architecture, test layers and covered scenarios, local installation and configuration, and current admin/parent web flows with known limitations.
+- **Verification:** Documentation links and Markdown formatting are included in the repository format check; the application quality gate is tracked separately from these documentation-only changes.
+- **Blocker or risk:** Stage 0 still has open ADR, threat-model, notification-template, hosting, and provider decisions. This documentation set records those gaps but does not resolve them.
+- **Next concrete action:** Review the guides in the pull request, then keep them synchronized with each behavior-changing checkpoint.
