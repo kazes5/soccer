@@ -134,6 +134,10 @@ describe('HomePage', () => {
 
     expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
     expect(screen.getByText('U-12 Wildcats')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage collection points' })).toHaveAttribute(
+      'href',
+      '/admin/collection-points?team=team-1',
+    );
 
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15550002222' },
