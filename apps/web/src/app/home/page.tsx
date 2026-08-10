@@ -7,7 +7,7 @@ import type {
   ShiftStatsResponse,
   TeamMembership,
 } from '@soccer/contracts';
-import { formatDate, type Locale } from '@soccer/i18n';
+import type { Locale } from '@soccer/i18n';
 import { Calendar, Copy, Home, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -28,6 +28,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { ApiError, api } from '@/lib/api';
+import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
 
 interface UpcomingShift {
   session: PracticeSession;
@@ -185,13 +186,10 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
   }, [teamId]);
 
   const loadStats = useCallback(() => {
-    return api
-      .getShiftStats(teamId)
-      .then((data) => {
-        setStats(data);
-        setStatsState('ready');
-      })
-      .catch(() => setStatsState('error'));
+    return api.getShiftStats(teamId).then((data) => {
+      setStats(data);
+      setStatsState('ready');
+    });
   }, [teamId]);
 
   // Initial fetch: `sessionsState`/`statsState` already start as 'loading' via
@@ -207,12 +205,20 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
     };
   }, [loadSessions]);
 
-  // loadStats already guards its own failure with .catch internally, so there's
-  // no cancellation flag needed here (unlike loadSessions above).
   useEffect(() => {
-    loadStats();
+    let cancelled = false;
+    loadStats().catch(() => {
+      if (!cancelled) setStatsState('error');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadStats]);
 
+  // Only used to resync after a claim/release conflict, where the local list is
+  // known-stale — a normal success patches the one changed shift in place
+  // instead (see handleClaim/handleRelease below), so the rest of the
+  // workspace never flashes back to a full loading state.
   const reloadSessions = useCallback(() => {
     setSessionsState('loading');
     loadSessions().catch(() => setSessionsState('error'));
@@ -221,9 +227,9 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
   async function handleClaim(shiftId: string) {
     setPendingShiftId(shiftId);
     try {
-      await api.claimShift(teamId, shiftId);
-      reloadSessions();
-      loadStats();
+      const updated = await api.claimShift(teamId, shiftId);
+      setSessions((prev) => (prev ? updateShiftInSessions(prev, shiftId, updated) : prev));
+      loadStats().catch(() => setStatsState('error'));
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const holderName =
@@ -246,9 +252,9 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
   async function handleRelease(shiftId: string) {
     setPendingShiftId(shiftId);
     try {
-      await api.releaseShift(teamId, shiftId);
-      reloadSessions();
-      loadStats();
+      const updated = await api.releaseShift(teamId, shiftId);
+      setSessions((prev) => (prev ? updateShiftInSessions(prev, shiftId, updated) : prev));
+      loadStats().catch(() => setStatsState('error'));
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         showToast(t('schedule.releaseConflict'), 'error');
@@ -344,7 +350,7 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
             </DataList>
             {remainingOpenCount > 0 && (
               <Link
-                href="/schedule"
+                href={`/schedule?team=${encodeURIComponent(teamId)}`}
                 className="text-sm font-medium text-status-mine-on hover:underline"
               >
                 {t('home.helpNeededMore', { count: remainingOpenCount })}
@@ -421,16 +427,7 @@ function ShiftRow({
   onAction: () => void;
 }) {
   const { t } = useLocale();
-  const formatted = formatDate(locale, new Date(entry.session.startsAt), {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    // See schedule/page.tsx's SessionCard for why this is pinned to UTC.
-    timeZone: 'UTC',
-  });
+  const formatted = formatSessionStartsAt(locale, entry.session.startsAt);
 
   return (
     <DataListItem className="flex flex-wrap items-center justify-between gap-3">

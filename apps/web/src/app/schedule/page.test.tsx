@@ -8,6 +8,7 @@ const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {

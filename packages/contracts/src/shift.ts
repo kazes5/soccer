@@ -13,10 +13,16 @@ export const shiftSummarySchema = z.object({
 });
 export type ShiftSummary = z.infer<typeof shiftSummarySchema>;
 
-const shiftCountsSchema = z.object({
-  toPractice: z.number(),
-  fromPractice: z.number(),
-  total: z.number(),
+const personalShiftCountsSchema = z.object({
+  toPractice: z.number().int().nonnegative(),
+  fromPractice: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+
+const teamAverageShiftCountsSchema = z.object({
+  toPractice: z.number().nonnegative(),
+  fromPractice: z.number().nonnegative(),
+  total: z.number().nonnegative(),
 });
 
 /**
@@ -27,7 +33,7 @@ const shiftCountsSchema = z.object({
  * still letting every parent see the team average for self-comparison.
  */
 export const shiftStatsResponseSchema = z.object({
-  mine: shiftCountsSchema,
-  teamAverage: shiftCountsSchema,
+  mine: personalShiftCountsSchema,
+  teamAverage: teamAverageShiftCountsSchema,
 });
 export type ShiftStatsResponse = z.infer<typeof shiftStatsResponseSchema>;

@@ -201,7 +201,12 @@ describe('HomePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^claim$/i }));
 
     await waitFor(() => expect(api.claimShift).toHaveBeenCalledWith('team-1', 'shift-open'));
-    await waitFor(() => expect(api.listSessions).toHaveBeenCalledTimes(2));
+    // The claimed shift moves into "your shifts" and out of "help needed" by
+    // patching local state, not by refetching the whole session list — the
+    // rest of the workspace must never flash back to a loading state.
+    expect(await screen.findByText('All upcoming shifts are covered.')).toBeInTheDocument();
+    expect(screen.getByText('2 shifts coming up')).toBeInTheDocument();
+    expect(api.listSessions).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(api.getShiftStats).toHaveBeenCalledTimes(2));
   });
 
@@ -225,7 +230,9 @@ describe('HomePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^release$/i }));
 
     await waitFor(() => expect(api.releaseShift).toHaveBeenCalledWith('team-1', 'shift-mine'));
-    await waitFor(() => expect(api.listSessions).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("You don't have any upcoming shifts.")).toBeInTheDocument();
+    expect(screen.getByText('2 still need a driver')).toBeInTheDocument();
+    expect(api.listSessions).toHaveBeenCalledTimes(1);
   });
 
   it('shows empty states when there are no upcoming shifts, and a static pending-swaps placeholder', async () => {
