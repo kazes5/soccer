@@ -6,6 +6,7 @@ import {
   createScheduledTaskQueue,
   enqueueOutboxEvent,
   OUTBOX_QUEUE_NAME,
+  QUEUE_PREFIX,
 } from '../src/lib/queues';
 import { createRedisConnection } from '../src/lib/redis';
 import { processOutboxEvent } from '../src/worker/processors/outbox';
@@ -63,12 +64,21 @@ describe('worker queue plumbing', () => {
       },
     });
 
+    // Baseline before enqueueing: other test files share this same
+    // test-prefixed queue and may have left their own waiting jobs behind
+    // (nothing in the test environment runs a worker to drain them), so the
+    // real assertion is the *delta* this test's two calls produce, not an
+    // absolute total.
+    const before = await queue.getJobCounts('waiting', 'delayed', 'active');
+    const beforeTotal = (before.waiting ?? 0) + (before.delayed ?? 0) + (before.active ?? 0);
+
     await enqueueOutboxEvent(queue, event.id);
     await enqueueOutboxEvent(queue, event.id);
 
-    const counts = await queue.getJobCounts('waiting', 'delayed', 'active');
-    const total = (counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.active ?? 0);
-    expect(total).toBe(1);
+    const after = await queue.getJobCounts('waiting', 'delayed', 'active');
+    const afterTotal = (after.waiting ?? 0) + (after.delayed ?? 0) + (after.active ?? 0);
+    expect(afterTotal - beforeTotal).toBe(1);
+    expect(await queue.getJob(event.id)).toBeDefined();
 
     await queue.close();
   });
@@ -139,7 +149,7 @@ describe('worker queue plumbing', () => {
     const worker = new Worker<{ outboxEventId: string }>(
       OUTBOX_QUEUE_NAME,
       (job) => processOutboxEvent(app.prisma, job.data.outboxEventId),
-      { connection: redisConnection() },
+      { connection: redisConnection(), prefix: QUEUE_PREFIX },
     );
 
     try {
@@ -189,7 +199,7 @@ describe('worker queue plumbing', () => {
       () => {
         throw new Error('simulated processing failure');
       },
-      { connection: redisConnection() },
+      { connection: redisConnection(), prefix: QUEUE_PREFIX },
     );
     try {
       await new Promise<void>((resolve) => {
@@ -212,7 +222,7 @@ describe('worker queue plumbing', () => {
     const worker = new Worker<{ outboxEventId: string }>(
       OUTBOX_QUEUE_NAME,
       (job) => processOutboxEvent(app.prisma, job.data.outboxEventId),
-      { connection: redisConnection() },
+      { connection: redisConnection(), prefix: QUEUE_PREFIX },
     );
     try {
       const completed = new Promise<void>((resolve, reject) => {

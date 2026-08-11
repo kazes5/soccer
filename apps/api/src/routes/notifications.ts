@@ -17,12 +17,35 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-const DEFAULT_UNREAD_COUNT_WHERE = (userId: string, teamId: string) => ({
-  userId,
-  teamId,
-  readAt: null,
-  dismissedAt: null,
-});
+/**
+ * The set of "unread and still visible" notifications for a user+team —
+ * deliberately shared, not per-endpoint, by both the unread-count query and
+ * `POST .../read-all`'s mutation: "how many are unread" and "mark all
+ * unread ones read" must always agree on exactly the same set, or read-all
+ * would silently stop matching what the badge reports.
+ */
+function unreadVisibleWhere(userId: string, teamId: string) {
+  return { userId, teamId, readAt: null, dismissedAt: null };
+}
+
+/** Loads a `UserNotification` the caller owns, or throws 404 — same 404 for
+ * "doesn't exist" and "belongs to someone else" so the response can't be
+ * used to probe for another team member's notification ids. Shared by the
+ * read and dismiss endpoints below, which otherwise duplicated this check. */
+async function loadOwnNotificationOrThrow(
+  prisma: FastifyInstance['prisma'],
+  teamId: string,
+  notificationId: string,
+  userId: string,
+) {
+  const notification = await prisma.userNotification.findUnique({
+    where: { id: notificationId },
+  });
+  if (!notification || notification.teamId !== teamId || notification.userId !== userId) {
+    throw new HttpError(404, 'Notification not found.');
+  }
+  return notification;
+}
 
 export default async function notificationRoutes(app: FastifyInstance) {
   app.get('/teams/:teamId/notifications', async (request) => {
@@ -39,7 +62,7 @@ export default async function notificationRoutes(app: FastifyInstance) {
         take: query.limit + 1,
       }),
       app.prisma.userNotification.count({
-        where: DEFAULT_UNREAD_COUNT_WHERE(currentUser.id, params.teamId),
+        where: unreadVisibleWhere(currentUser.id, params.teamId),
       }),
     ]);
 
@@ -69,7 +92,7 @@ export default async function notificationRoutes(app: FastifyInstance) {
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
 
     const count = await app.prisma.userNotification.count({
-      where: DEFAULT_UNREAD_COUNT_WHERE(currentUser.id, params.teamId),
+      where: unreadVisibleWhere(currentUser.id, params.teamId),
     });
 
     return unreadNotificationCountResponseSchema.parse({ count });
@@ -80,16 +103,12 @@ export default async function notificationRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
 
-    const notification = await app.prisma.userNotification.findUnique({
-      where: { id: params.notificationId },
-    });
-    if (
-      !notification ||
-      notification.teamId !== params.teamId ||
-      notification.userId !== currentUser.id
-    ) {
-      throw new HttpError(404, 'Notification not found.');
-    }
+    const notification = await loadOwnNotificationOrThrow(
+      app.prisma,
+      params.teamId,
+      params.notificationId,
+      currentUser.id,
+    );
 
     if (!notification.readAt) {
       await app.prisma.userNotification.update({
@@ -106,16 +125,12 @@ export default async function notificationRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
 
-    const notification = await app.prisma.userNotification.findUnique({
-      where: { id: params.notificationId },
-    });
-    if (
-      !notification ||
-      notification.teamId !== params.teamId ||
-      notification.userId !== currentUser.id
-    ) {
-      throw new HttpError(404, 'Notification not found.');
-    }
+    const notification = await loadOwnNotificationOrThrow(
+      app.prisma,
+      params.teamId,
+      params.notificationId,
+      currentUser.id,
+    );
 
     if (!notification.dismissedAt) {
       await app.prisma.userNotification.update({
@@ -133,7 +148,7 @@ export default async function notificationRoutes(app: FastifyInstance) {
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
 
     await app.prisma.userNotification.updateMany({
-      where: DEFAULT_UNREAD_COUNT_WHERE(currentUser.id, params.teamId),
+      where: unreadVisibleWhere(currentUser.id, params.teamId),
       data: { readAt: new Date() },
     });
 

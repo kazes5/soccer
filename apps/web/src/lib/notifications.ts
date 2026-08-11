@@ -163,5 +163,18 @@ export function describeNotification(
         text: t('notifications.event.inviteAccepted', { userName: asString(payload, 'userName') }),
         href: null,
       };
+
+    default: {
+      // Defensive fallback: `eventType`'s TS type is the exhaustive union
+      // above, but this renders real API data at runtime — a future event
+      // type added server-side without a matching case here (or a rolling
+      // deploy serving a stale web bundle a newer eventType) must not crash
+      // the whole notifications list, just make this one row generic.
+      const unknownEventType: string = eventType;
+      return {
+        text: t('notifications.event.unknown', { eventType: unknownEventType }),
+        href: null,
+      };
+    }
   }
 }

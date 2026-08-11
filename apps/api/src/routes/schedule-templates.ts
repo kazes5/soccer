@@ -11,6 +11,7 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 import { combineDateAndTime, generateOccurrences } from '../lib/recurrence';
 import { wallClockToInstant } from '../lib/timezone';
 import type { Prisma } from '../../generated/prisma/client';
@@ -166,7 +167,7 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         afterState: { recurrenceRule: template.recurrenceRule, sessionsCreated },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'schedule_template_created',
         category: 'shift_changes',
@@ -179,8 +180,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         },
       });
 
-      return { template, sessionsCreated };
+      return { template, sessionsCreated, outboxEventId: outboxEvent.id };
     });
+
+    enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
 
     reply.status(201);
     return createScheduleTemplateResponseSchema.parse({
@@ -312,7 +315,7 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'schedule_template_updated',
         category: 'shift_changes',
@@ -325,8 +328,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         },
       });
 
-      return { template: updated, sessionsCreated };
+      return { template: updated, sessionsCreated, outboxEventId: outboxEvent.id };
     });
+
+    enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
 
     return updateScheduleTemplateResponseSchema.parse({
       template: toTemplateDto(

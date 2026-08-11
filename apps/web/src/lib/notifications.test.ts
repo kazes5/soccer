@@ -92,4 +92,18 @@ describe('describeNotification', () => {
     expect(result.text).toContain('24');
     expect(result.href).toBe('/admin/schedule-templates?team=team-1');
   });
+
+  it('falls back to a generic message instead of crashing for an unrecognized event type', () => {
+    // Simulates version skew: the API returns an eventType this build of the
+    // web app doesn't know about yet. describeNotification's TS type is
+    // exhaustive, so this deliberately casts past it to exercise the
+    // runtime fallback.
+    const result = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_accepted' as never,
+      payload: {},
+    });
+
+    expect(result.text).toContain('swap_accepted');
+    expect(result.href).toBeNull();
+  });
 });

@@ -103,15 +103,21 @@ function NotificationsWorkspace({ teamId, timeZone }: { teamId: string; timeZone
 
   const load = useCallback(() => api.listNotifications(teamId), [teamId]);
 
+  // Shared by the initial load and manual `reload()` below, which otherwise
+  // differ only in whether a stale response (e.g. after a fast team switch)
+  // is allowed to overwrite state.
+  const applyLoadResult = useCallback((data: Awaited<ReturnType<typeof api.listNotifications>>) => {
+    setNotifications(data.notifications);
+    setNextCursor(data.nextCursor);
+    setUnreadCount(data.unreadCount);
+    setLoadState('ready');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     load()
       .then((data) => {
-        if (cancelled) return;
-        setNotifications(data.notifications);
-        setNextCursor(data.nextCursor);
-        setUnreadCount(data.unreadCount);
-        setLoadState('ready');
+        if (!cancelled) applyLoadResult(data);
       })
       .catch(() => {
         if (!cancelled) setLoadState('error');
@@ -119,17 +125,12 @@ function NotificationsWorkspace({ teamId, timeZone }: { teamId: string; timeZone
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, applyLoadResult]);
 
   function reload() {
     setLoadState('loading');
     load()
-      .then((data) => {
-        setNotifications(data.notifications);
-        setNextCursor(data.nextCursor);
-        setUnreadCount(data.unreadCount);
-        setLoadState('ready');
-      })
+      .then(applyLoadResult)
       .catch(() => setLoadState('error'));
   }
 

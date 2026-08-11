@@ -5,6 +5,7 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
@@ -134,7 +135,7 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'shift_claimed',
         category: 'shift_changes',
@@ -150,10 +151,12 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      return result;
+      return { result, outboxEventId: outboxEvent.id };
     });
 
-    return shiftSummarySchema.parse(toDto(updated));
+    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+
+    return shiftSummarySchema.parse(toDto(updated.result));
   });
 
   app.post('/teams/:teamId/shifts/:shiftId/release', async (request) => {
@@ -202,7 +205,7 @@ export default async function shiftRoutes(app: FastifyInstance) {
         afterState: { status: result.status, version: result.version },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'shift_released',
         category: 'shift_changes',
@@ -219,9 +222,11 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      return result;
+      return { result, outboxEventId: outboxEvent.id };
     });
 
-    return shiftSummarySchema.parse(toDto(updated));
+    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+
+    return shiftSummarySchema.parse(toDto(updated.result));
   });
 }

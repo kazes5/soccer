@@ -239,6 +239,7 @@ export const en = {
   'notifications.event.memberDemoted': '{userName} is no longer an admin',
   'notifications.event.memberRemoved': '{userName} was removed from the team',
   'notifications.event.inviteAccepted': '{userName} joined the team',
+  'notifications.event.unknown': 'Team update ({eventType})',
 
   'schedule.title': 'Schedule',
   'schedule.loading': 'Loading the schedule…',
@@ -522,6 +523,7 @@ export const he: Record<MessageKey, string> = {
   'notifications.event.memberDemoted': '{userName} כבר לא מנהל',
   'notifications.event.memberRemoved': '{userName} הוסר מהקבוצה',
   'notifications.event.inviteAccepted': '{userName} הצטרף לקבוצה',
+  'notifications.event.unknown': 'עדכון בקבוצה ({eventType})',
 
   'schedule.title': 'לוח זמנים',
   'schedule.loading': 'טוען את לוח הזמנים…',

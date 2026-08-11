@@ -11,6 +11,7 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
@@ -179,7 +180,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { startsAt: updated.startsAt, fieldLocation: updated.fieldLocation },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'session_updated',
         category: 'shift_changes',
@@ -191,10 +192,12 @@ export default async function sessionRoutes(app: FastifyInstance) {
         },
       });
 
-      return updated;
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 
   app.post('/teams/:teamId/sessions/:sessionId/cancel', async (request) => {
@@ -234,7 +237,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { status: updated.status },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'session_cancelled',
         category: 'shift_changes',
@@ -246,10 +249,12 @@ export default async function sessionRoutes(app: FastifyInstance) {
         },
       });
 
-      return updated;
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 
   app.patch('/teams/:teamId/sessions/:sessionId/points/:pointId', async (request) => {
@@ -307,7 +312,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { playerIds: body.playerIds },
       });
 
-      await recordOutboxEvent(tx, {
+      const outboxEvent = await recordOutboxEvent(tx, {
         teamId: params.teamId,
         eventType: 'session_point_players_updated',
         category: 'shift_changes',
@@ -327,9 +332,11 @@ export default async function sessionRoutes(app: FastifyInstance) {
           shifts: { include: { assignedUser: true } },
         },
       });
-      return updated;
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 }
