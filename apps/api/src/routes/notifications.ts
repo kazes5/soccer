@@ -1,11 +1,16 @@
 import {
   notificationListResponseSchema,
+  notificationSchema,
   unreadNotificationCountResponseSchema,
 } from '@soccer/contracts';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { fetchNotificationsSince } from '../lib/notification-replay';
+
+type UserNotificationRow = Awaited<ReturnType<typeof fetchNotificationsSince>>[number];
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const notificationParamsSchema = z.object({
@@ -153,5 +158,114 @@ export default async function notificationRoutes(app: FastifyInstance) {
     });
 
     reply.status(204).send();
+  });
+
+  /**
+   * Real-time in-app delivery per ADR 0001: one authenticated, team-scoped
+   * `text/event-stream` per browser tab. Auth is the same cookie-based
+   * `requireAuth`/`requireTeamRole` every other route here uses — `GET`
+   * requests are exempt from the CSRF check (`assertCsrfSafe` in
+   * `lib/cookies.ts`), and `EventSource` sends the session cookie
+   * automatically via `withCredentials`, so no special-casing is needed.
+   *
+   * Delivery is layered for reliability, not just speed: a `plugins/sse.ts`
+   * Redis-pub/sub dispatch (fed by the worker right after it processes an
+   * `OutboxEvent`) is the low-latency path, and a periodic re-query
+   * piggybacked on the heartbeat timer is the fallback that still delivers
+   * within one interval even if a pub/sub message is dropped (Redis pub/sub
+   * has no redelivery). Postgres (`UserNotification`) stays the single
+   * source of truth throughout — a dispatch only ever means "go re-check",
+   * never carries the payload itself.
+   */
+  app.get('/teams/:teamId/notifications/stream', async (request, reply) => {
+    const params = teamParamsSchema.parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
+
+    reply.hijack();
+    const res = reply.raw;
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    });
+    // Reconnect hint for the browser's automatic retry after a dropped
+    // connection; independent of the server-side heartbeat interval below.
+    res.write('retry: 5000\n\n');
+
+    let cursor: string | null = null;
+    let isFlushing = false;
+
+    function sendRow(row: UserNotificationRow) {
+      const dto = notificationSchema.parse({
+        id: row.id,
+        teamId: row.teamId,
+        eventType: row.eventType,
+        category: row.category,
+        severity: row.severity,
+        payload: row.payload,
+        readAt: row.readAt?.toISOString() ?? null,
+        dismissedAt: row.dismissedAt?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+      });
+      res.write(`id: ${row.id}\nevent: notification\ndata: ${JSON.stringify(dto)}\n\n`);
+      cursor = row.id;
+    }
+
+    // A pub/sub dispatch and the heartbeat's own poll can race to call this
+    // concurrently; the guard makes a second overlapping call a no-op rather
+    // than risking two queries racing to advance `cursor` out of order.
+    async function flush() {
+      if (isFlushing) return;
+      isFlushing = true;
+      try {
+        const rows = await fetchNotificationsSince(app.prisma, {
+          userId: currentUser.id,
+          teamId: params.teamId,
+          afterId: cursor,
+        });
+        for (const row of rows) sendRow(row);
+      } finally {
+        isFlushing = false;
+      }
+    }
+
+    const lastEventIdHeader = request.headers['last-event-id'];
+    if (typeof lastEventIdHeader === 'string' && lastEventIdHeader.length > 0) {
+      // Reconnect: the browser is telling us exactly where it left off.
+      cursor = lastEventIdHeader;
+      await flush();
+    } else {
+      // Fresh connect: the caller's initial page load already pulled history
+      // via the REST list endpoint, so don't replay it again here — just
+      // establish a baseline cursor (via a synthetic `id`-carrying comment
+      // event) so the browser's own automatic reconnect already carries a
+      // correct `Last-Event-ID` even if this connection drops before any
+      // real event fires.
+      const mostRecent = await app.prisma.userNotification.findFirst({
+        where: { userId: currentUser.id, teamId: params.teamId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+      if (mostRecent) {
+        cursor = mostRecent.id;
+        res.write(`id: ${mostRecent.id}\nevent: sync\ndata: {}\n\n`);
+      }
+    }
+
+    const connectionId = randomUUID();
+    app.sseRegistry.add({ id: connectionId, userId: currentUser.id, teamId: params.teamId }, () => {
+      void flush();
+    });
+
+    const heartbeat = setInterval(() => {
+      res.write(': heartbeat\n\n');
+      void flush();
+    }, app.sseHeartbeatIntervalMs);
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat);
+      app.sseRegistry.remove(connectionId);
+    });
   });
 }

@@ -10,6 +10,7 @@ import { SimpleWebauthnVerifier, type WebauthnVerifier } from './lib/webauthn';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import queuesPlugin from './plugins/queues';
+import ssePlugin from './plugins/sse';
 import authRoutes from './routes/auth';
 import collectionPointRoutes from './routes/collection-points';
 import coordinationSettingsRoutes from './routes/coordination-settings';
@@ -29,13 +30,19 @@ import teamRoutes from './routes/teams';
 declare module 'fastify' {
   interface FastifyInstance {
     webauthnVerifier: WebauthnVerifier;
+    sseHeartbeatIntervalMs: number;
   }
 }
+
+const DEFAULT_SSE_HEARTBEAT_INTERVAL_MS = 25_000;
 
 export interface BuildAppOptions {
   /** Overrides the default (`@simplewebauthn/server`-backed) verifier — used in tests, since a
    *  real WebAuthn ceremony needs actual browser/authenticator crypto Vitest can't produce. */
   webauthnVerifier?: WebauthnVerifier;
+  /** Overrides the notification stream's heartbeat/fallback-poll interval — used in tests so
+   *  they don't have to wait out the real 25s interval to observe fallback-poll delivery. */
+  sseHeartbeatIntervalMs?: number;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -45,16 +52,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.decorate('webauthnVerifier', options.webauthnVerifier ?? new SimpleWebauthnVerifier());
+  app.decorate(
+    'sseHeartbeatIntervalMs',
+    options.sseHeartbeatIntervalMs ?? DEFAULT_SSE_HEARTBEAT_INTERVAL_MS,
+  );
 
   app.register(cors, {
     origin: env.WEB_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+    // `Last-Event-ID` is EventSource's own automatic reconnect header — the
+    // browser preflights it like any other non-safelisted header, so it
+    // needs to be explicitly allowed here or every reconnect fails CORS.
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'Last-Event-ID'],
   });
   app.register(cookie);
   app.register(prismaPlugin);
   app.register(queuesPlugin);
+  app.register(ssePlugin);
   app.register(authPlugin);
   app.addHook('onRequest', async (request) => {
     assertCsrfSafe(request);

@@ -42,6 +42,7 @@ async function withAttemptTracking<T>(
 async function main() {
   const outboxQueue = createOutboxQueue(createRedisConnection());
   const scheduledTaskQueue = createScheduledTaskQueue(createRedisConnection());
+  const notificationPublisher = createRedisConnection();
 
   const counts = await reconcile(prisma, outboxQueue, scheduledTaskQueue);
   console.log(
@@ -52,7 +53,7 @@ async function main() {
     OUTBOX_QUEUE_NAME,
     (job) =>
       withAttemptTracking(
-        () => processOutboxEvent(prisma, job.data.outboxEventId),
+        () => processOutboxEvent(prisma, job.data.outboxEventId, notificationPublisher),
         (lastError) =>
           prisma.outboxEvent.update({
             where: { id: job.data.outboxEventId },
@@ -95,6 +96,7 @@ async function main() {
       scheduledTaskWorker.close(),
       outboxQueue.close(),
       scheduledTaskQueue.close(),
+      notificationPublisher.quit(),
       prisma.$disconnect(),
     ]);
     process.exit(0);
