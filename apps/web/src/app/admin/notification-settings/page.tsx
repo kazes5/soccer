@@ -2,6 +2,7 @@
 
 import {
   ADMIN_ALERT_LEAD_MINUTES,
+  ESCALATION_LEAD_MINUTES_MAX,
   REMINDER_OFFSET_MINUTES_MAX_COUNT,
   SWAP_EXPIRY_HOURS_MAX,
   SWAP_EXPIRY_HOURS_MIN,
@@ -321,6 +322,7 @@ function SettingsForm({
             type="number"
             required
             min={ADMIN_ALERT_LEAD_MINUTES + 1}
+            max={ESCALATION_LEAD_MINUTES_MAX}
             value={escalationLeadMinutes}
             onChange={(e) => setEscalationLeadMinutes(e.target.value)}
             className={inputClassName}

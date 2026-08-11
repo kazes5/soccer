@@ -5,8 +5,16 @@ CREATE TYPE "NotificationCategory" AS ENUM ('shift_changes', 'swaps', 'reminders
 DROP INDEX "notification_preferences_user_id_team_id_event_type_channel_key";
 
 -- AlterTable
-ALTER TABLE "notification_preferences" DROP COLUMN "event_type",
-ADD COLUMN     "category" "NotificationCategory" NOT NULL;
+-- `category` is added nullable and backfilled before being made NOT NULL,
+-- rather than a single ADD COLUMN ... NOT NULL, so this migration doesn't
+-- fail outright against any environment where notification_preferences
+-- already has rows (it has none in any environment as of this migration —
+-- nothing read or wrote this table before this checkpoint — but a migration
+-- file is permanent history and shouldn't assume that stays true).
+ALTER TABLE "notification_preferences" ADD COLUMN "category" "NotificationCategory";
+UPDATE "notification_preferences" SET "category" = 'shift_changes' WHERE "category" IS NULL;
+ALTER TABLE "notification_preferences" ALTER COLUMN "category" SET NOT NULL;
+ALTER TABLE "notification_preferences" DROP COLUMN "event_type";
 
 -- CreateTable
 CREATE TABLE "coordination_settings" (

@@ -61,4 +61,14 @@ describe('coordinationSettingsRequestSchema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  it('rejects an escalation lead time above the 24-hour upper bound', () => {
+    const result = coordinationSettingsRequestSchema.safeParse({
+      swapExpiryHours: 24,
+      reminderOffsetMinutes: [120],
+      escalationLeadMinutes: 1441,
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

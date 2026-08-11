@@ -50,11 +50,17 @@ export default async function coordinationSettingsRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
-    const existing = await app.prisma.coordinationSettings.findUnique({
-      where: { teamId: params.teamId },
-    });
-
     const settings = await app.prisma.$transaction(async (tx) => {
+      // Read immediately before the write, inside this transaction — not
+      // from a snapshot taken before it opened — so a concurrent PATCH can't
+      // make the audit log's beforeState stale relative to what was actually
+      // in the database just before this write (same hazard as the session
+      // PATCH partial-update fix; here it's the audit trail, not the write
+      // itself, since the upsert always applies the full submitted object).
+      const existing = await tx.coordinationSettings.findUnique({
+        where: { teamId: params.teamId },
+      });
+
       const updated = await tx.coordinationSettings.upsert({
         where: { teamId: params.teamId },
         create: {

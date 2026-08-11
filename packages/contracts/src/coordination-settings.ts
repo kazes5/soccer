@@ -8,6 +8,11 @@ export const REMINDER_OFFSET_MINUTES_DEFAULT = [1440, 120];
 export const REMINDER_OFFSET_MINUTES_MAX_COUNT = 4;
 
 export const ESCALATION_LEAD_MINUTES_DEFAULT = 120;
+/** A generous upper bound (24h) — escalation is meant to flag coverage still
+ * missing shortly before a session, not days out; mirrors the explicit cap
+ * already applied to `swapExpiryHours` rather than leaving this field
+ * unbounded. */
+export const ESCALATION_LEAD_MINUTES_MAX = 1440;
 
 /** The admin unresolved-coverage alert always fires a fixed 60 minutes before
  * the session — escalation must lead that by a positive margin, or the two
@@ -23,6 +28,7 @@ export const coordinationSettingsRequestSchema = z.object({
   escalationLeadMinutes: z
     .number()
     .int()
+    .max(ESCALATION_LEAD_MINUTES_MAX)
     .refine((value) => value > ADMIN_ALERT_LEAD_MINUTES, {
       message: `Escalation lead time must be greater than the fixed ${ADMIN_ALERT_LEAD_MINUTES}-minute admin alert.`,
     }),

@@ -44,11 +44,14 @@ export default async function notificationSettingsRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
-    const existing = await app.prisma.teamNotificationSettings.findUnique({
-      where: { teamId: params.teamId },
-    });
-
     const settings = await app.prisma.$transaction(async (tx) => {
+      // Read immediately before the write, inside this transaction — see
+      // coordination-settings.ts's identical comment for the full rationale
+      // (audit-log beforeState accuracy under a concurrent PATCH).
+      const existing = await tx.teamNotificationSettings.findUnique({
+        where: { teamId: params.teamId },
+      });
+
       const updated = await tx.teamNotificationSettings.upsert({
         where: { teamId: params.teamId },
         create: {
