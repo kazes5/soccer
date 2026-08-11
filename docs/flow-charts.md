@@ -1,156 +1,426 @@
-# Admin and User Flow Charts
+# Admin and Parent Flow Charts
 
-This guide summarizes the currently shipped web MVP flows as separate Mermaid
-diagrams. Each chart covers one focused journey so it can be read, reviewed,
-and updated independently.
+This guide shows the currently shipped web flows in two role-specific sections.
+Every scenario has its own Mermaid diagram so it can be read, reviewed, and
+updated independently.
 
-It complements [user-guide.md](./user-guide.md): that guide explains the same
-behavior in prose, while this page shows the route and decision flow at a
-glance.
+Admin permissions are scoped to a team. A person may therefore follow an admin
+flow for one team and a parent flow for another. See the
+[Admin User Guide](./admin-user-guide.md) and [User Guide](./user-guide.md) for
+the same behavior in prose.
 
-For this document, **user** means a non-admin team member in the current MVP,
-which is typically a **parent**.
+## Admin flows
 
-## Admin creates a team
+### Admin creates a team
 
 ```mermaid
 flowchart TD
     A([Start]) --> B[Open `/teams/new`]
-    B --> C[Enter team, season, name, and phone or email]
+    B --> C[Enter team name, season, admin name, and phone]
     C --> D[Submit create-team form]
-    D --> E[API creates team and signs admin in]
-    E --> F{Passkey setup succeeds?}
-    F -->|No| G[Stay on passkey retry screen]
-    G --> F
-    F -->|Yes| H[Land on Home]
-    H --> I([Continue to team and Home flow])
+    D --> E{Team creation succeeds?}
+    E -->|No| F[Show error and keep form data]
+    F --> D
+    E -->|Yes| G[API creates team and authenticated admin session]
+    G --> H[Prompt for passkey registration]
+    H --> I{Passkey setup succeeds?}
+    I -->|No| J[Stay on passkey retry screen]
+    J --> H
+    I -->|Yes| K[Open `/home`]
+    K --> L([Continue to admin Home flow])
 ```
 
-## User accepts an invite
-
-```mermaid
-flowchart TD
-    A([Start]) --> B[Receive invite link from an admin]
-    B --> C[Open `/invite/[code]`]
-    C --> D{Invite exists and is still pending?}
-    D -->|No| E[Show invalid or expired state]
-    E --> F[Ask admin for a new invite]
-    F --> G([End])
-    D -->|Yes| H[Review team preview]
-    H --> I[Enter name and optional linked players]
-    I --> J[Submit join-team form]
-    J --> K[API accepts invite and creates or links membership]
-    K --> L{Passkey setup succeeds?}
-    L -->|No| M[Stay on passkey retry screen]
-    M --> L
-    L -->|Yes| N[Land on Home]
-    N --> O([Continue to team and Home flow])
-```
-
-## User signs in with a passkey
+### Returning admin signs in
 
 ```mermaid
 flowchart TD
     A([Start]) --> B[Open `/login`]
-    B --> C[Enter phone or email]
+    B --> C[Enter phone or email on file]
     C --> D[Start passkey login]
     D --> E{Login succeeds?}
-    E -->|No| F[Show error and retry login]
+    E -->|No| F[Show error]
     F --> B
-    E -->|Yes| G[Receive authenticated session]
-    G --> H[Land on Home]
-    H --> I([Continue to team and Home flow])
+    E -->|Yes| G[Create authenticated session]
+    G --> H[Open `/home`]
+    H --> I([Continue to admin Home flow])
 ```
 
-## User selects a team and reviews Home
+### Admin selects a team and reviews Home
 
 ```mermaid
 flowchart TD
-    A([Authenticated user]) --> B{Belongs to multiple teams?}
-    B -->|Yes| C[Choose active team with the team switcher]
-    B -->|No| D[Use the default team]
-    C --> E[Load Home workspace for active team]
+    A([Admin opens `/home`]) --> B{Belongs to multiple teams?}
+    B -->|Yes| C[Choose active team]
+    B -->|No| D[Use default team]
+    C --> E[Load team workspace]
     D --> E
-    E --> F[Review next action, assignments, help-needed shifts, and stats]
-    F --> G{Open another destination?}
-    G -->|Schedule| H[Open `/schedule`]
-    G -->|Admin screen| I[Open the selected admin destination]
-    G -->|Stay on Home| F
-    H --> J([Continue to schedule flow])
-    I --> K([Continue to admin management flow])
+    E --> F[Review assignments, open trips, and stats]
+    F --> G{Admin for the active team?}
+    G -->|No| H([Continue with parent flows for this team])
+    G -->|Yes| I[Show admin destinations and invite form]
+    I --> J{Next task?}
+    J -->|Invite parent| K([Continue to invite flow])
+    J -->|Manage team| L([Open an admin management scenario])
+    J -->|Drive a trip| M([Continue to admin claim or release flow])
+    J -->|Review notifications| N([Continue to admin notifications flow])
 ```
 
-## Admin manages schedule data
+### Admin invites a parent
 
 ```mermaid
 flowchart TD
-    A([Admin on Home]) --> B{What needs changing?}
-    B -->|Collection point| C[Open `/admin/collection-points`]
-    C --> D[Create, edit, or delete a collection point]
-    D --> E{Validation or scheduled-shift conflict?}
-    E -->|Yes| F[Show error and keep current data]
+    A([Admin on Home]) --> B[Find active team under Your teams]
+    B --> C[Enter parent phone number]
+    C --> D[Select Invite]
+    D --> E{Invitation creation succeeds?}
+    E -->|No| F[Show error and keep admin on Home]
     F --> C
-    E -->|No| G[Save change and update the list]
-    B -->|Schedule template| H[Open `/admin/schedule-templates`]
-    H --> I[Create or edit recurrence, time, location, and points]
-    I --> J[Generate or preserve future sessions as allowed]
-    J --> K[Show saved template and session count]
-    B -->|Individual session| L[Open `/schedule`]
-    L --> M[Edit time or location, manage players, or cancel]
-    M --> N{Session is historical?}
-    N -->|Yes| O[Keep controls read-only]
-    N -->|No| P[Save change or confirm cancellation]
-    G --> Q([Return to admin navigation])
-    K --> Q
-    O --> Q
-    P --> Q
+    E -->|Yes| G[Show single-use, time-limited invite link]
+    G --> H{Copy succeeds?}
+    H -->|No| I[Show copy error and leave link visible]
+    H -->|Yes| J[Show copied confirmation]
+    I --> K[Admin sends link through a trusted channel]
+    J --> K
+    K --> L([Parent continues with invite acceptance flow])
 ```
 
-## User claims or releases a shift
+### Admin manages collection points
 
 ```mermaid
 flowchart TD
-    A([User on Home or Schedule]) --> B{Need a shift now?}
-    B -->|No| C[Review upcoming assignments and stats]
-    C --> D([Continue browsing])
-    B -->|Yes| E[Select an open shift]
-    E --> F[Submit Claim]
-    F --> G{Claim succeeds?}
-    G -->|No, another user won the race| H[Show conflict toast and refresh canonical state]
-    H --> D
-    G -->|Yes| I[Shift becomes assigned to the user]
-    I --> J{Release later?}
-    J -->|No| D
-    J -->|Yes| K[Select Release on the assigned shift]
-    K --> L{Release succeeds?}
-    L -->|No| M[Show release conflict and refresh canonical state]
-    M --> D
-    L -->|Yes| N[Shift becomes open again]
-    N --> D
+    A([Admin]) --> B[Open `/admin/collection-points`]
+    B --> C{Choose action}
+    C -->|Add| D[Enter name, address, type, and optional coordinates]
+    D --> E{Input is valid?}
+    E -->|No| F[Show validation error]
+    F --> D
+    E -->|Yes| G[Create point and update list]
+    C -->|Edit| H[Change point details]
+    H --> I{Save succeeds?}
+    I -->|No| J[Show error]
+    J --> H
+    I -->|Yes| K[Update point in list]
+    C -->|Delete| L[Confirm deletion]
+    L --> M{Point is used by a scheduled session?}
+    M -->|Yes| N[Keep point and show conflict error]
+    M -->|No| O[Delete point from list]
+    G --> P([Continue managing collection points])
+    K --> P
+    N --> P
+    O --> P
 ```
 
-## User logs out
+### Admin creates a schedule template
 
 ```mermaid
 flowchart TD
-    A([Authenticated user]) --> B[Choose Log out]
+    A([Admin]) --> B[Open `/admin/schedule-templates`]
+    B --> C{Collection point exists?}
+    C -->|No| D[Disable Add template]
+    D --> E[Open collection-points flow first]
+    C -->|Yes| F[Select Add template]
+    F --> G[Choose weekly or biweekly recurrence and days]
+    G --> H[Enter start date, time, field, and 1-52 week horizon]
+    H --> I[Select one or more collection points]
+    I --> J{Form is valid?}
+    J -->|No| K[Show validation error]
+    K --> G
+    J -->|Yes| L[Create template and matching sessions]
+    L --> M[Show number of sessions created]
+    M --> N([Review sessions on Schedule])
+```
+
+### Admin edits a schedule template
+
+```mermaid
+flowchart TD
+    A([Admin on Schedule templates]) --> B[Select template edit control]
+    B --> C[Change editable recurrence, time, field, horizon, or points]
+    C --> D[Keep original start date]
+    D --> E{Save succeeds?}
+    E -->|No| F[Show error and keep dialog open]
+    F --> C
+    E -->|Yes| G[Update template]
+    G --> H[Create only missing future sessions]
+    H --> I[Preserve every existing session unchanged]
+    I --> J[Show number of new sessions]
+    J --> K([Review and adjust individual sessions])
+```
+
+### Admin manages an individual session
+
+```mermaid
+flowchart TD
+    A([Admin opens `/schedule`]) --> B[Select team and session]
+    B --> C{Session is scheduled and in the future?}
+    C -->|No| D[Show session as read-only]
+    C -->|Yes| E{Choose action}
+    E -->|Edit| F[Change date, time, or field]
+    F --> G[Save only this session]
+    E -->|Assign players| H[Choose collection point and direction]
+    H --> I[Select players and save only this trip]
+    E -->|Cancel| J[Open cancellation confirmation]
+    J --> K{Confirm?}
+    K -->|No| L[Keep session scheduled]
+    K -->|Yes| M[Mark session Cancelled and keep it visible]
+    D --> N([Return to Schedule])
+    G --> N
+    I --> N
+    L --> N
+    M --> N
+```
+
+### Admin configures team coordination settings
+
+```mermaid
+flowchart TD
+    A([Admin]) --> B[Open `/admin/notification-settings`]
+    B --> C[Set swap expiry]
+    C --> D[Set one to four reminder offsets]
+    D --> E[Set escalation lead time]
+    E --> F[Set team default quiet hours]
+    F --> G{Values are valid?}
+    G -->|No| H[Show validation error]
+    H --> C
+    G -->|Yes| I[Save coordination and team notification settings]
+    I --> J[Show saved confirmation]
+    J --> K([Members may override personal preferences])
+```
+
+### Admin claims or releases a trip
+
+```mermaid
+flowchart TD
+    A([Admin on Home or Schedule]) --> B{Choose action}
+    B -->|Claim open trip| C[Submit Claim]
+    C --> D{Claim succeeds?}
+    D -->|No, another member won| E[Show conflict and reload canonical state]
+    D -->|Yes| F[Assign trip to admin]
+    B -->|Release own trip| G[Submit Release]
+    G --> H{Release succeeds?}
+    H -->|No| I[Show conflict and reload canonical state]
+    H -->|Yes| J[Make trip open again]
+    E --> K([Continue on current page])
+    F --> K
+    I --> K
+    J --> K
+```
+
+### Admin reviews team notifications
+
+```mermaid
+flowchart TD
+    A([Admin]) --> B[Open `/notifications` for active team]
+    B --> C[Load notification list and unread count]
+    C --> D{Choose action}
+    D -->|Open item| E[Mark item read]
+    E --> F{Item has a destination?}
+    F -->|Yes| G[Open linked team screen]
+    F -->|No| H[Remain in notification center]
+    D -->|Mark all read| I[Clear unread count]
+    D -->|Dismiss item| J[Remove item from the list]
+    D -->|Load more| K[Append the next page]
+    G --> L([Continue in linked flow])
+    H --> M([Continue reviewing notifications])
+    I --> M
+    J --> M
+    K --> M
+```
+
+### Admin sets personal notification preferences
+
+```mermaid
+flowchart TD
+    A([Admin]) --> B[Open `/settings/notifications`]
+    B --> C{Use custom quiet hours?}
+    C -->|No| D[Inherit team default quiet hours]
+    C -->|Yes| E[Set personal start and end times]
+    D --> F{Use custom reminder timing?}
+    E --> F
+    F -->|No| G[Inherit team reminder timing]
+    F -->|Yes| H[Set one to four personal reminder offsets]
+    G --> I[Choose enabled notification categories]
+    H --> I
+    I --> J{Save succeeds?}
+    J -->|No| K[Show error]
+    K --> C
+    J -->|Yes| L[Show saved confirmation]
+    L --> M([Return to current team])
+```
+
+### Admin logs out
+
+```mermaid
+flowchart TD
+    A([Admin on Home]) --> B[Choose Log out]
     B --> C[Open confirmation dialog]
     C --> D{Confirm logout?}
-    D -->|No| E[Close dialog and remain on current page]
-    E --> F([Continue current flow])
-    D -->|Yes| G[API revokes the session and clears cookies]
-    G --> H[Redirect to `/login`]
-    H --> I([End])
+    D -->|No| E[Close dialog and remain on Home]
+    D -->|Yes| F[API revokes session and clears cookies]
+    F --> G[Open landing page `/`]
+    E --> H([Continue admin Home flow])
+    G --> I([End])
 ```
 
-## Notes
+## Parent flows
 
-- The team and Home flow is shared by admins and parents; available admin
-  destinations are determined by the active membership role.
-- A returning user with an already registered passkey uses `/login`; a first
-  join from an invite uses `/invite/[code]`.
-- A user can claim or release each direction independently. The API remains
-  authoritative when concurrent actions produce a conflict.
-- Current admin UI covers collection points, schedule templates, individual
-  session management, team invites, and shared shift actions. Future admin
-  operations remain tracked in [PLAN.md](../PLAN.md).
+### Parent accepts an invite
+
+```mermaid
+flowchart TD
+    A([Parent receives invite link]) --> B[Open `/invite/[code]`]
+    B --> C{Invite exists, is pending, and has not expired?}
+    C -->|No| D[Show invalid or expired state]
+    D --> E[Ask admin for a new invite]
+    E --> F([End])
+    C -->|Yes| G[Review team preview]
+    G --> H[Enter name and optional linked players]
+    H --> I[Submit join-team form]
+    I --> J{Invite acceptance succeeds?}
+    J -->|No| K[Show error]
+    K --> B
+    J -->|Yes| L[Create or link parent membership]
+    L --> M[Prompt for passkey registration]
+    M --> N{Passkey setup succeeds?}
+    N -->|No| O[Stay on passkey retry screen]
+    O --> M
+    N -->|Yes| P[Open `/home`]
+    P --> Q([Continue to parent Home flow])
+```
+
+### Returning parent signs in
+
+```mermaid
+flowchart TD
+    A([Start]) --> B[Open `/login`]
+    B --> C[Enter phone or email on file]
+    C --> D[Start passkey login]
+    D --> E{Login succeeds?}
+    E -->|No| F[Show error]
+    F --> B
+    E -->|Yes| G[Create authenticated session]
+    G --> H[Open `/home`]
+    H --> I([Continue to parent Home flow])
+```
+
+### Parent selects a team and reviews Home
+
+```mermaid
+flowchart TD
+    A([Parent opens `/home`]) --> B{Belongs to multiple teams?}
+    B -->|Yes| C[Choose active team]
+    B -->|No| D[Use default team]
+    C --> E[Load team workspace]
+    D --> E
+    E --> F[Review upcoming assignments]
+    F --> G[Review trips needing a driver and personal stats]
+    G --> H{Next task?}
+    H -->|Full schedule| I([Continue to parent Schedule flow])
+    H -->|Notifications| J([Continue to parent notifications flow])
+    H -->|Preferences| K([Continue to parent preferences flow])
+    H -->|Stay on Home| F
+```
+
+### Parent reviews Schedule and trip coverage
+
+```mermaid
+flowchart TD
+    A([Parent opens `/schedule`]) --> B[Select team]
+    B --> C[Review sessions, field locations, and cancellation status]
+    C --> D[Review players and coverage for each point and direction]
+    D --> E[Review team-member roster]
+    E --> F{Take a trip action?}
+    F -->|No| G([Continue browsing])
+    F -->|Claim or release| H([Continue to parent claim or release flow])
+```
+
+### Parent claims or releases a trip
+
+```mermaid
+flowchart TD
+    A([Parent on Home or Schedule]) --> B{Choose action}
+    B -->|Claim open trip| C[Submit Claim]
+    C --> D{Claim succeeds?}
+    D -->|No, another member won| E[Show conflict and reload canonical state]
+    D -->|Yes| F[Assign trip to parent]
+    B -->|Release own trip| G[Submit Release]
+    G --> H{Release succeeds?}
+    H -->|No| I[Show conflict and reload canonical state]
+    H -->|Yes| J[Make trip open again]
+    E --> K([Continue on current page])
+    F --> K
+    I --> K
+    J --> K
+```
+
+### Parent reviews team notifications
+
+```mermaid
+flowchart TD
+    A([Parent]) --> B[Open `/notifications` for active team]
+    B --> C[Load notification list and unread count]
+    C --> D{Choose action}
+    D -->|Open item| E[Mark item read]
+    E --> F{Item has a destination?}
+    F -->|Yes| G[Open linked team screen]
+    F -->|No| H[Remain in notification center]
+    D -->|Mark all read| I[Clear unread count]
+    D -->|Dismiss item| J[Remove item from the list]
+    D -->|Load more| K[Append the next page]
+    G --> L([Continue in linked flow])
+    H --> M([Continue reviewing notifications])
+    I --> M
+    J --> M
+    K --> M
+```
+
+### Parent sets personal notification preferences
+
+```mermaid
+flowchart TD
+    A([Parent]) --> B[Open `/settings/notifications`]
+    B --> C{Use custom quiet hours?}
+    C -->|No| D[Inherit team default quiet hours]
+    C -->|Yes| E[Set personal start and end times]
+    D --> F{Use custom reminder timing?}
+    E --> F
+    F -->|No| G[Inherit team reminder timing]
+    F -->|Yes| H[Set one to four personal reminder offsets]
+    G --> I[Choose enabled notification categories]
+    H --> I
+    I --> J{Save succeeds?}
+    J -->|No| K[Show error]
+    K --> C
+    J -->|Yes| L[Show saved confirmation]
+    L --> M([Return to current team])
+```
+
+### Parent logs out
+
+```mermaid
+flowchart TD
+    A([Parent on Home]) --> B[Choose Log out]
+    B --> C[Open confirmation dialog]
+    C --> D{Confirm logout?}
+    D -->|No| E[Close dialog and remain on Home]
+    D -->|Yes| F[API revokes session and clears cookies]
+    F --> G[Open landing page `/`]
+    E --> H([Continue parent Home flow])
+    G --> I([End])
+```
+
+## Shared behavior and current boundaries
+
+- Every team switch reloads data in the selected team's scope. Admin-only
+  destinations appear only when the active membership has the admin role.
+- First-time parents register a passkey through their invite. Returning admins
+  and parents use `/login` on a device with a registered passkey.
+- Trips to practice and from practice are independent. A member can claim or
+  release one direction without changing the other.
+- Claim and release conflicts reload server state because the API is
+  authoritative when members act concurrently.
+- Past and cancelled sessions are read-only. Template edits add missing future
+  sessions but never rewrite sessions that already exist.
+- Swap-request UI, member and role management, reporting, and audit-log screens
+  are not yet part of the shipped web flows. See [PLAN.md](../PLAN.md) for their
+  delivery status.
