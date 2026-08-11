@@ -282,10 +282,11 @@ export const en = {
 export type MessageKey = keyof typeof en;
 
 /**
- * AI-drafted Hebrew, reviewed and approved as-is by a native speaker on
- * 2026-08-10 (see PLAN.md's Stage 2 closure note) — satisfies CLAUDE.md
- * §3.10's human-review requirement for everything present at that point.
- * Keys added after that date should get the same review before pilot.
+ * AI-drafted Hebrew, reviewed and approved by a native speaker on 2026-08-10
+ * (see PLAN.md's Stage 2 closure note), with the expanded catalog reviewed
+ * again and its parent-facing tone revised on 2026-08-12. This satisfies
+ * CLAUDE.md §3.10's human-review requirement for everything present at that
+ * point. Keys added after that date should get the same review before pilot.
  */
 export const he: Record<MessageKey, string> = {
   'common.appName': 'מערכת הסעות לכדורגל',
@@ -352,7 +353,7 @@ export const he: Record<MessageKey, string> = {
     'מפתחות גישה אינם נתמכים בדפדפן זה. עברו לדפדפן נתמך (כרום, ספארי, edge או פיירפוקס) כדי לסיים את ההצטרפות לקבוצה.',
   'invite.passkeyCancelled': 'הגדרת מפתח הגישה בוטלה. נסו שוב כדי לסיים את ההצטרפות לקבוצה.',
 
-  'home.welcome': 'הי, {name}',
+  'home.welcome': 'היי, {name}',
   'home.logOut': 'התנתקות',
   'home.logOutConfirmTitle': 'להתנתק?',
   'home.logOutConfirmBody': 'תצטרכו להתחבר מחדש כדי לראות את הקבוצות שלכם.',
@@ -367,10 +368,10 @@ export const he: Record<MessageKey, string> = {
   'home.inviteCopyFailed': 'ההעתקה נכשלה — יש להעתיק את הקישור ידנית',
   'home.roleAdmin': 'מנהל/ת',
   'home.roleParent': 'הורה',
-  'home.upcomingShiftsCount': '{count} הסעה קרובות',
-  'home.openShiftsCount': '{count} עדיין דורשות נהג/ת',
-  'home.myAssignmentsTitle': 'ההסעה הקרובות שלכם',
-  'home.myAssignmentsEmpty': 'אין לכם הסעה קרובות.',
+  'home.upcomingShiftsCount': 'הסעות בקרוב: {count}',
+  'home.openShiftsCount': 'הסעות בלי נהג/ת: {count}',
+  'home.myAssignmentsTitle': 'ההסעות הקרובות שלכם',
+  'home.myAssignmentsEmpty': 'אין לכם הסעות בקרוב.',
   'home.helpNeededTitle': 'הסעות שדורשות נהג/ת',
   'home.helpNeededEmpty': 'כל ההסעות הקרובות מכוסות.',
   'home.helpNeededMore': 'עוד {count} בלוח הזמנים המלא',
@@ -380,8 +381,8 @@ export const he: Record<MessageKey, string> = {
   'home.statsMineLabel': 'אתם',
   'home.statsTeamAverageLabel': 'ממוצע הקבוצה',
   'home.statsError': 'לא ניתן היה לטעון את הסטטיסטיקה שלכם.',
-  'home.workspaceLoading': 'טוען את ההסעה שלכם…',
-  'home.workspaceError': 'לא ניתן היה לטעון את ההסעה שלכם. נסו שוב.',
+  'home.workspaceLoading': 'טוענים את ההסעות שלכם…',
+  'home.workspaceError': 'לא הצלחנו לטעון את ההסעות. נסו שוב.',
 
   'adminCollectionPoints.title': 'נקודות איסוף',
   'adminCollectionPoints.addButton': 'הוספת נקודת איסוף',
@@ -432,7 +433,7 @@ export const he: Record<MessageKey, string> = {
   'adminScheduleTemplates.startDateNotEditable': 'לא ניתן לשנות לאחר יצירת התבנית.',
   'adminScheduleTemplates.defaultTimeLabel': 'שעה',
   'adminScheduleTemplates.defaultFieldLocationLabel': 'מיקום המגרש',
-  'adminScheduleTemplates.horizonWeeksLabel': 'יצירת אימונים קדימה למספר השבועות הבא',
+  'adminScheduleTemplates.horizonWeeksLabel': 'לכמה שבועות קדימה ליצור אימונים',
   'adminScheduleTemplates.collectionPointsLabel': 'נקודות איסוף',
   'adminScheduleTemplates.noCollectionPoints': 'הוסיפו קודם נקודת איסוף.',
   'adminScheduleTemplates.save': 'שמירה',
@@ -461,10 +462,10 @@ export const he: Record<MessageKey, string> = {
   'adminNotificationSettings.reminderOffsetAriaLabel': 'תזכורת מספר {index}',
   'adminNotificationSettings.removeReminderOffsetAriaLabel': 'הסרת תזכורת מספר {index}',
   'adminNotificationSettings.addReminderOffset': 'הוספת תזכורת',
-  'adminNotificationSettings.escalationLeadLabel': 'זמן הסלמה (דקות לפני האימון)',
+  'adminNotificationSettings.escalationLeadLabel': 'מתי להתחיל לחפש נהג/ת בדחיפות',
   'adminNotificationSettings.escalationLeadHint':
     'חייב להיות גדול מהתראת המנהלים הקבועה של {minutes} דקות.',
-  'adminNotificationSettings.quietHoursSectionTitle': 'שעות שקט ברירת מחדל',
+  'adminNotificationSettings.quietHoursSectionTitle': 'שעות השקט של הקבוצה',
   'adminNotificationSettings.quietHoursHint':
     'ברירת המחדל לכל הקבוצה. חברי הקבוצה יכולים להגדיר שעות שקט אישיות בהגדרות שלהם.',
   'adminNotificationSettings.quietHoursStartLabel': 'תחילת שעות שקט',
@@ -489,10 +490,10 @@ export const he: Record<MessageKey, string> = {
   'settingsNotifications.addReminderOffset': 'הוספת תזכורת',
   'settingsNotifications.invalidReminderOffsets': 'הזינו מספר דקות חיובי ושלם לכל תזכורת.',
   'settingsNotifications.categoriesSectionTitle': 'להודיע לי על',
-  'settingsNotifications.category.shift_changes': 'שינויים במשמרות',
+  'settingsNotifications.category.shift_changes': 'שינויים בהסעות',
   'settingsNotifications.category.swaps': 'בקשות החלפה',
   'settingsNotifications.category.reminders': 'תזכורות',
-  'settingsNotifications.category.escalations': 'צורך דחוף בכיסוי',
+  'settingsNotifications.category.escalations': 'צריך נהג/ת בדחיפות',
   'settingsNotifications.category.admin_changes': 'שינויים בקבוצה ובניהול',
   'settingsNotifications.save': 'שמירה',
   'settingsNotifications.saving': 'שומר…',
@@ -502,27 +503,27 @@ export const he: Record<MessageKey, string> = {
   'notifications.loadError': 'לא ניתן היה לטעון את ההתראות. נסו שוב.',
   'notifications.empty': 'הכל מעודכן.',
   'notifications.unreadCount': '{count} שלא נקראו',
-  'notifications.markAllRead': 'סימון הכל כנקרא',
-  'notifications.loadMore': 'טעינת עוד',
+  'notifications.markAllRead': 'קראתי הכל',
+  'notifications.loadMore': 'הצגת עוד',
   'notifications.loadingMore': 'טוען…',
   'notifications.dismissAriaLabel': 'התעלמות מהתראה',
-  'notifications.event.shiftClaimed':
-    '{byUserName} תפס את משמרת ה{direction} עבור {pointName} ({when})',
+  'notifications.event.shiftClaimed': '{byUserName} לקח/ה את {direction} דרך {pointName} ({when})',
   'notifications.event.shiftReleased':
-    '{byUserName} שחרר את משמרת ה{direction} עבור {pointName} ({when})',
+    '{byUserName} ויתר/ה על {direction} דרך {pointName} ({when})',
   'notifications.event.shiftReleasedMemberRemoved':
-    'משמרת ה{direction} עבור {pointName} פתוחה שוב — {byUserName} הוסר מהקבוצה',
-  'notifications.event.sessionUpdated': 'האימון הועבר ל-{when} ב{fieldLocation}',
-  'notifications.event.sessionCancelled': 'האימון בתאריך {when} ב{fieldLocation} בוטל',
-  'notifications.event.sessionPointPlayersUpdated': 'השחקנים עודכנו עבור {pointName} ({direction})',
+    '{direction} דרך {pointName} שוב פנויה — {byUserName} כבר לא בקבוצה',
+  'notifications.event.sessionUpdated': 'האימון עבר ל־{when}, ב־{fieldLocation}',
+  'notifications.event.sessionCancelled': 'האימון ב־{when}, ב־{fieldLocation}, בוטל',
+  'notifications.event.sessionPointPlayersUpdated':
+    'רשימת השחקנים עודכנה: {direction} דרך {pointName}',
   'notifications.event.scheduleTemplateCreated':
     'נוצרה תבנית לוח זמנים חדשה: {sessionsCreated} אימונים בשעה {defaultTime}, {defaultFieldLocation}',
   'notifications.event.scheduleTemplateUpdated':
     'תבנית לוח הזמנים עודכנה: {sessionsCreated} אימונים חדשים בשעה {defaultTime}, {defaultFieldLocation}',
-  'notifications.event.memberPromoted': '{userName} קודם לתפקיד מנהל',
-  'notifications.event.memberDemoted': '{userName} כבר לא מנהל',
-  'notifications.event.memberRemoved': '{userName} הוסר מהקבוצה',
-  'notifications.event.inviteAccepted': '{userName} הצטרף לקבוצה',
+  'notifications.event.memberPromoted': '{userName} מנהל/ת עכשיו',
+  'notifications.event.memberDemoted': '{userName} כבר לא מנהל/ת',
+  'notifications.event.memberRemoved': '{userName} כבר לא בקבוצה',
+  'notifications.event.inviteAccepted': '{userName} הצטרף/ה לקבוצה',
   'notifications.event.unknown': 'עדכון בקבוצה ({eventType})',
 
   'schedule.title': 'לוח זמנים',
@@ -533,16 +534,16 @@ export const he: Record<MessageKey, string> = {
   'schedule.toPractice': 'הסעה לאימון',
   'schedule.fromPractice': 'הסעה מהאימון',
   'schedule.noPlayersAssigned': 'טרם שובצו שחקנים',
-  'schedule.claim': 'קבלה',
-  'schedule.claiming': 'משבץ…',
-  'schedule.release': 'שחרור',
-  'schedule.releasing': 'משחרר…',
-  'schedule.statusMine': 'אתם',
-  'schedule.statusCoveredBy': 'מכוסה על ידי {name}',
-  'schedule.statusOpen': 'פתוח',
-  'schedule.claimConflictWithName': 'המשמרת הזו שובצה הרגע על ידי {name}.',
-  'schedule.claimConflictUnknown': 'המשמרת הזו שובצה הרגע על ידי מישהו אחר.',
-  'schedule.releaseConflict': 'המשמרת הזו כבר לא משויכת אליכם.',
+  'schedule.claim': 'אני אנהג/ת',
+  'schedule.claiming': 'משבצים את ההסעה…',
+  'schedule.release': 'ויתור על ההסעה',
+  'schedule.releasing': 'מוותרים על ההסעה…',
+  'schedule.statusMine': 'שלכם',
+  'schedule.statusCoveredBy': '{name} נוהג/ת',
+  'schedule.statusOpen': 'צריך נהג/ת',
+  'schedule.claimConflictWithName': '{name} כבר לקח/ה את ההסעה הזו.',
+  'schedule.claimConflictUnknown': 'ההסעה הזו כבר נתפסה.',
+  'schedule.releaseConflict': 'ההסעה הזו כבר לא שלכם.',
   'schedule.editSessionAriaLabel': 'עריכת {date}',
   'schedule.cancelSessionAriaLabel': 'ביטול {date}',
   'schedule.managePlayersAriaLabel': 'ניהול שחקנים עבור {point}',
