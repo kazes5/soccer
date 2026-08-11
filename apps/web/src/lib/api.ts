@@ -13,6 +13,9 @@ import {
   type InviteSummary,
   type CreateScheduleTemplateRequest,
   type CreateScheduleTemplateResponse,
+  type CoordinationSettings,
+  type CoordinationSettingsRequest,
+  type MemberNotificationPreferences,
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
@@ -22,7 +25,10 @@ import {
   type SessionListResponse,
   type ShiftStatsResponse,
   type ShiftSummary,
+  type TeamNotificationSettings,
+  type TeamNotificationSettingsRequest,
   type TeamRosterResponse,
+  type UpdateMemberNotificationPreferencesRequest,
   type UpdateScheduleTemplateRequest,
   type UpdateScheduleTemplateResponse,
   type UpdateSessionPointPlayersRequest,
@@ -31,11 +37,13 @@ import {
   authSessionResponseSchema,
   collectionPointListResponseSchema,
   collectionPointSchema,
+  coordinationSettingsSchema,
   createScheduleTemplateResponseSchema,
   createTeamResponseSchema,
   currentUserResponseSchema,
   invitePreviewSchema,
   inviteSummarySchema,
+  memberNotificationPreferencesSchema,
   passkeyChallengeResponseSchema,
   playerListResponseSchema,
   practiceSessionSchema,
@@ -43,6 +51,7 @@ import {
   sessionListResponseSchema,
   shiftStatsResponseSchema,
   shiftSummarySchema,
+  teamNotificationSettingsSchema,
   teamRosterResponseSchema,
   updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
@@ -288,5 +297,42 @@ export const api = {
   listTeamRoster: (teamId: string) =>
     request<TeamRosterResponse>(`/teams/${encodeURIComponent(teamId)}/roster`, {
       responseSchema: teamRosterResponseSchema,
+    }),
+
+  getCoordinationSettings: (teamId: string) =>
+    request<CoordinationSettings>(`/teams/${encodeURIComponent(teamId)}/coordination-settings`, {
+      responseSchema: coordinationSettingsSchema,
+    }),
+
+  updateCoordinationSettings: (teamId: string, body: CoordinationSettingsRequest) =>
+    request<CoordinationSettings>(`/teams/${encodeURIComponent(teamId)}/coordination-settings`, {
+      method: 'PATCH',
+      body,
+      responseSchema: coordinationSettingsSchema,
+    }),
+
+  getNotificationSettings: (teamId: string) =>
+    request<TeamNotificationSettings>(
+      `/teams/${encodeURIComponent(teamId)}/notification-settings`,
+      { responseSchema: teamNotificationSettingsSchema },
+    ),
+
+  updateNotificationSettings: (teamId: string, body: TeamNotificationSettingsRequest) =>
+    request<TeamNotificationSettings>(
+      `/teams/${encodeURIComponent(teamId)}/notification-settings`,
+      { method: 'PATCH', body, responseSchema: teamNotificationSettingsSchema },
+    ),
+
+  getMemberPreferences: (teamId: string) =>
+    request<MemberNotificationPreferences>(
+      `/users/me/preferences?teamId=${encodeURIComponent(teamId)}`,
+      { responseSchema: memberNotificationPreferencesSchema },
+    ),
+
+  updateMemberPreferences: (body: UpdateMemberNotificationPreferencesRequest) =>
+    request<MemberNotificationPreferences>('/users/me/preferences', {
+      method: 'PATCH',
+      body,
+      responseSchema: memberNotificationPreferencesSchema,
     }),
 };

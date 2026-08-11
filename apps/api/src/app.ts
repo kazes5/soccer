@@ -11,9 +11,12 @@ import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import authRoutes from './routes/auth';
 import collectionPointRoutes from './routes/collection-points';
+import coordinationSettingsRoutes from './routes/coordination-settings';
 import healthRoutes from './routes/health';
 import inviteRoutes from './routes/invites';
+import memberPreferencesRoutes from './routes/member-preferences';
 import memberRoutes from './routes/members';
+import notificationSettingsRoutes from './routes/notification-settings';
 import playerRoutes from './routes/players';
 import pushSubscriptionRoutes from './routes/push-subscriptions';
 import scheduleTemplateRoutes from './routes/schedule-templates';
@@ -64,6 +67,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(scheduleTemplateRoutes);
   app.register(sessionRoutes);
   app.register(shiftRoutes);
+  app.register(coordinationSettingsRoutes);
+  app.register(notificationSettingsRoutes);
+  app.register(memberPreferencesRoutes);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HttpError) {

@@ -63,6 +63,14 @@ enum ShiftStatus {
   pending_swap
 }
 
+enum NotificationCategory {
+  shift_changes
+  swaps
+  reminders
+  escalations
+  admin_changes
+}
+
 model User {
   id                 String   @id @default(uuid())
   name               String
@@ -73,18 +81,19 @@ model User {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  teamMemberships    TeamMember[]
-  playerLinks        PlayerParent[]
-  sentInvites        Invite[]                 @relation("InvitesCreated")
-  acceptedInvites    Invite[]                 @relation("InvitesAccepted")
-  passkeys           Passkey[]
-  webauthnChallenges WebauthnChallenge[]
-  sessions           Session[]
-  notificationPrefs  NotificationPreference[]
-  auditLogEntries    AuditLog[]               @relation("AuditActor")
-  pushSubscriptions  PushSubscription[]
-  scheduleTemplates  ScheduleTemplate[]       @relation("ScheduleTemplatesCreated")
-  assignedShifts     Shift[]                  @relation("ShiftsAssigned")
+  teamMemberships            TeamMember[]
+  playerLinks                PlayerParent[]
+  sentInvites                Invite[]                     @relation("InvitesCreated")
+  acceptedInvites            Invite[]                     @relation("InvitesAccepted")
+  passkeys                   Passkey[]
+  webauthnChallenges         WebauthnChallenge[]
+  sessions                   Session[]
+  notificationPrefs          NotificationPreference[]
+  auditLogEntries            AuditLog[]                   @relation("AuditActor")
+  pushSubscriptions          PushSubscription[]
+  scheduleTemplates          ScheduleTemplate[]           @relation("ScheduleTemplatesCreated")
+  assignedShifts             Shift[]                      @relation("ShiftsAssigned")
+  memberNotificationSettings MemberNotificationSettings[]
 
   @@map("users")
 }
@@ -97,14 +106,17 @@ model Team {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  members           TeamMember[]
-  players           Player[]
-  invites           Invite[]
-  notificationPrefs NotificationPreference[]
-  auditLogEntries   AuditLog[]
-  collectionPoints  CollectionPoint[]
-  scheduleTemplates ScheduleTemplate[]
-  practiceSessions  PracticeSession[]
+  members                    TeamMember[]
+  players                    Player[]
+  invites                    Invite[]
+  notificationPrefs          NotificationPreference[]
+  auditLogEntries            AuditLog[]
+  collectionPoints           CollectionPoint[]
+  scheduleTemplates          ScheduleTemplate[]
+  practiceSessions           PracticeSession[]
+  coordinationSettings       CoordinationSettings?
+  notificationSettings       TeamNotificationSettings?
+  memberNotificationSettings MemberNotificationSettings[]
 
   @@map("teams")
 }
@@ -224,19 +236,67 @@ model Session {
 }
 
 model NotificationPreference {
-  id        String              @id @default(uuid())
-  userId    String              @map("user_id")
-  teamId    String              @map("team_id")
-  eventType String              @map("event_type")
-  channel   NotificationChannel
-  enabled   Boolean             @default(true)
+  id       String               @id @default(uuid())
+  userId   String               @map("user_id")
+  teamId   String               @map("team_id")
+  category NotificationCategory
+  channel  NotificationChannel
+  enabled  Boolean              @default(true)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, teamId, eventType, channel])
+  @@unique([userId, teamId, category, channel])
   @@index([teamId])
   @@map("notification_preferences")
+}
+
+model CoordinationSettings {
+  teamId                String   @id @map("team_id")
+  swapExpiryHours       Int      @default(24) @map("swap_expiry_hours")
+  reminderOffsetMinutes Int[]    @default([1440, 120]) @map("reminder_offset_minutes")
+  escalationLeadMinutes Int      @default(120) @map("escalation_lead_minutes")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("coordination_settings")
+}
+
+/**
+ * Team-wide default quiet-hours window — the fallback for any member who
+ * hasn't set a personal override on `MemberNotificationSettings`.
+ */
+model TeamNotificationSettings {
+  teamId          String   @id @map("team_id")
+  quietHoursStart String   @default("22:00") @map("quiet_hours_start")
+  quietHoursEnd   String   @default("07:00") @map("quiet_hours_end")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("team_notification_settings")
+}
+
+/**
+ * Per-member overrides of the team defaults above. `null` quiet-hours fields
+ * and an empty `reminderOffsetMinutes` array both mean "no override — use the
+ * team default", not "explicitly disabled".
+ */
+model MemberNotificationSettings {
+  id                    String   @id @default(uuid())
+  userId                String   @map("user_id")
+  teamId                String   @map("team_id")
+  quietHoursStart       String?  @map("quiet_hours_start")
+  quietHoursEnd         String?  @map("quiet_hours_end")
+  reminderOffsetMinutes Int[]    @default([]) @map("reminder_offset_minutes")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("member_notification_settings")
 }
 
 model PushSubscription {

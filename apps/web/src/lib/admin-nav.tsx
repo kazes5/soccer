@@ -1,20 +1,33 @@
 import type { MessageKey } from '@soccer/i18n';
-import { MapPin, Repeat } from 'lucide-react';
+import { Bell, MapPin, Repeat, Settings } from 'lucide-react';
 import type { ShellNavItem } from '@/components/ui/shell';
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
+/** Every authenticated user gets this destination (personal notification
+ * preferences) regardless of role — shared the same way `adminNavItems`
+ * below shares the admin-only destinations, so every page's nav stays in
+ * sync without hand-copying the entry. */
+export function settingsNavItem(t: Translate, active = false): ShellNavItem {
+  return {
+    href: '/settings/notifications',
+    label: t('nav.settings'),
+    icon: <Settings className="size-full" />,
+    active,
+  };
+}
+
 /**
- * Shared by Home and both admin pages so the two admin destinations always
- * appear together, in the same order, with the same labels/icons/hrefs — used
- * on Home (gated to the active team being one the user admins) and
+ * Shared by Home and all admin pages so the admin destinations always appear
+ * together, in the same order, with the same labels/icons/hrefs — used on
+ * Home (gated to the active team being one the user admins) and
  * unconditionally on the admin pages themselves (which only ever operate on
  * an admin team by construction).
  */
 export function adminNavItems(
   teamId: string,
   t: Translate,
-  activePage?: 'collection-points' | 'schedule-templates',
+  activePage?: 'collection-points' | 'schedule-templates' | 'notification-settings',
 ): ShellNavItem[] {
   return [
     {
@@ -28,6 +41,12 @@ export function adminNavItems(
       label: t('adminScheduleTemplates.title'),
       icon: <Repeat className="size-full" />,
       active: activePage === 'schedule-templates',
+    },
+    {
+      href: `/admin/notification-settings?team=${encodeURIComponent(teamId)}`,
+      label: t('adminNotificationSettings.title'),
+      icon: <Bell className="size-full" />,
+      active: activePage === 'notification-settings',
     },
   ];
 }
