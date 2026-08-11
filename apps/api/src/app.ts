@@ -14,6 +14,7 @@ import collectionPointRoutes from './routes/collection-points';
 import healthRoutes from './routes/health';
 import inviteRoutes from './routes/invites';
 import memberRoutes from './routes/members';
+import playerRoutes from './routes/players';
 import pushSubscriptionRoutes from './routes/push-subscriptions';
 import scheduleTemplateRoutes from './routes/schedule-templates';
 import sessionRoutes from './routes/sessions';
@@ -58,6 +59,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(authRoutes);
   app.register(memberRoutes);
   app.register(pushSubscriptionRoutes);
+  app.register(playerRoutes);
   app.register(collectionPointRoutes);
   app.register(scheduleTemplateRoutes);
   app.register(sessionRoutes);
