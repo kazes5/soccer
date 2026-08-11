@@ -15,6 +15,9 @@ status and sequencing.
   database lifecycle, and development startup.
 - [User Guide](./user-guide.md) - the currently supported web flows for admins
   and parents, plus planned user-facing capabilities.
+- [Admin User Guide](./admin-user-guide.md) - team setup, invitations,
+  collection points, schedules, session management, and coordination settings
+  for team admins.
 - [Flow Charts](./flow-charts.md) - current admin and user route flows shown as
   Mermaid diagrams.
 - [Architecture Decision Records](./adr/README.md) - short records of
