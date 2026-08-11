@@ -10,10 +10,11 @@ import { instantToWallClock } from '@/lib/timezone';
 import SchedulePage from './page';
 
 const replace = vi.fn();
+let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -134,6 +135,7 @@ function buildSessions(options: {
 
 describe('SchedulePage', () => {
   beforeEach(() => {
+    searchParams = new URLSearchParams();
     replace.mockClear();
     vi.mocked(api.me).mockReset();
     vi.mocked(api.listSessions).mockReset();
@@ -177,6 +179,29 @@ describe('SchedulePage', () => {
 
     await waitFor(() => expect(api.claimShift).toHaveBeenCalledWith('team-1', 'shift-1'));
     expect(await screen.findByText('You')).toBeInTheDocument();
+  });
+
+  it('highlights the deep-linked shift from a notification', async () => {
+    searchParams = new URLSearchParams({ team: 'team-1', session: 'session-1', shift: 'shift-1' });
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ shiftStatus: 'open' }));
+
+    renderWithProviders(<SchedulePage />);
+
+    const pointLabel = await screen.findByText('Drop-off · Oak St');
+    const pointRow = pointLabel.closest('div')?.parentElement;
+    expect(pointRow?.className).toContain('bg-status-mine-subtle');
+  });
+
+  it('does not highlight anything without a deep-link session/shift in the URL', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ shiftStatus: 'open' }));
+
+    renderWithProviders(<SchedulePage />);
+
+    const pointLabel = await screen.findByText('Drop-off · Oak St');
+    const pointRow = pointLabel.closest('div')?.parentElement;
+    expect(pointRow?.className).not.toContain('bg-status-mine-subtle');
   });
 
   it('shows a friendly conflict message naming the new holder when claiming loses the race', async () => {
