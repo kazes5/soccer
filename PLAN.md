@@ -13,7 +13,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 | 0 — Product & Architecture Foundation | Partial, non-blocking | ADRs/threat model/notification-template docs not written yet; nothing here has blocked code so far |
 | 1 — Repo, Environments, Quality Gates | Mostly done | Branch protection on `main` now on (verified 2026-08-09); "staging" defined 2026-08-10 as the local `docker compose` stack — no external hosting vendor, by explicit user decision |
 | **2 — Identity/Membership/i18n/Design** | **Done (2026-08-10)** | Backend + onboarding UI loop, i18n foundation, backend hardening, and design tokens/accessible primitives all built and verified. Native-speaker Hebrew review done 2026-08-10 (approved as-is, no changes). Staging/journey/RTL exit criteria satisfied via the local-stack redefinition. Automated a11y/responsive tooling explicitly re-homed to Stage 6, its documented owner. |
-| **3 — Schedule & Atomic Shift Core** | **In progress** | Checkpoints 1 (schema, recurrence, atomic `claimShift`/`releaseShift`, parent-facing Schedule page), 2 (Home workspace, `GET /shifts/stats`), 3 (template-edit backend, `PATCH /schedule-templates/:id`), and 4 (first admin screen: `/admin/collection-points`) all done and tested. Remaining admin screens (schedule-template wizard, session management) and the separate "bulk-edit all future sessions" tool are being built one screen per checkpoint. |
+| **3 — Schedule & Atomic Shift Core** | **In progress** | Checkpoints 1 (schema, recurrence, atomic `claimShift`/`releaseShift`, parent-facing Schedule page), 2 (Home workspace, `GET /shifts/stats`), 3 (template-edit backend, `PATCH /schedule-templates/:id`), and 4 (first admin screen: `/admin/collection-points`) all done and tested. Plan to close the stage set 2026-08-11 (see "Plan to Close Stage 3" below): Checkpoint 5 (player-roster endpoint) → 6 (schedule-template wizard UI) → 7 (session management UI + Schedule page follow-through), then a final multi-viewport EN/HE regression pass. "Bulk-edit all future sessions" is confirmed deferred to the backlog, not blocking Stage 3 closure. |
 | 4 — Swap/Notification/Reminder/Escalation | Not started | |
 | 5 — Admin Ops & Reporting | Not started | |
 | 6 — Verification/Security/Performance | Not started (this is an ongoing gate, not a one-time stage) | |
@@ -51,7 +51,33 @@ Process:
 
 1. Both Stage 2 PRs (backend hardening #8 and design tokens #9) are merged to `main`; the frontend is fully on the cookie-based session flow. Branch protection on `main` is on (verified 2026-08-09 via the GitHub API — scoped correctly to `main` only, after an initial misconfiguration that accidentally protected every branch was caught and fixed).
 2. Stage 2's native-speaker Hebrew review is done (2026-08-10, approved as-is — no changes needed) and "staging" is now defined as the local `docker compose` stack (2026-08-10, explicit user decision, no external hosting vendor) — both formerly-blocking exit criteria are now satisfied by the accumulated manual verification already done throughout Stage 2/3. The one remaining Stage 2 gap is automated a11y/responsive tooling (see above).
-3. Stage 3's first four checkpoints (backend atomic-shift core + parent-facing Schedule page; the Home workspace; template-edit backend; the admin collection-point screen) are done — see the Stage 3 Progress notes below. Admin screens are being built one at a time, sequenced with the user; next up is the schedule-template wizard or session management, still not prioritized against each other, or starting Stage 4.
+3. Stage 3's first four checkpoints (backend atomic-shift core + parent-facing Schedule page; the Home workspace; template-edit backend; the admin collection-point screen) are done — see the Stage 3 Progress notes below. The sequencing question from before ("template wizard or session management, not yet prioritized") is now resolved — see "Plan to Close Stage 3" immediately below for the agreed order, scope, and what's explicitly deferred.
+
+### Plan to Close Stage 3 (decided 2026-08-11)
+
+Three checkpoints remain before Stage 3's checklist and exit criteria can be closed, continuing the numbering from the four checkpoints already landed (schema/atomic-shift-core+Schedule page, Home workspace, template-edit backend, admin collection-points). Order and scope agreed with the user 2026-08-11.
+
+**Checkpoint 5 — Player-roster endpoint (backend prerequisite).**
+- Add a `GET` route returning each player's name (and their session/collection-point context) for a team. The `packages/contracts/src/player.ts` schema already exists but has no route behind it yet — this checkpoint wires one up.
+- Blocks both Checkpoint 7's per-session player-override UI and its "player names instead of counts" / "available drivers" work — done first so neither has to stub around a missing endpoint.
+
+**Checkpoint 6 — Schedule-template wizard UI (admin).**
+- Admin create/edit flow for `ScheduleTemplate`, driving the already-shipped `POST /teams/:teamId/schedule-templates` and `PATCH .../schedule-templates/:templateId` backend (including collection-point selection, reusing UI patterns from the already-shipped `/admin/collection-points` screen).
+- Closes the wizard portion of Stage 3's open "Implement an admin schedule-template wizard…" checklist item. The rest of that item (session edits/cancellation, per-session overrides) is Checkpoint 7's scope, not this one.
+
+**Checkpoint 7 — Session management UI (admin) + Schedule page follow-through (parent-facing).**
+- Admin: individual session edit/cancel UI (driving the already-shipped `PATCH /teams/:teamId/sessions/:sessionId` and `.../cancel`), and per-session collection-point/player override UI (driving `PATCH .../points/:pointId`, now backed by Checkpoint 5's player-roster endpoint).
+- Parent-facing: Schedule page shows player *names* (not counts) per collection point, closing "visibility of the full assigned player list before a driver claims" from the collection-point-management checklist item, plus an "available drivers" listing to close the remaining piece of the Schedule checklist item.
+- Bundled in: mark historical/past sessions read-only at the API level (today only the web UI avoids editing them; the API itself doesn't reject it) — a small guard added naturally while touching the session-edit endpoints in this checkpoint. This closes the read-only half of the "read models for current/upcoming/historical" checklist item. The other half (a dedicated split into separate current/upcoming/historical read *endpoints*, vs. today's single `GET /sessions` covering all three at this data scale) stays an accepted, documented functional-equivalent gap — not planned work, same treatment as Stage 2's re-homed a11y tooling.
+- Last checkpoint expected to touch new Stage 3 UI surface.
+
+**Closing Stage 3 (after Checkpoint 7):**
+- One manual regression pass across every Stage 3 screen (Home, Schedule, `/admin/collection-points`, the new template wizard, the new session-management screens) at desktop, tablet, and narrow-mobile viewports, in both English and Hebrew — the same rigor Stage 2's design-tokens checkpoint used. This closes Stage 3's last open exit criterion. Confirmed with the user 2026-08-11: no automated Playwright coverage is pulled forward for this — that stays Stage 6's job per the existing Testing Strategy table.
+- Each of Checkpoints 5–7 still goes through the full existing per-checkpoint gate (quality gate, new tests, `/code-review medium`, manual browser verification, PLAN.md update) — this plan only fixes their scope and order, not the process.
+
+**Explicitly deferred out of Stage 3 (backlog, not blocking closure — confirmed with the user 2026-08-11):**
+- "Bulk-edit all future sessions to time X" — CLAUDE.md §3.1 calls this out as its own acceptance criterion, distinct from template-edit-regenerates-sessions (which only ever adds sessions, never overwrites existing ones' content). Ships after Stage 3 closes, as its own later checkpoint (candidate: early Stage 4, or Stage 7).
+- The "dense operational tables and side panels" wording for admin screens — collection-points already shipped as `DataList` cards, a deliberate, previously-flagged deviation. Keep deferring: Checkpoints 6–7's new admin screens follow the same `DataList` convention rather than introducing a table component now.
 
 ### Always run before calling anything "done"
 
