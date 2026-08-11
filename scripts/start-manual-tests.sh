@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Brings up everything needed to manually click through the web app:
-# Postgres/Redis, a Prisma client regen, demo seed data, and both dev
-# servers. Pair with stop-manual-tests.sh, which undoes exactly this.
+# Postgres/Redis, a Prisma client regen, demo seed data, both dev servers,
+# and the notification worker process. Pair with stop-manual-tests.sh, which
+# undoes exactly this.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,7 +10,7 @@ STATE_DIR="$ROOT_DIR/scripts/.manual-test-state"
 LOG_DIR="$STATE_DIR/logs"
 cd "$ROOT_DIR"
 
-if [ -f "$STATE_DIR/api.pid" ] || [ -f "$STATE_DIR/web.pid" ]; then
+if [ -f "$STATE_DIR/api.pid" ] || [ -f "$STATE_DIR/web.pid" ] || [ -f "$STATE_DIR/worker.pid" ]; then
   echo "A manual test session already looks active (found $STATE_DIR)."
   echo "Run scripts/stop-manual-tests.sh first, or remove $STATE_DIR if it's stale."
   exit 1
@@ -54,6 +55,10 @@ echo "==> Starting the web app on http://localhost:3000 ..."
 pnpm --filter @soccer/web dev >"$LOG_DIR/web.log" 2>&1 &
 echo $! >"$STATE_DIR/web.pid"
 
+echo "==> Starting the notification worker..."
+pnpm --filter @soccer/api worker:dev >"$LOG_DIR/worker.log" 2>&1 &
+echo $! >"$STATE_DIR/worker.pid"
+
 set +m
 
 echo "==> Waiting for both to respond..."
@@ -90,6 +95,6 @@ click through the logged-in app yourself:
   - Generate an invite link from an existing session and accept it at
     /invite/<code> (same real passkey prompt, right after joining).
 
-Logs: $LOG_DIR/api.log , $LOG_DIR/web.log
+Logs: $LOG_DIR/api.log , $LOG_DIR/web.log , $LOG_DIR/worker.log
 When done: scripts/stop-manual-tests.sh
 EOF

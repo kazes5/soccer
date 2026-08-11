@@ -9,6 +9,7 @@ import { HttpError } from './lib/errors';
 import { SimpleWebauthnVerifier, type WebauthnVerifier } from './lib/webauthn';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
+import queuesPlugin from './plugins/queues';
 import authRoutes from './routes/auth';
 import collectionPointRoutes from './routes/collection-points';
 import coordinationSettingsRoutes from './routes/coordination-settings';
@@ -52,6 +53,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
   app.register(cookie);
   app.register(prismaPlugin);
+  app.register(queuesPlugin);
   app.register(authPlugin);
   app.addHook('onRequest', async (request) => {
     assertCsrfSafe(request);

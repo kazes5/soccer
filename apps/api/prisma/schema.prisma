@@ -71,6 +71,38 @@ enum NotificationCategory {
   admin_changes
 }
 
+/**
+ * Which of the three recipient-resolution shapes ADR 0001 declares applies
+ * to an `OutboxEvent` — the worker reads this to know how to fan the event
+ * out, instead of each event type re-deriving its own recipient logic.
+ */
+enum RecipientScope {
+  team_broadcast
+  participants
+  self
+}
+
+/**
+ * Emergency events (a "can't make it" flag, auto-escalation) bypass quiet
+ * hours and the collapse/throttle rules that apply to everything else.
+ */
+enum NotificationSeverity {
+  normal
+  emergency
+}
+
+enum DeliveryChannel {
+  in_app
+  push
+  sms
+  email
+}
+
+enum ScheduledTaskType {
+  reminder
+  escalation
+}
+
 model User {
   id                 String   @id @default(uuid())
   name               String
@@ -94,6 +126,7 @@ model User {
   scheduleTemplates          ScheduleTemplate[]           @relation("ScheduleTemplatesCreated")
   assignedShifts             Shift[]                      @relation("ShiftsAssigned")
   memberNotificationSettings MemberNotificationSettings[]
+  userNotifications          UserNotification[]
 
   @@map("users")
 }
@@ -117,6 +150,9 @@ model Team {
   coordinationSettings       CoordinationSettings?
   notificationSettings       TeamNotificationSettings?
   memberNotificationSettings MemberNotificationSettings[]
+  outboxEvents               OutboxEvent[]
+  userNotifications          UserNotification[]
+  scheduledTasks             ScheduledTask[]
 
   @@map("teams")
 }
@@ -297,6 +333,120 @@ model MemberNotificationSettings {
 
   @@unique([userId, teamId])
   @@map("member_notification_settings")
+}
+
+/**
+ * One row per team-visible mutation, written in the same transaction as the
+ * mutation and its `AuditLog` entry (see ADR 0001). The worker fans this out
+ * into one `UserNotification` per resolved recipient; `processedAt` is the
+ * source of truth for "has this actually been handled" — BullMQ jobs are
+ * just the trigger, re-enqueued freely from a null `processedAt` on restart.
+ */
+model OutboxEvent {
+  id                 String               @id @default(uuid())
+  teamId             String               @map("team_id")
+  eventType          String               @map("event_type")
+  category           NotificationCategory
+  severity           NotificationSeverity @default(normal)
+  recipientScope     RecipientScope       @map("recipient_scope")
+  /**
+   * Populated only when `recipientScope = participants`.
+   */
+  participantUserIds String[]             @default([]) @map("participant_user_ids")
+  /**
+   * Populated only when `recipientScope = self`.
+   */
+  selfUserId         String?              @map("self_user_id")
+  payload            Json
+  attempts           Int                  @default(0)
+  lastError          String?              @map("last_error")
+  processedAt        DateTime?            @map("processed_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+
+  team          Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  notifications UserNotification[]
+
+  @@index([processedAt])
+  @@index([teamId, createdAt])
+  @@map("outbox_events")
+}
+
+/**
+ * One row per (event, recipient) — the durable in-app record. Unlike push,
+ * in-app history can't be disabled per ADR 0001, so creating this row *is*
+ * the in-app delivery, not a queue of something still to send.
+ */
+model UserNotification {
+  id            String               @id @default(uuid())
+  outboxEventId String               @map("outbox_event_id")
+  userId        String               @map("user_id")
+  teamId        String               @map("team_id")
+  eventType     String               @map("event_type")
+  category      NotificationCategory
+  severity      NotificationSeverity @default(normal)
+  payload       Json
+  readAt        DateTime?            @map("read_at")
+  dismissedAt   DateTime?            @map("dismissed_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  outboxEvent OutboxEvent            @relation(fields: [outboxEventId], references: [id], onDelete: Cascade)
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  deliveries  NotificationDelivery[]
+
+  // Makes the fan-out step idempotent: reprocessing an event after a crash
+  // can't create a second notification for a recipient who already got one.
+  @@unique([outboxEventId, userId])
+  @@index([userId, teamId, createdAt])
+  @@map("user_notifications")
+}
+
+/**
+ * Per-channel delivery record for a `UserNotification` — answers "did this
+ * actually go out" instead of assuming. Push/SMS/email delivery isn't wired
+ * until later checkpoints; this checkpoint only ever writes `in_app` rows,
+ * created (and immediately marked delivered) alongside their notification.
+ */
+model NotificationDelivery {
+  id                 String          @id @default(uuid())
+  userNotificationId String          @map("user_notification_id")
+  channel            DeliveryChannel
+  attempts           Int             @default(0)
+  lastError          String?         @map("last_error")
+  deliveredAt        DateTime?       @map("delivered_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+
+  userNotification UserNotification @relation(fields: [userNotificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userNotificationId, channel])
+  @@map("notification_deliveries")
+}
+
+/**
+ * A durable, delayed unit of future work (a reminder or escalation firing
+ * at `runAt`) — scheduled via a delayed BullMQ job keyed by this row's own
+ * id, reconciled the same way as `OutboxEvent`. No concrete task type has
+ * real business logic yet: reminders land in Checkpoint 9, escalation in
+ * Checkpoint 10. This checkpoint only proves the schedule -> delayed job ->
+ * processor -> `completedAt` plumbing is correct and idempotent.
+ */
+model ScheduledTask {
+  id          String            @id @default(uuid())
+  teamId      String            @map("team_id")
+  type        ScheduledTaskType
+  payload     Json
+  runAt       DateTime          @map("run_at")
+  attempts    Int               @default(0)
+  lastError   String?           @map("last_error")
+  cancelledAt DateTime?         @map("cancelled_at")
+  completedAt DateTime?         @map("completed_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([completedAt, cancelledAt, runAt])
+  @@map("scheduled_tasks")
 }
 
 model PushSubscription {
