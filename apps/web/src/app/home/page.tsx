@@ -27,6 +27,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
+import { adminNavItems } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
 
@@ -105,6 +106,7 @@ export default function HomePage() {
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" />, active: true },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
+    ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
   ];
 
   return (
@@ -529,15 +531,6 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
             </div>
           )}
         </form>
-      )}
-
-      {membership.role === 'admin' && (
-        <Link
-          href={`/admin/collection-points?team=${encodeURIComponent(membership.teamId)}`}
-          className="mt-4 inline-block text-sm font-medium text-status-mine-on hover:underline"
-        >
-          {t('home.manageCollectionPoints')}
-        </Link>
       )}
     </DataListItem>
   );

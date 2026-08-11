@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createScheduleTemplateRequestSchema,
+  scheduleTemplateSchema,
   updateScheduleTemplateRequestSchema,
 } from './schedule-template';
 
@@ -71,5 +72,35 @@ describe('updateScheduleTemplateRequestSchema', () => {
   it('rejects an invalid time the same way the create schema does', () => {
     const result = updateScheduleTemplateRequestSchema.safeParse({ defaultTime: '6:00pm' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('scheduleTemplateSchema', () => {
+  const base = {
+    id: '00000000-0000-4000-8000-000000000001',
+    teamId: '00000000-0000-4000-8000-000000000002',
+    recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR',
+    startDate: '2026-08-10',
+    defaultTime: '18:00',
+    defaultFieldLocation: 'Central Field',
+    horizonWeeks: 8,
+    collectionPointIds: ['00000000-0000-4000-8000-000000000003'],
+    createdByUserId: '00000000-0000-4000-8000-000000000004',
+    createdAt: '2026-08-10T00:00:00.000Z',
+  };
+
+  it('accepts a template with its collectionPointIds', () => {
+    expect(scheduleTemplateSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('accepts an empty collectionPointIds array (e.g. all points since removed)', () => {
+    const result = scheduleTemplateSchema.safeParse({ ...base, collectionPointIds: [] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing collectionPointIds field', () => {
+    const withoutIds: Partial<typeof base> = { ...base };
+    delete withoutIds.collectionPointIds;
+    expect(scheduleTemplateSchema.safeParse(withoutIds).success).toBe(false);
   });
 });

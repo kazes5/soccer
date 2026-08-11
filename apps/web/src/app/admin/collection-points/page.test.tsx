@@ -96,6 +96,18 @@ describe('AdminCollectionPointsPage', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/home'));
   });
 
+  it('shows nav links to both admin screens, with this one marked current', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listCollectionPoints).mockResolvedValue({ points: [] });
+
+    renderWithProviders(<AdminCollectionPointsPage />);
+
+    const [currentLink] = await screen.findAllByRole('link', { name: 'Collection points' });
+    expect(currentLink).toHaveAttribute('aria-current', 'page');
+    const [otherLink] = screen.getAllByRole('link', { name: 'Schedule templates' });
+    expect(otherLink).toHaveAttribute('href', '/admin/schedule-templates?team=team-1');
+  });
+
   it('shows an empty state when there are no collection points yet', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
     vi.mocked(api.listCollectionPoints).mockResolvedValue({ points: [] });

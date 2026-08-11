@@ -1,6 +1,7 @@
 import {
   createScheduleTemplateRequestSchema,
   createScheduleTemplateResponseSchema,
+  scheduleTemplateListResponseSchema,
   updateScheduleTemplateRequestSchema,
   updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
@@ -18,17 +19,20 @@ const templateParamsSchema = z.object({
   templateId: z.string().uuid(),
 });
 
-function toTemplateDto(template: {
-  id: string;
-  teamId: string;
-  recurrenceRule: string;
-  startDate: Date;
-  defaultTime: string;
-  defaultFieldLocation: string;
-  horizonWeeks: number;
-  createdByUserId: string;
-  createdAt: Date;
-}) {
+function toTemplateDto(
+  template: {
+    id: string;
+    teamId: string;
+    recurrenceRule: string;
+    startDate: Date;
+    defaultTime: string;
+    defaultFieldLocation: string;
+    horizonWeeks: number;
+    createdByUserId: string;
+    createdAt: Date;
+  },
+  collectionPointIds: string[],
+) {
   return {
     id: template.id,
     teamId: template.teamId,
@@ -37,6 +41,7 @@ function toTemplateDto(template: {
     defaultTime: template.defaultTime,
     defaultFieldLocation: template.defaultFieldLocation,
     horizonWeeks: template.horizonWeeks,
+    collectionPointIds,
     createdByUserId: template.createdByUserId,
     createdAt: template.createdAt.toISOString(),
   };
@@ -73,10 +78,18 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
 
     const templates = await app.prisma.scheduleTemplate.findMany({
       where: { teamId: params.teamId },
+      include: { collectionPoints: true },
       orderBy: { createdAt: 'desc' },
     });
 
-    return { templates: templates.map(toTemplateDto) };
+    return scheduleTemplateListResponseSchema.parse({
+      templates: templates.map((template) =>
+        toTemplateDto(
+          template,
+          template.collectionPoints.map((assignment) => assignment.pointId),
+        ),
+      ),
+    });
   });
 
   app.post('/teams/:teamId/schedule-templates', async (request, reply) => {
@@ -143,7 +156,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
 
     reply.status(201);
     return createScheduleTemplateResponseSchema.parse({
-      template: toTemplateDto(result.template),
+      template: toTemplateDto(
+        result.template,
+        points.map((point) => point.id),
+      ),
       sessionsCreated: result.sessionsCreated,
     });
   });
@@ -261,7 +277,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     });
 
     return updateScheduleTemplateResponseSchema.parse({
-      template: toTemplateDto(result.template),
+      template: toTemplateDto(
+        result.template,
+        points.map((point) => point.id),
+      ),
       sessionsCreated: result.sessionsCreated,
     });
   });

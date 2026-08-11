@@ -134,10 +134,16 @@ describe('HomePage', () => {
 
     expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
     expect(screen.getByText('U-12 Wildcats')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage collection points' })).toHaveAttribute(
-      'href',
-      '/admin/collection-points?team=team-1',
-    );
+    const collectionPointsLinks = screen.getAllByRole('link', { name: 'Collection points' });
+    expect(collectionPointsLinks.length).toBeGreaterThan(0);
+    for (const link of collectionPointsLinks) {
+      expect(link).toHaveAttribute('href', '/admin/collection-points?team=team-1');
+    }
+    const scheduleTemplatesLinks = screen.getAllByRole('link', { name: 'Schedule templates' });
+    expect(scheduleTemplatesLinks.length).toBeGreaterThan(0);
+    for (const link of scheduleTemplatesLinks) {
+      expect(link).toHaveAttribute('href', '/admin/schedule-templates?team=team-1');
+    }
 
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
       target: { value: '+15550002222' },
@@ -148,6 +154,19 @@ describe('HomePage', () => {
       expect(api.createInvite).toHaveBeenCalledWith('team-1', { phone: '+15550002222' }),
     );
     expect(await screen.findByText(/CR3SvwmKtwJp/)).toBeInTheDocument();
+  });
+
+  it('does not show admin nav links for a parent-only membership', async () => {
+    vi.mocked(api.me).mockResolvedValue({
+      ...currentUser,
+      teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' as const }],
+    });
+
+    renderWithProviders(<HomePage />);
+
+    expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Collection points' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Schedule templates' })).not.toBeInTheDocument();
   });
 
   it('revokes the session on the server and navigates home on log out', async () => {

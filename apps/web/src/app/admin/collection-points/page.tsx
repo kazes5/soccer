@@ -19,6 +19,7 @@ import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
+import { adminNavItems } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 
 interface PointFormState {
@@ -101,13 +102,15 @@ export default function AdminCollectionPointsPage() {
   }
 
   const adminMemberships = adminMembershipsOf(session.teamMemberships);
-  if (adminMemberships.length === 0) {
+  const firstAdminMembership = adminMemberships[0];
+  if (!firstAdminMembership) {
     return null;
   }
 
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" /> },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
+    ...adminNavItems(activeTeamId ?? firstAdminMembership.teamId, t, 'collection-points'),
   ];
 
   return (

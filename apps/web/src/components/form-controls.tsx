@@ -45,3 +45,35 @@ export function Field({
     </label>
   );
 }
+
+/**
+ * For a group of checkboxes/radios, each with its own label — use this instead
+ * of `Field`. `Field` wraps its children in a `<label>`, which is correct for a
+ * single control but breaks accessible-name computation for children that are
+ * themselves individually `<label>`-wrapped: the browser associates each control
+ * with *both* labels (its own, and the outer Field's concatenated text), and
+ * Chrome's accessible-name algorithm resolves that ambiguity to nothing rather
+ * than picking either one. `<fieldset>`/`<legend>` is the semantically correct,
+ * unambiguous pattern for a labeled group of separately-labeled controls.
+ */
+export function FieldsetGroup({
+  legend,
+  children,
+  error,
+}: {
+  legend: string;
+  children: ReactNode;
+  error?: string;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="text-sm font-medium text-ink">{legend}</legend>
+      {children}
+      {error && (
+        <span role="alert" className="text-xs font-normal text-status-open-on">
+          {error}
+        </span>
+      )}
+    </fieldset>
+  );
+}
