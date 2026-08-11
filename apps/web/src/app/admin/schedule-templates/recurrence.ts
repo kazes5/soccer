@@ -20,10 +20,13 @@ export function buildRecurrenceRule(state: RecurrenceBuilderState): string {
  * read-only display rather than losing/misrepresenting that rule. */
 export function parseRecurrenceRule(rule: string): RecurrenceBuilderState | null {
   const fields = new Map(
-    rule.split(';').map((part) => {
-      const [key = '', value] = part.split('=');
-      return [key, value] as const;
-    }),
+    rule
+      .split(';')
+      .filter((part) => part !== '')
+      .map((part) => {
+        const [key = '', value] = part.split('=');
+        return [key, value] as const;
+      }),
   );
   if (fields.get('FREQ') !== 'WEEKLY') return null;
 

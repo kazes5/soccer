@@ -52,4 +52,11 @@ describe('parseRecurrenceRule', () => {
   it('returns null for an invalid weekday code', () => {
     expect(parseRecurrenceRule('FREQ=WEEKLY;BYDAY=MO,ZZ')).toBeNull();
   });
+
+  it('tolerates a trailing semicolon, e.g. from a hand-edited or imported rule', () => {
+    expect(parseRecurrenceRule('FREQ=WEEKLY;BYDAY=MO,WE,FR;')).toEqual({
+      frequency: 'weekly',
+      days: ['MO', 'WE', 'FR'],
+    });
+  });
 });

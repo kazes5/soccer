@@ -12,7 +12,7 @@ import { formatDate, type Locale, type MessageKey } from '@soccer/i18n';
 import { focusRingClassName } from '@soccer/ui-tokens';
 import { Calendar, Home, Pencil, Plus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Field,
   FieldsetGroup,
@@ -28,6 +28,7 @@ import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
+import { adminNavItems } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import {
   WEEKDAY_CODES,
@@ -101,13 +102,15 @@ export default function AdminScheduleTemplatesPage() {
   }
 
   const adminMemberships = adminMembershipsOf(session.teamMemberships);
-  if (adminMemberships.length === 0) {
+  const firstAdminMembership = adminMemberships[0];
+  if (!firstAdminMembership) {
     return null;
   }
 
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" /> },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
+    ...adminNavItems(activeTeamId ?? firstAdminMembership.teamId, t, 'schedule-templates'),
   ];
 
   return (
@@ -190,6 +193,11 @@ function ScheduleTemplatesWorkspace({ teamId }: { teamId: string }) {
       .catch(() => setLoadState('error'));
   }, [fetchAll]);
 
+  const pointsById = useMemo(
+    () => new Map((points ?? []).map((point) => [point.id, point])),
+    [points],
+  );
+
   function handleSaved(saved: ScheduleTemplate, sessionsCreated: number) {
     setTemplates((prev) => {
       if (!prev) return prev;
@@ -220,8 +228,6 @@ function ScheduleTemplatesWorkspace({ teamId }: { teamId: string }) {
       />
     );
   }
-
-  const pointsById = new Map(points.map((point) => [point.id, point]));
 
   return (
     <div className="flex flex-col gap-4">

@@ -1,6 +1,7 @@
 import {
   createScheduleTemplateRequestSchema,
   createScheduleTemplateResponseSchema,
+  scheduleTemplateListResponseSchema,
   updateScheduleTemplateRequestSchema,
   updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
@@ -81,14 +82,14 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return {
+    return scheduleTemplateListResponseSchema.parse({
       templates: templates.map((template) =>
         toTemplateDto(
           template,
           template.collectionPoints.map((assignment) => assignment.pointId),
         ),
       ),
-    };
+    });
   });
 
   app.post('/teams/:teamId/schedule-templates', async (request, reply) => {

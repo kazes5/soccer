@@ -93,8 +93,6 @@ export const en = {
   'home.statsError': "Couldn't load your stats.",
   'home.workspaceLoading': 'Loading your shifts…',
   'home.workspaceError': "Couldn't load your shifts. Please try again.",
-  'home.manageCollectionPoints': 'Manage collection points',
-  'home.manageScheduleTemplates': 'Manage schedule templates',
 
   'adminCollectionPoints.title': 'Collection points',
   'adminCollectionPoints.addButton': 'Add collection point',
@@ -282,8 +280,6 @@ export const he: Record<MessageKey, string> = {
   'home.statsError': 'לא ניתן היה לטעון את הסטטיסטיקה שלכם.',
   'home.workspaceLoading': 'טוען את ההסעה שלכם…',
   'home.workspaceError': 'לא ניתן היה לטעון את ההסעה שלכם. נסו שוב.',
-  'home.manageCollectionPoints': 'ניהול נקודות איסוף',
-  'home.manageScheduleTemplates': 'ניהול תבניות לוח זמנים',
 
   'adminCollectionPoints.title': 'נקודות איסוף',
   'adminCollectionPoints.addButton': 'הוספת נקודת איסוף',
@@ -334,7 +330,7 @@ export const he: Record<MessageKey, string> = {
   'adminScheduleTemplates.startDateNotEditable': 'לא ניתן לשנות לאחר יצירת התבנית.',
   'adminScheduleTemplates.defaultTimeLabel': 'שעה',
   'adminScheduleTemplates.defaultFieldLocationLabel': 'מיקום המגרש',
-  'adminScheduleTemplates.horizonWeeksLabel': 'יצירת משמרות קדימה למספר השבועות הבא',
+  'adminScheduleTemplates.horizonWeeksLabel': 'יצירת אימונים קדימה למספר השבועות הבא',
   'adminScheduleTemplates.collectionPointsLabel': 'נקודות איסוף',
   'adminScheduleTemplates.noCollectionPoints': 'הוסיפו קודם נקודת איסוף.',
   'adminScheduleTemplates.save': 'שמירה',
@@ -344,7 +340,7 @@ export const he: Record<MessageKey, string> = {
   'adminScheduleTemplates.invalidHorizonWeeks': 'הזינו מספר בין 1 ל-52.',
   'adminScheduleTemplates.customRuleNotice':
     'לתבנית זו יש דפוס חזרה מותאם אישית שלא ניתן לערוך כאן — ניתן לשנות רק את השעה, המיקום, טווח הזמן ונקודות האיסוף.',
-  'adminScheduleTemplates.sessionsCreatedToast': '{count} משמרות נוצרו',
+  'adminScheduleTemplates.sessionsCreatedToast': '{count} אימונים נוצרו',
   'adminScheduleTemplates.summaryEveryWeek': 'כל שבוע: {days}',
   'adminScheduleTemplates.summaryEveryTwoWeeks': 'כל שבועיים: {days}',
   'adminScheduleTemplates.horizonWeeksSummary': '{count} שבועות קדימה',
