@@ -1,9 +1,22 @@
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
 import type IORedis from 'ioredis';
+import { env } from '../env';
 
 export const OUTBOX_QUEUE_NAME = 'outbox-events';
 export const SCHEDULED_TASK_QUEUE_NAME = 'scheduled-tasks';
+
+/**
+ * Every route that writes an `OutboxEvent` also enqueues a real job (see
+ * `enqueueOutboxEventBestEffort`) — including in tests, which build a real
+ * `buildApp()` against real Redis, matching this project's "no mocking"
+ * testing philosophy. Without a distinct namespace, jobs created by test
+ * runs (where nothing consumes them, since no test spins up the actual
+ * long-running worker process) would otherwise accumulate forever under the
+ * same keys real dev/prod jobs use. A test-only key prefix keeps that state
+ * fully separate — it starts empty every time and never touches real jobs.
+ */
+export const QUEUE_PREFIX = env.NODE_ENV === 'test' ? 'test' : undefined;
 
 /**
  * Shared BullMQ job options: a deterministic `jobId` (the outbox/scheduled-
@@ -28,11 +41,17 @@ const RETRY_OPTIONS = {
 };
 
 export function createOutboxQueue(connection: IORedis): Queue<{ outboxEventId: string }> {
-  return new Queue(OUTBOX_QUEUE_NAME, { connection: connection as ConnectionOptions });
+  return new Queue(OUTBOX_QUEUE_NAME, {
+    connection: connection as ConnectionOptions,
+    prefix: QUEUE_PREFIX,
+  });
 }
 
 export function createScheduledTaskQueue(connection: IORedis): Queue<{ scheduledTaskId: string }> {
-  return new Queue(SCHEDULED_TASK_QUEUE_NAME, { connection: connection as ConnectionOptions });
+  return new Queue(SCHEDULED_TASK_QUEUE_NAME, {
+    connection: connection as ConnectionOptions,
+    prefix: QUEUE_PREFIX,
+  });
 }
 
 /**
@@ -79,6 +98,21 @@ export async function enqueueOutboxEvent(
   const terminalState = await terminalStateOf(queue, outboxEventId);
   if (terminalState === 'failed') return; // retry() above already revived it
   await queue.add('process', { outboxEventId }, { jobId: outboxEventId, ...RETRY_OPTIONS });
+}
+
+/**
+ * Fire-and-forget enqueue for a route handler to call right after its
+ * transaction commits — a pure latency optimization, not a correctness
+ * requirement. If this never runs (API restart, a Redis blip) or fails, the
+ * worker's own startup reconciliation still picks the row up from Postgres
+ * (the source of truth per ADR 0001); a route should never make the caller
+ * wait on this or fail the request if it errors.
+ */
+export function enqueueOutboxEventBestEffort(
+  queue: Queue<{ outboxEventId: string }>,
+  outboxEventId: string,
+): void {
+  void enqueueOutboxEvent(queue, outboxEventId).catch(() => {});
 }
 
 export async function enqueueScheduledTask(

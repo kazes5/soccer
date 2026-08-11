@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
@@ -114,7 +116,7 @@ export default async function shiftRoutes(app: FastifyInstance) {
 
       const result = await tx.shift.findUniqueOrThrow({
         where: { id: params.shiftId },
-        include: { assignedUser: true },
+        include: { assignedUser: true, point: true },
       });
 
       await recordAuditLog(tx, {
@@ -133,10 +135,28 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      return result;
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'shift_claimed',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          sessionId: result.sessionId,
+          shiftId: result.id,
+          pointId: result.pointId,
+          pointName: result.point.name,
+          direction: result.direction,
+          sessionStartsAt: shift.session.startsAt.toISOString(),
+          byUserName: currentUser.name,
+        },
+      });
+
+      return { result, outboxEventId: outboxEvent.id };
     });
 
-    return shiftSummarySchema.parse(toDto(updated));
+    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+
+    return shiftSummarySchema.parse(toDto(updated.result));
   });
 
   app.post('/teams/:teamId/shifts/:shiftId/release', async (request) => {
@@ -172,7 +192,7 @@ export default async function shiftRoutes(app: FastifyInstance) {
 
       const result = await tx.shift.findUniqueOrThrow({
         where: { id: params.shiftId },
-        include: { assignedUser: true },
+        include: { assignedUser: true, point: true },
       });
 
       await recordAuditLog(tx, {
@@ -185,9 +205,28 @@ export default async function shiftRoutes(app: FastifyInstance) {
         afterState: { status: result.status, version: result.version },
       });
 
-      return result;
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'shift_released',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          sessionId: result.sessionId,
+          shiftId: result.id,
+          pointId: result.pointId,
+          pointName: result.point.name,
+          direction: result.direction,
+          sessionStartsAt: shift.session.startsAt.toISOString(),
+          byUserName: currentUser.name,
+          reason: 'voluntary',
+        },
+      });
+
+      return { result, outboxEventId: outboxEvent.id };
     });
 
-    return shiftSummarySchema.parse(toDto(updated));
+    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+
+    return shiftSummarySchema.parse(toDto(updated.result));
   });
 }

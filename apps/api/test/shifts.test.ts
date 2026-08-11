@@ -193,6 +193,22 @@ describe('shifts', () => {
       where: { teamId, actionType: 'shift_claimed' },
     });
     expect(auditEntries).toHaveLength(1);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'shift_claimed' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]).toMatchObject({
+      category: 'shift_changes',
+      recipientScope: 'team_broadcast',
+      processedAt: null,
+    });
+    expect(outboxEvents[0]?.payload).toMatchObject({
+      shiftId,
+      pointName: 'Oak St',
+      direction: 'to_practice',
+      byUserName: 'Parent',
+    });
   });
 
   it('returns a friendly conflict with the holder name when claiming an already-claimed shift', async () => {
@@ -236,6 +252,12 @@ describe('shifts', () => {
     expect(body.status).toBe('open');
     expect(body.assignedUserId).toBeNull();
     expect(body.version).toBe(2);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'shift_released' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]?.payload).toMatchObject({ shiftId, reason: 'voluntary' });
   });
 
   it('rejects releasing a shift on a session that has since been cancelled', async () => {

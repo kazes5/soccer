@@ -16,6 +16,7 @@ import {
   type CoordinationSettings,
   type CoordinationSettingsRequest,
   type MemberNotificationPreferences,
+  type NotificationListResponse,
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
@@ -28,6 +29,7 @@ import {
   type TeamNotificationSettings,
   type TeamNotificationSettingsRequest,
   type TeamRosterResponse,
+  type UnreadNotificationCountResponse,
   type UpdateMemberNotificationPreferencesRequest,
   type UpdateScheduleTemplateRequest,
   type UpdateScheduleTemplateResponse,
@@ -44,6 +46,7 @@ import {
   invitePreviewSchema,
   inviteSummarySchema,
   memberNotificationPreferencesSchema,
+  notificationListResponseSchema,
   passkeyChallengeResponseSchema,
   playerListResponseSchema,
   practiceSessionSchema,
@@ -53,6 +56,7 @@ import {
   shiftSummarySchema,
   teamNotificationSettingsSchema,
   teamRosterResponseSchema,
+  unreadNotificationCountResponseSchema,
   updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
@@ -334,5 +338,40 @@ export const api = {
       method: 'PATCH',
       body,
       responseSchema: memberNotificationPreferencesSchema,
+    }),
+
+  listNotifications: (teamId: string, options?: { cursor?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (options?.cursor) query.set('cursor', options.cursor);
+    if (options?.limit) query.set('limit', String(options.limit));
+    const queryString = query.toString();
+    return request<NotificationListResponse>(
+      `/teams/${encodeURIComponent(teamId)}/notifications${queryString ? `?${queryString}` : ''}`,
+      { responseSchema: notificationListResponseSchema },
+    );
+  },
+
+  getUnreadNotificationCount: (teamId: string) =>
+    request<UnreadNotificationCountResponse>(
+      `/teams/${encodeURIComponent(teamId)}/notifications/unread-count`,
+      { responseSchema: unreadNotificationCountResponseSchema },
+    ),
+
+  markNotificationRead: (teamId: string, notificationId: string) =>
+    request<unknown>(
+      `/teams/${encodeURIComponent(teamId)}/notifications/${encodeURIComponent(notificationId)}/read`,
+      { method: 'POST', responseSchema: z.unknown() },
+    ),
+
+  dismissNotification: (teamId: string, notificationId: string) =>
+    request<unknown>(
+      `/teams/${encodeURIComponent(teamId)}/notifications/${encodeURIComponent(notificationId)}/dismiss`,
+      { method: 'POST', responseSchema: z.unknown() },
+    ),
+
+  markAllNotificationsRead: (teamId: string) =>
+    request<unknown>(`/teams/${encodeURIComponent(teamId)}/notifications/read-all`, {
+      method: 'POST',
+      responseSchema: z.unknown(),
     }),
 };

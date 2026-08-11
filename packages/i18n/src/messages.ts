@@ -11,6 +11,7 @@ export const en = {
 
   'nav.home': 'Home',
   'nav.schedule': 'Schedule',
+  'nav.notifications': 'Notifications',
   'nav.settings': 'Settings',
   'nav.primaryLabel': 'Primary navigation',
   'nav.skipToContent': 'Skip to content',
@@ -212,6 +213,34 @@ export const en = {
   'settingsNotifications.save': 'Save',
   'settingsNotifications.saving': 'Saving…',
 
+  'notifications.title': 'Notifications',
+  'notifications.loading': 'Loading notifications…',
+  'notifications.loadError': "Couldn't load notifications. Please try again.",
+  'notifications.empty': "You're all caught up.",
+  'notifications.unreadCount': '{count} unread',
+  'notifications.markAllRead': 'Mark all as read',
+  'notifications.loadMore': 'Load more',
+  'notifications.loadingMore': 'Loading…',
+  'notifications.dismissAriaLabel': 'Dismiss notification',
+  'notifications.event.shiftClaimed':
+    '{byUserName} claimed the {direction} shift for {pointName} ({when})',
+  'notifications.event.shiftReleased':
+    '{byUserName} released the {direction} shift for {pointName} ({when})',
+  'notifications.event.shiftReleasedMemberRemoved':
+    'The {direction} shift for {pointName} is open again — {byUserName} was removed from the team',
+  'notifications.event.sessionUpdated': 'Session moved to {when} at {fieldLocation}',
+  'notifications.event.sessionCancelled': 'The session on {when} at {fieldLocation} was cancelled',
+  'notifications.event.sessionPointPlayersUpdated': 'Players updated for {pointName} ({direction})',
+  'notifications.event.scheduleTemplateCreated':
+    'New schedule template created: {sessionsCreated} sessions at {defaultTime}, {defaultFieldLocation}',
+  'notifications.event.scheduleTemplateUpdated':
+    'Schedule template updated: {sessionsCreated} new sessions at {defaultTime}, {defaultFieldLocation}',
+  'notifications.event.memberPromoted': '{userName} was promoted to admin',
+  'notifications.event.memberDemoted': '{userName} is no longer an admin',
+  'notifications.event.memberRemoved': '{userName} was removed from the team',
+  'notifications.event.inviteAccepted': '{userName} joined the team',
+  'notifications.event.unknown': 'Team update ({eventType})',
+
   'schedule.title': 'Schedule',
   'schedule.loading': 'Loading the schedule…',
   'schedule.loadError': "Couldn't load the schedule. Please try again.",
@@ -271,6 +300,7 @@ export const he: Record<MessageKey, string> = {
 
   'nav.home': 'בית',
   'nav.schedule': 'לוח זמנים',
+  'nav.notifications': 'התראות',
   'nav.settings': 'הגדרות',
   'nav.primaryLabel': 'ניווט ראשי',
   'nav.skipToContent': 'דילוג לתוכן',
@@ -466,6 +496,34 @@ export const he: Record<MessageKey, string> = {
   'settingsNotifications.category.admin_changes': 'שינויים בקבוצה ובניהול',
   'settingsNotifications.save': 'שמירה',
   'settingsNotifications.saving': 'שומר…',
+
+  'notifications.title': 'התראות',
+  'notifications.loading': 'טוען התראות…',
+  'notifications.loadError': 'לא ניתן היה לטעון את ההתראות. נסו שוב.',
+  'notifications.empty': 'הכל מעודכן.',
+  'notifications.unreadCount': '{count} שלא נקראו',
+  'notifications.markAllRead': 'סימון הכל כנקרא',
+  'notifications.loadMore': 'טעינת עוד',
+  'notifications.loadingMore': 'טוען…',
+  'notifications.dismissAriaLabel': 'התעלמות מהתראה',
+  'notifications.event.shiftClaimed':
+    '{byUserName} תפס את משמרת ה{direction} עבור {pointName} ({when})',
+  'notifications.event.shiftReleased':
+    '{byUserName} שחרר את משמרת ה{direction} עבור {pointName} ({when})',
+  'notifications.event.shiftReleasedMemberRemoved':
+    'משמרת ה{direction} עבור {pointName} פתוחה שוב — {byUserName} הוסר מהקבוצה',
+  'notifications.event.sessionUpdated': 'האימון הועבר ל-{when} ב{fieldLocation}',
+  'notifications.event.sessionCancelled': 'האימון בתאריך {when} ב{fieldLocation} בוטל',
+  'notifications.event.sessionPointPlayersUpdated': 'השחקנים עודכנו עבור {pointName} ({direction})',
+  'notifications.event.scheduleTemplateCreated':
+    'נוצרה תבנית לוח זמנים חדשה: {sessionsCreated} אימונים בשעה {defaultTime}, {defaultFieldLocation}',
+  'notifications.event.scheduleTemplateUpdated':
+    'תבנית לוח הזמנים עודכנה: {sessionsCreated} אימונים חדשים בשעה {defaultTime}, {defaultFieldLocation}',
+  'notifications.event.memberPromoted': '{userName} קודם לתפקיד מנהל',
+  'notifications.event.memberDemoted': '{userName} כבר לא מנהל',
+  'notifications.event.memberRemoved': '{userName} הוסר מהקבוצה',
+  'notifications.event.inviteAccepted': '{userName} הצטרף לקבוצה',
+  'notifications.event.unknown': 'עדכון בקבוצה ({eventType})',
 
   'schedule.title': 'לוח זמנים',
   'schedule.loading': 'טוען את לוח הזמנים…',

@@ -32,7 +32,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
-import { adminNavItems, settingsNavItem } from '@/lib/admin-nav';
+import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import {
   formatSessionStartsAt,
@@ -108,6 +108,7 @@ export default function SchedulePage() {
       icon: <Calendar className="size-full" />,
       active: true,
     },
+    ...(activeMembership ? [notificationsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
   ];

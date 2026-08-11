@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 
 const paramsSchema = z.object({ teamId: z.string().uuid() });
 const memberParamsSchema = z.object({ teamId: z.string().uuid(), userId: z.string().uuid() });
@@ -66,6 +68,7 @@ export default async function memberRoutes(app: FastifyInstance) {
 
     const target = await app.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+      include: { user: { select: { name: true } } },
     });
     if (!target) {
       throw new HttpError(404, 'This person is not on the team.');
@@ -99,10 +102,20 @@ export default async function memberRoutes(app: FastifyInstance) {
         afterState: { role: changed.role },
       });
 
-      return changed;
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: body.role === 'admin' ? 'member_promoted' : 'member_demoted',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: params.userId, userName: target.user.name },
+      });
+
+      return { changed, outboxEventId: outboxEvent.id };
     });
 
-    return { userId: updated.userId, role: updated.role };
+    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+
+    return { userId: updated.changed.userId, role: updated.changed.role };
   });
 
   app.delete('/teams/:teamId/members/:userId', async (request, reply) => {
@@ -112,12 +125,15 @@ export default async function memberRoutes(app: FastifyInstance) {
 
     const target = await app.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+      include: { user: { select: { name: true } } },
     });
     if (!target) {
       throw new HttpError(404, 'This person is not on the team.');
     }
 
-    await app.prisma.$transaction(async (tx) => {
+    const outboxEventIds = await app.prisma.$transaction(async (tx) => {
+      const eventIds: string[] = [];
+
       if (target.role === 'admin') {
         const otherAdminCount = await tx.teamMember.count({
           where: { teamId: params.teamId, role: 'admin', userId: { not: params.userId } },
@@ -140,6 +156,7 @@ export default async function memberRoutes(app: FastifyInstance) {
           status: 'claimed',
           session: { teamId: params.teamId },
         },
+        include: { point: true, session: true },
       });
       for (const heldShift of heldShifts) {
         await tx.shift.updateMany({
@@ -159,6 +176,24 @@ export default async function memberRoutes(app: FastifyInstance) {
           },
           afterState: { status: 'open' },
         });
+
+        const shiftOutboxEvent = await recordOutboxEvent(tx, {
+          teamId: params.teamId,
+          eventType: 'shift_released',
+          category: 'shift_changes',
+          recipientScope: { type: 'team_broadcast' },
+          payload: {
+            sessionId: heldShift.sessionId,
+            shiftId: heldShift.id,
+            pointId: heldShift.pointId,
+            pointName: heldShift.point.name,
+            direction: heldShift.direction,
+            sessionStartsAt: heldShift.session.startsAt.toISOString(),
+            byUserName: target.user.name,
+            reason: 'member_removed',
+          },
+        });
+        eventIds.push(shiftOutboxEvent.id);
       }
 
       const remainingMemberships = await tx.teamMember.count({
@@ -180,7 +215,22 @@ export default async function memberRoutes(app: FastifyInstance) {
         targetId: params.userId,
         beforeState: { role: target.role },
       });
+
+      const memberOutboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'member_removed',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: params.userId, userName: target.user.name },
+      });
+      eventIds.push(memberOutboxEvent.id);
+
+      return eventIds;
     });
+
+    for (const outboxEventId of outboxEventIds) {
+      enqueueOutboxEventBestEffort(app.outboxQueue, outboxEventId);
+    }
 
     reply.status(204).send();
   });

@@ -132,6 +132,19 @@ describe('team member management', () => {
       where: { teamId, actionType: 'member_promoted' },
     });
     expect(auditEntries).toHaveLength(1);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'member_promoted' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]).toMatchObject({
+      category: 'admin_changes',
+      recipientScope: 'team_broadcast',
+    });
+    expect(outboxEvents[0]?.payload).toMatchObject({
+      userId: parentUserId,
+      userName: 'Parent Two',
+    });
   });
 
   it('blocks demoting the last remaining admin', async () => {
@@ -194,6 +207,15 @@ describe('team member management', () => {
       where: { teamId, actionType: 'member_removed', targetId: parentUserId },
     });
     expect(auditEntries).toHaveLength(1);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'member_removed' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]?.payload).toMatchObject({
+      userId: parentUserId,
+      userName: 'Parent Two',
+    });
   });
 
   it('releases any shift the removed member held, back to open', async () => {
@@ -254,5 +276,15 @@ describe('team member management', () => {
       where: { teamId, actionType: 'shift_released', targetId: shiftId },
     });
     expect(auditEntries).toHaveLength(1);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'shift_released' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]?.payload).toMatchObject({
+      shiftId,
+      reason: 'member_removed',
+      byUserName: 'Parent Two',
+    });
   });
 });

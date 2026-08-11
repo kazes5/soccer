@@ -6,6 +6,7 @@ import {
   createOutboxQueue,
   createScheduledTaskQueue,
   OUTBOX_QUEUE_NAME,
+  QUEUE_PREFIX,
   SCHEDULED_TASK_QUEUE_NAME,
 } from '../lib/queues';
 import { createRedisConnection } from '../lib/redis';
@@ -58,7 +59,7 @@ async function main() {
             data: { attempts: { increment: 1 }, lastError },
           }),
       ),
-    { connection: createRedisConnection() },
+    { connection: createRedisConnection(), prefix: QUEUE_PREFIX },
   );
 
   const scheduledTaskWorker = new Worker<{ scheduledTaskId: string }>(
@@ -72,7 +73,7 @@ async function main() {
             data: { attempts: { increment: 1 }, lastError },
           }),
       ),
-    { connection: createRedisConnection() },
+    { connection: createRedisConnection(), prefix: QUEUE_PREFIX },
   );
 
   outboxWorker.on('failed', (job, error) => {

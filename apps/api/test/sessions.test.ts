@@ -84,6 +84,16 @@ describe('sessions', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().fieldLocation).toBe('North Field');
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'session_updated' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]).toMatchObject({
+      category: 'shift_changes',
+      recipientScope: 'team_broadcast',
+    });
+    expect(outboxEvents[0]?.payload).toMatchObject({ sessionId, fieldLocation: 'North Field' });
   });
 
   it('converts a new local time through the team timezone, changing only the requested piece', async () => {
@@ -148,6 +158,12 @@ describe('sessions', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe('cancelled');
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'session_cancelled' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]?.payload).toMatchObject({ sessionId });
   });
 
   it('rejects cancelling an already-cancelled session', async () => {
@@ -256,6 +272,12 @@ describe('sessions', () => {
     expect(response.statusCode).toBe(200);
     const point = response.json().points.find((p: { pointId: string }) => p.pointId === pointId);
     expect(point.playerIds).toEqual([playerId]);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'session_point_players_updated' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]?.payload).toMatchObject({ sessionId, pointId, pointName: 'Oak St' });
   });
 
   it('rejects assigning a player from a different team', async () => {

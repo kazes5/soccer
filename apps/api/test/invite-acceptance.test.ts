@@ -78,6 +78,16 @@ describe('POST /invites/:code/accept', () => {
 
     const updatedInvite = await app.prisma.invite.findUnique({ where: { code: invite.code } });
     expect(updatedInvite?.status).toBe('accepted');
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'invite_accepted' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]).toMatchObject({
+      category: 'admin_changes',
+      recipientScope: 'team_broadcast',
+    });
+    expect(outboxEvents[0]?.payload).toMatchObject({ userId: body.user.id, userName: 'Avi Levi' });
   });
 
   it('lets the newly registered parent complete passkey registration afterward', async () => {
@@ -185,6 +195,18 @@ describe('POST /invites/:code/accept', () => {
       where: { teamId, actionType: 'invite_accepted_for_recovery', targetId: recoveryInvite.id },
     });
     expect(auditEntries).toHaveLength(1);
+
+    // The recovery path doesn't change team composition (the user was
+    // already a member), so it's deliberately not notification-worthy —
+    // only the original, genuinely-new-membership accept above is.
+    const recoveryOutboxEvents = await app.prisma.outboxEvent.findMany({
+      where: {
+        teamId,
+        eventType: 'invite_accepted',
+        payload: { path: ['userId'], equals: userId },
+      },
+    });
+    expect(recoveryOutboxEvents).toHaveLength(1);
   });
 
   it('rejects an unknown invite code', async () => {

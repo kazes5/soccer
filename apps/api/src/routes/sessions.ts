@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
@@ -178,10 +180,24 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { startsAt: updated.startsAt, fieldLocation: updated.fieldLocation },
       });
 
-      return updated;
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'session_updated',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          sessionId: updated.id,
+          startsAt: updated.startsAt.toISOString(),
+          fieldLocation: updated.fieldLocation,
+        },
+      });
+
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 
   app.post('/teams/:teamId/sessions/:sessionId/cancel', async (request) => {
@@ -221,10 +237,24 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { status: updated.status },
       });
 
-      return updated;
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'session_cancelled',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          sessionId: updated.id,
+          startsAt: updated.startsAt.toISOString(),
+          fieldLocation: updated.fieldLocation,
+        },
+      });
+
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 
   app.patch('/teams/:teamId/sessions/:sessionId/points/:pointId', async (request) => {
@@ -241,7 +271,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
           direction: body.direction,
         },
       },
-      include: { session: true },
+      include: { session: true, point: true },
     });
     if (!assignment || assignment.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Session collection-point assignment not found.');
@@ -282,6 +312,19 @@ export default async function sessionRoutes(app: FastifyInstance) {
         afterState: { playerIds: body.playerIds },
       });
 
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'session_point_players_updated',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          sessionId: params.sessionId,
+          pointId: params.pointId,
+          pointName: assignment.point.name,
+          direction: body.direction,
+        },
+      });
+
       const updated = await tx.practiceSession.findUniqueOrThrow({
         where: { id: params.sessionId },
         include: {
@@ -289,9 +332,11 @@ export default async function sessionRoutes(app: FastifyInstance) {
           shifts: { include: { assignedUser: true } },
         },
       });
-      return updated;
+      return { updated, outboxEventId: outboxEvent.id };
     });
 
-    return practiceSessionSchema.parse(toSessionDto(session));
+    enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+
+    return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
 }

@@ -1,5 +1,5 @@
 import type { MessageKey } from '@soccer/i18n';
-import { Bell, MapPin, Repeat, Settings } from 'lucide-react';
+import { Bell, Inbox, MapPin, Repeat, Settings } from 'lucide-react';
 import type { ShellNavItem } from '@/components/ui/shell';
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
@@ -13,6 +13,19 @@ export function settingsNavItem(t: Translate, active = false): ShellNavItem {
     href: '/settings/notifications',
     label: t('nav.settings'),
     icon: <Settings className="size-full" />,
+    active,
+  };
+}
+
+/** The notification center — team-scoped like Schedule/admin pages, so the
+ * href carries `?team=`. Distinct icon from `adminNotificationSettings`'s
+ * `Bell` (that page configures *how* notifications behave; this one *is*
+ * the notifications) even though both are notification-related. */
+export function notificationsNavItem(teamId: string, t: Translate, active = false): ShellNavItem {
+  return {
+    href: `/notifications?team=${encodeURIComponent(teamId)}`,
+    label: t('nav.notifications'),
+    icon: <Inbox className="size-full" />,
     active,
   };
 }

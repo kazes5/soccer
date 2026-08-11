@@ -17,10 +17,12 @@ import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { setSessionCookies } from '../lib/cookies';
 import { generateInviteCode, generateSessionToken, hashSecret } from '../lib/crypto';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
 import {
   createRegistrationChallenge,
   verifyRegistrationChallenge,
 } from '../lib/passkey-registration';
+import { enqueueOutboxEventBestEffort } from '../lib/queues';
 
 const codeParamsSchema = z.object({ code: z.string().min(1) });
 
@@ -191,8 +193,27 @@ export default async function inviteRoutes(app: FastifyInstance) {
         afterState: { userId: user.id, playerCount: players.length },
       });
 
-      return { user, team, players };
+      // Only a genuinely new membership is "user added to team" per CLAUDE.md
+      // §3.5 — the recovery path (re-issuing a passkey to an already-existing
+      // member) doesn't change team composition, so it isn't notification-worthy.
+      let outboxEventId: string | undefined;
+      if (!existingMembership) {
+        const outboxEvent = await recordOutboxEvent(tx, {
+          teamId: invite.teamId,
+          eventType: 'invite_accepted',
+          category: 'admin_changes',
+          recipientScope: { type: 'team_broadcast' },
+          payload: { userId: user.id, userName: user.name },
+        });
+        outboxEventId = outboxEvent.id;
+      }
+
+      return { user, team, players, outboxEventId };
     });
+
+    if (result.outboxEventId) {
+      enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
+    }
 
     reply.status(201);
     return acceptInviteResponseSchema.parse({

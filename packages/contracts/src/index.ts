@@ -15,3 +15,4 @@ export * from './session';
 export * from './coordination-settings';
 export * from './notification-settings';
 export * from './member-notification-preferences';
+export * from './notification';
