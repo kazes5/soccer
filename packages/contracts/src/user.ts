@@ -14,5 +14,6 @@ export const teamMembershipSchema = z.object({
   teamId: z.string().uuid(),
   teamName: z.string(),
   role: teamRoleSchema,
+  timezone: z.string(),
 });
 export type TeamMembership = z.infer<typeof teamMembershipSchema>;

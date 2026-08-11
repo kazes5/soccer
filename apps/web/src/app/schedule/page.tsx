@@ -39,6 +39,7 @@ import {
   updateSessionInSessions,
   updateShiftInSessions,
 } from '@/lib/sessions';
+import { instantToWallClock } from '@/lib/timezone';
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   if (shift.status === 'open') return 'open';
@@ -50,22 +51,6 @@ function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
  * show for an action the server would reject anyway. */
 function isSessionPast(startsAt: string): boolean {
   return new Date(startsAt).getTime() <= Date.now();
-}
-
-/** Combines separate date/time inputs into the literal-UTC-wall-clock ISO string
- * this codebase's session times are stored as (see the API's `combineDateAndTime`
- * doc comment) — not a true timezone-aware instant. */
-function buildStartsAt(date: string, time: string): string {
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time);
-  if (!dateMatch || !timeMatch) {
-    throw new Error(`Invalid date/time: ${date} ${time}`);
-  }
-  const [, year, month, day] = dateMatch;
-  const [, hours, minutes] = timeMatch;
-  return new Date(
-    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes)),
-  ).toISOString();
 }
 
 export default function SchedulePage() {
@@ -151,6 +136,7 @@ export default function SchedulePage() {
             teamId={activeTeamId}
             currentUserId={session.user.id}
             isAdmin={activeMembership?.role === 'admin'}
+            timeZone={activeMembership?.timezone ?? 'UTC'}
           />
         )}
       </div>
@@ -162,10 +148,12 @@ function ScheduleSessions({
   teamId,
   currentUserId,
   isAdmin,
+  timeZone,
 }: {
   teamId: string;
   currentUserId: string;
   isAdmin: boolean;
+  timeZone: string;
 }) {
   const { t, locale } = useLocale();
   const { showToast } = useToast();
@@ -331,6 +319,7 @@ function ScheduleSessions({
               practiceSession={practiceSession}
               currentUserId={currentUserId}
               locale={locale}
+              timeZone={timeZone}
               isAdmin={isAdmin}
               playersById={playersById}
               pendingShiftId={pendingShiftId}
@@ -350,6 +339,7 @@ function ScheduleSessions({
         <SessionEditDialog
           teamId={teamId}
           practiceSession={editingSession}
+          timeZone={timeZone}
           onClose={() => setEditingSession(null)}
           onSaved={handleSessionSaved}
         />
@@ -390,6 +380,7 @@ function SessionCard({
   practiceSession,
   currentUserId,
   locale,
+  timeZone,
   isAdmin,
   playersById,
   pendingShiftId,
@@ -402,6 +393,7 @@ function SessionCard({
   practiceSession: PracticeSession;
   currentUserId: string;
   locale: Locale;
+  timeZone: string;
   isAdmin: boolean;
   playersById: Map<string, string>;
   pendingShiftId: string | null;
@@ -418,7 +410,7 @@ function SessionCard({
   }) => void;
 }) {
   const { t } = useLocale();
-  const formatted = formatSessionStartsAt(locale, practiceSession.startsAt);
+  const formatted = formatSessionStartsAt(locale, practiceSession.startsAt, timeZone);
   const canManage =
     isAdmin && practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt);
 
@@ -536,18 +528,20 @@ function SessionCard({
 function SessionEditDialog({
   teamId,
   practiceSession,
+  timeZone,
   onClose,
   onSaved,
 }: {
   teamId: string;
   practiceSession: PracticeSession;
+  timeZone: string;
   onClose: () => void;
   onSaved: (updated: PracticeSession) => void;
 }) {
   const { t } = useLocale();
-  const startsAtDate = new Date(practiceSession.startsAt);
-  const [date, setDate] = useState(startsAtDate.toISOString().slice(0, 10));
-  const [time, setTime] = useState(startsAtDate.toISOString().slice(11, 16));
+  const initialWallClock = instantToWallClock(new Date(practiceSession.startsAt), timeZone);
+  const [date, setDate] = useState(initialWallClock.date);
+  const [time, setTime] = useState(initialWallClock.time);
   const [fieldLocation, setFieldLocation] = useState(practiceSession.fieldLocation);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -557,8 +551,12 @@ function SessionEditDialog({
     setError(null);
     setIsSubmitting(true);
     try {
+      // `date`/`time` are sent as local wall-clock values, not a pre-combined
+      // instant — the server converts through the team's own timezone, so this
+      // client never has to reason about DST or offsets itself.
       const updated = await api.updateSession(teamId, practiceSession.id, {
-        startsAt: buildStartsAt(date, time),
+        date,
+        time,
         fieldLocation,
       });
       onSaved(updated);

@@ -11,6 +11,7 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { combineDateAndTime, generateOccurrences } from '../lib/recurrence';
+import { wallClockToInstant } from '../lib/timezone';
 import type { Prisma } from '../../generated/prisma/client';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
@@ -98,6 +99,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
+    const team = await app.prisma.team.findUniqueOrThrow({
+      where: { id: params.teamId },
+      select: { timezone: true },
+    });
     const points = await loadAndValidateCollectionPoints(
       app.prisma,
       params.teamId,
@@ -108,7 +113,16 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const dtstart = combineDateAndTime(startDate, body.defaultTime);
     let occurrences: Date[];
     try {
-      occurrences = generateOccurrences(body.recurrenceRule, dtstart, body.horizonWeeks);
+      // `generateOccurrences` works in the same "pseudo-UTC" wall-clock space as
+      // `dtstart` — each result's UTC-labeled getters are the correct calendar
+      // date/time in the team's zone, not yet a real instant. Converting each one
+      // individually (not the series as a whole) is what makes the recurrence
+      // correctly cross DST boundaries: a fixed offset applied to the whole
+      // series would drift the displayed local time by an hour past the
+      // transition, instead of keeping "every Monday at 18:00" actually at 18:00.
+      occurrences = generateOccurrences(body.recurrenceRule, dtstart, body.horizonWeeks).map(
+        (occurrence) => wallClockToInstant(occurrence, team.timezone),
+      );
     } catch {
       throw new HttpError(400, 'Invalid recurrence rule.');
     }
@@ -183,6 +197,10 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
+    const team = await app.prisma.team.findUniqueOrThrow({
+      where: { id: params.teamId },
+      select: { timezone: true },
+    });
     const existing = await app.prisma.scheduleTemplate.findUnique({
       where: { id: params.templateId },
       include: { collectionPoints: { include: { point: true } } },
@@ -205,7 +223,14 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const dtstart = combineDateAndTime(existing.startDate, effective.defaultTime);
     let occurrences: Date[];
     try {
-      occurrences = generateOccurrences(effective.recurrenceRule, dtstart, effective.horizonWeeks);
+      // See the POST handler's comment: converting per-occurrence, not the
+      // series as a whole, is what keeps "every Monday at 18:00" actually
+      // showing 18:00 local across a DST boundary.
+      occurrences = generateOccurrences(
+        effective.recurrenceRule,
+        dtstart,
+        effective.horizonWeeks,
+      ).map((occurrence) => wallClockToInstant(occurrence, team.timezone));
     } catch {
       throw new HttpError(400, 'Invalid recurrence rule.');
     }

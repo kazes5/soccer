@@ -24,8 +24,12 @@ export function updateSessionInSessions(
   return sessions.map((session) => (session.id === updated.id ? updated : session));
 }
 
-/** Shared date/time format for a session's `startsAt` across the Schedule and Home pages. */
-export function formatSessionStartsAt(locale: Locale, startsAt: string): string {
+/** Shared date/time format for a session's `startsAt` across the Schedule and Home pages.
+ * `startsAt` is a true UTC instant (Stage 4's timezone conversion) — `timeZone` is the
+ * *team's* IANA zone (from `TeamMembership.timezone`), not the viewer's own browser
+ * timezone, so every team member sees the same team-local time regardless of where
+ * they personally are. */
+export function formatSessionStartsAt(locale: Locale, startsAt: string, timeZone: string): string {
   return formatDate(locale, new Date(startsAt), {
     weekday: 'short',
     day: '2-digit',
@@ -34,11 +38,6 @@ export function formatSessionStartsAt(locale: Locale, startsAt: string): string 
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    // `startsAt` is stored as literal wall-clock numbers, not a true
-    // timezone-aware instant (see PLAN.md's Stage 3 recurrence note) — pinning
-    // the formatter to UTC displays exactly what was entered/generated,
-    // regardless of the viewer's own browser timezone. Real per-team
-    // IANA-timezone conversion is Stage 4's job (reminders/escalation).
-    timeZone: 'UTC',
+    timeZone,
   });
 }

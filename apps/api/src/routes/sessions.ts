@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const sessionParamsSchema = z.object({ teamId: z.string().uuid(), sessionId: z.string().uuid() });
@@ -129,11 +130,29 @@ export default async function sessionRoutes(app: FastifyInstance) {
       'This session has already happened and can no longer be edited.',
     );
 
+    // `date`/`time` are independently optional local wall-clock values (see
+    // the contract schema's doc comment) — whichever one isn't provided falls
+    // back to the session's current value, recovered through the team's own
+    // timezone rather than read off the stored UTC instant directly.
+    let newStartsAt: Date | undefined;
+    if (body.date !== undefined || body.time !== undefined) {
+      const team = await app.prisma.team.findUniqueOrThrow({
+        where: { id: params.teamId },
+        select: { timezone: true },
+      });
+      const current = instantToWallClock(existing.startsAt, team.timezone);
+      newStartsAt = localDateTimeToInstant(
+        body.date ?? current.date,
+        body.time ?? current.time,
+        team.timezone,
+      );
+    }
+
     const session = await app.prisma.$transaction(async (tx) => {
       const updated = await tx.practiceSession.update({
         where: { id: params.sessionId },
         data: {
-          startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
+          startsAt: newStartsAt,
           fieldLocation: body.fieldLocation,
         },
         include: {

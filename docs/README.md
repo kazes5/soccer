@@ -17,6 +17,8 @@ status and sequencing.
   and parents, plus planned user-facing capabilities.
 - [Flow Charts](./flow-charts.md) - current admin and user route flows shown as
   Mermaid diagrams.
+- [Architecture Decision Records](./adr/README.md) - short records of
+  significant, hard-to-reverse decisions that later work builds on.
 
 ## Documentation status
 

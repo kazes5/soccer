@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { instantToWallClock } from '../src/lib/timezone';
 import { futureMondayDateString, pastMondayDateString } from './support/dates';
 
 describe('schedule templates', () => {
@@ -306,9 +307,15 @@ describe('schedule templates', () => {
       for (const startsAt of beforeTimes) {
         expect(after.some((s) => s.startsAt === startsAt)).toBe(true);
       }
-      // New 19:00 sessions exist alongside them, not in place of them.
+      // New 19:00-local sessions exist alongside them, not in place of them.
+      // `startsAt` is a real UTC instant now, so the local wall-clock time has
+      // to be recovered through the team's zone rather than string-matched.
       expect(
-        after.every((s) => beforeTimes.includes(s.startsAt) || s.startsAt.includes('19:00')),
+        after.every(
+          (s) =>
+            beforeTimes.includes(s.startsAt) ||
+            instantToWallClock(new Date(s.startsAt), 'Asia/Jerusalem').time === '19:00',
+        ),
       ).toBe(true);
     });
 
