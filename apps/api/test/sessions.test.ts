@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { instantToWallClock } from '../src/lib/timezone';
 import { futureMondayDateString, pastMondayDateString } from './support/dates';
 
 describe('sessions', () => {
@@ -85,6 +86,34 @@ describe('sessions', () => {
     expect(response.json().fieldLocation).toBe('North Field');
   });
 
+  it('converts a new local time through the team timezone, changing only the requested piece', async () => {
+    const { adminToken, teamId, sessionId } = await setUpTeamWithSession();
+
+    const beforeResponse = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const before = (beforeResponse.json().sessions as Array<{ id: string; startsAt: string }>).find(
+      (s) => s.id === sessionId,
+    )!;
+    const originalDate = instantToWallClock(new Date(before.startsAt), 'Asia/Jerusalem').date;
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { time: '19:30' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const updated = instantToWallClock(new Date(response.json().startsAt), 'Asia/Jerusalem');
+    // The time changed to what was requested, and the date — which wasn't
+    // provided — stayed exactly what it was before the edit.
+    expect(updated.time).toBe('19:30');
+    expect(updated.date).toBe(originalDate);
+  });
+
   it('reports a friendly conflict, not a 500, when an edit collides with another session from the same template', async () => {
     const { adminToken, teamId, sessionId } = await setUpTeamWithSession();
 
@@ -97,11 +126,12 @@ describe('sessions', () => {
     const otherSession = sessions.find((s) => s.id !== sessionId);
     expect(otherSession).toBeDefined();
 
+    const otherWallClock = instantToWallClock(new Date(otherSession!.startsAt), 'Asia/Jerusalem');
     const response = await app.inject({
       method: 'PATCH',
       url: `/teams/${teamId}/sessions/${sessionId}`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { startsAt: otherSession!.startsAt },
+      payload: { date: otherWallClock.date, time: otherWallClock.time },
     });
 
     expect(response.statusCode).toBe(409);

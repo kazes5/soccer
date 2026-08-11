@@ -25,12 +25,14 @@
     "dotenv": "^17.4.2",
     "fastify": "^5.11.2",
     "fastify-plugin": "^6.0.0",
+    "luxon": "^3.7.2",
     "pg": "^8.22.0",
     "rrule": "^2.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@soccer/config": "workspace:*",
+    "@types/luxon": "^3.7.4",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.20.4",
     "eslint": "^10.8.0",

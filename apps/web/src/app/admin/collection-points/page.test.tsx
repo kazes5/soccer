@@ -52,12 +52,26 @@ const adminUser = {
     email: null,
     languagePreference: 'en' as const,
   },
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'admin' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'admin' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 const parentOnlyUser = {
   ...adminUser,
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'parent' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 const oakSt: CollectionPoint = {

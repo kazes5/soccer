@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const sessionParamsSchema = z.object({ teamId: z.string().uuid(), sessionId: z.string().uuid() });
@@ -130,10 +131,35 @@ export default async function sessionRoutes(app: FastifyInstance) {
     );
 
     const session = await app.prisma.$transaction(async (tx) => {
+      // `date`/`time` are independently optional local wall-clock values (see
+      // the contract schema's doc comment) — whichever one isn't provided falls
+      // back to the session's current value, recovered through the team's own
+      // timezone rather than read off the stored UTC instant directly. Re-read
+      // immediately before the write (inside this transaction, not from the
+      // `existing` snapshot taken before it) so two concurrent partial edits
+      // (one sending only `time`, the other only `date`) can't silently clobber
+      // each other with a stale default for the field they didn't send.
+      let newStartsAt: Date | undefined;
+      if (body.date !== undefined || body.time !== undefined) {
+        const [team, freshSession] = await Promise.all([
+          tx.team.findUniqueOrThrow({ where: { id: params.teamId }, select: { timezone: true } }),
+          tx.practiceSession.findUniqueOrThrow({
+            where: { id: params.sessionId },
+            select: { startsAt: true },
+          }),
+        ]);
+        const current = instantToWallClock(freshSession.startsAt, team.timezone);
+        newStartsAt = localDateTimeToInstant(
+          body.date ?? current.date,
+          body.time ?? current.time,
+          team.timezone,
+        );
+      }
+
       const updated = await tx.practiceSession.update({
         where: { id: params.sessionId },
         data: {
-          startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
+          startsAt: newStartsAt,
           fieldLocation: body.fieldLocation,
         },
         include: {

@@ -54,7 +54,9 @@ describe('LoginForm', () => {
         email: null,
         languagePreference: 'en',
       },
-      teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' }],
+      teamMemberships: [
+        { teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent', timezone: 'Asia/Jerusalem' },
+      ],
     });
 
     renderWithProviders(<LoginForm />);

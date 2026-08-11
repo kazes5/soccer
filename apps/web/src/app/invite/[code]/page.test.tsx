@@ -49,7 +49,14 @@ const authSessionResponse = {
   sessionToken: 'token-abc',
   expiresAt: '2026-09-01T00:00:00.000Z',
   user: acceptResponse.user,
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'parent' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 describe('AcceptInvitePage', () => {

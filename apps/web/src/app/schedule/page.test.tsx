@@ -6,6 +6,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
+import { instantToWallClock } from '@/lib/timezone';
 import SchedulePage from './page';
 
 const replace = vi.fn();
@@ -42,12 +43,26 @@ const adminUser = {
     email: null,
     languagePreference: 'en' as const,
   },
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'admin' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'admin' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 const parentOnlyUser = {
   ...adminUser,
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'parent' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 // A week from "now" so it's always a future, editable session regardless of
@@ -262,7 +277,7 @@ describe('SchedulePage', () => {
     expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
   });
 
-  it('lets an admin edit a session', async () => {
+  it('lets an admin edit a session, pre-filling and submitting local (not UTC) date/time', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
     const sessions = buildSessions({ shiftStatus: 'open' });
     vi.mocked(api.listSessions).mockResolvedValue(sessions);
@@ -270,17 +285,28 @@ describe('SchedulePage', () => {
       ...sessions.sessions[0]!,
       fieldLocation: 'North Field',
     });
+    // adminUser's membership carries `timezone: 'Asia/Jerusalem'` — this is the
+    // value the pre-fill and submit are expected to convert through, not UTC.
+    const expectedWallClock = instantToWallClock(new Date(FUTURE_STARTS_AT), 'Asia/Jerusalem');
 
     renderWithProviders(<SchedulePage />);
     await screen.findByText('Drop-off · Oak St');
 
     fireEvent.click(screen.getByRole('button', { name: /^edit/i }));
+    expect(screen.getByLabelText('Date')).toHaveValue(expectedWallClock.date);
+    expect(screen.getByLabelText('Time')).toHaveValue(expectedWallClock.time);
     fireEvent.change(screen.getByLabelText('Field location'), {
       target: { value: 'North Field' },
     });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-    await waitFor(() => expect(api.updateSession).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(api.updateSession).toHaveBeenCalledWith('team-1', 'session-1', {
+        date: expectedWallClock.date,
+        time: expectedWallClock.time,
+        fieldLocation: 'North Field',
+      }),
+    );
     expect(await screen.findByText('North Field')).toBeInTheDocument();
     // No refetch — the patched row comes straight from the update response.
     expect(api.listSessions).toHaveBeenCalledTimes(1);

@@ -142,7 +142,12 @@ export default function HomePage() {
         {/* Keyed on team so switching teams remounts this subtree and fetches
             fresh — avoids a synchronous setState-on-dependency-change effect. */}
         {activeTeamId && (
-          <HomeWorkspace key={activeTeamId} teamId={activeTeamId} currentUserId={session.user.id} />
+          <HomeWorkspace
+            key={activeTeamId}
+            teamId={activeTeamId}
+            currentUserId={session.user.id}
+            timeZone={activeMembership?.timezone ?? 'UTC'}
+          />
         )}
 
         <section className="flex flex-col gap-3">
@@ -171,7 +176,15 @@ export default function HomePage() {
   );
 }
 
-function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserId: string }) {
+function HomeWorkspace({
+  teamId,
+  currentUserId,
+  timeZone,
+}: {
+  teamId: string;
+  currentUserId: string;
+  timeZone: string;
+}) {
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<PracticeSession[] | null>(null);
@@ -317,6 +330,7 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
                 key={entry.point.shift.id}
                 entry={entry}
                 locale={locale}
+                timeZone={timeZone}
                 variant="secondary"
                 actionLabel={t('schedule.release')}
                 actionPendingLabel={t('schedule.releasing')}
@@ -342,6 +356,7 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
                   key={entry.point.shift.id}
                   entry={entry}
                   locale={locale}
+                  timeZone={timeZone}
                   variant="primary"
                   actionLabel={t('schedule.claim')}
                   actionPendingLabel={t('schedule.claiming')}
@@ -414,6 +429,7 @@ function HomeWorkspace({ teamId, currentUserId }: { teamId: string; currentUserI
 function ShiftRow({
   entry,
   locale,
+  timeZone,
   variant,
   actionLabel,
   actionPendingLabel,
@@ -422,6 +438,7 @@ function ShiftRow({
 }: {
   entry: UpcomingShift;
   locale: Locale;
+  timeZone: string;
   variant: 'primary' | 'secondary';
   actionLabel: string;
   actionPendingLabel: string;
@@ -429,7 +446,7 @@ function ShiftRow({
   onAction: () => void;
 }) {
   const { t } = useLocale();
-  const formatted = formatSessionStartsAt(locale, entry.session.startsAt);
+  const formatted = formatSessionStartsAt(locale, entry.session.startsAt, timeZone);
 
   return (
     <DataListItem className="flex flex-wrap items-center justify-between gap-3">

@@ -36,7 +36,14 @@ const currentUser = {
     email: null,
     languagePreference: 'en' as const,
   },
-  teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'admin' as const }],
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'admin' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
 };
 
 const emptySessions: SessionListResponse = { sessions: [] };
@@ -159,7 +166,14 @@ describe('HomePage', () => {
   it('does not show admin nav links for a parent-only membership', async () => {
     vi.mocked(api.me).mockResolvedValue({
       ...currentUser,
-      teamMemberships: [{ teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent' as const }],
+      teamMemberships: [
+        {
+          teamId: 'team-1',
+          teamName: 'U-12 Wildcats',
+          role: 'parent' as const,
+          timezone: 'Asia/Jerusalem',
+        },
+      ],
     });
 
     renderWithProviders(<HomePage />);

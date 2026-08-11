@@ -278,6 +278,7 @@ export default async function inviteRoutes(app: FastifyInstance) {
         teamId: membership.teamId,
         teamName: membership.team.name,
         role: membership.role,
+        timezone: membership.team.timezone,
       })),
     });
   });

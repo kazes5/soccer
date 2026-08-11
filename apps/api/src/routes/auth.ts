@@ -200,6 +200,7 @@ export default async function authRoutes(app: FastifyInstance) {
         teamId: membership.teamId,
         teamName: membership.team.name,
         role: membership.role,
+        timezone: membership.team.timezone,
       })),
     });
   });
@@ -235,6 +236,7 @@ export default async function authRoutes(app: FastifyInstance) {
         teamId: membership.teamId,
         teamName: membership.team.name,
         role: membership.role,
+        timezone: membership.team.timezone,
       })),
     });
   });

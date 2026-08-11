@@ -101,8 +101,12 @@ Team
 Important modeling choices:
 
 - `TeamMember.role` stores `parent` or `admin` per team, not globally on `User`.
-- `Team.timezone` defaults to `Asia/Jerusalem` and is the intended basis for
-  schedule and escalation behavior.
+- `Team.timezone` defaults to `Asia/Jerusalem` and is the IANA zone used to
+  convert between wall-clock local time and the real UTC instants stored on
+  `PracticeSession.startsAt`. Recurrence generation, session-time edits, and
+  display all convert through this zone (server-side via Luxon for wall-clock
+  -> instant, client-side via `Intl.DateTimeFormat` for instant -> wall-clock);
+  see `apps/api/src/lib/timezone.ts`.
 - A schedule template stores an RRULE, start date, default time/location,
   horizon, and default collection points.
 - A generated `PracticeSession` can be edited or cancelled independently of its

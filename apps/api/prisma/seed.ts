@@ -4,6 +4,7 @@ import { PrismaClient } from '../generated/prisma/client';
 import { env } from '../src/env';
 import { combineDateAndTime, generateOccurrences } from '../src/lib/recurrence';
 import { createSessionWithShifts } from '../src/routes/schedule-templates';
+import { wallClockToInstant } from '../src/lib/timezone';
 
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -160,7 +161,9 @@ async function main() {
       },
     });
 
-    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks);
+    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks).map(
+      (occurrence) => wallClockToInstant(occurrence, team.timezone),
+    );
     for (const startsAt of occurrences) {
       await createSessionWithShifts(prisma, {
         teamId: team.id,
@@ -347,7 +350,9 @@ async function seedHebrewDemoData() {
       },
     });
 
-    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks);
+    const occurrences = generateOccurrences(recurrenceRule, dtstart, template.horizonWeeks).map(
+      (occurrence) => wallClockToInstant(occurrence, team.timezone),
+    );
     for (const startsAt of occurrences) {
       await createSessionWithShifts(prisma, {
         teamId: team.id,

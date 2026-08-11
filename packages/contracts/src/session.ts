@@ -27,8 +27,19 @@ export const sessionListResponseSchema = z.object({
 });
 export type SessionListResponse = z.infer<typeof sessionListResponseSchema>;
 
+/**
+ * `date`/`time` are local wall-clock values in the team's own timezone, not a
+ * pre-combined instant — the server converts through `Team.timezone` so the
+ * browser never has to reason about DST or offsets itself. Either can be
+ * provided independently; the handler falls back to the session's current
+ * value for whichever one is omitted.
+ */
 export const updateSessionRequestSchema = z.object({
-  startsAt: z.string().datetime().optional(),
+  date: z.string().date().optional(),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM (24-hour).')
+    .optional(),
   fieldLocation: z.string().min(1).max(255).optional(),
 });
 export type UpdateSessionRequest = z.infer<typeof updateSessionRequestSchema>;
