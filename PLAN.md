@@ -649,3 +649,41 @@ Starts only after the web API and interaction patterns are stable. It must reuse
 - **Verification:** Documentation links and Markdown formatting are included in the repository format check; the application quality gate is tracked separately from these documentation-only changes.
 - **Blocker or risk:** Stage 0 still has open ADR, threat-model, notification-template, hosting, and provider decisions. This documentation set records those gaps but does not resolve them.
 - **Next concrete action:** Review the guides in the pull request, then keep them synchronized with each behavior-changing checkpoint.
+
+## Stage 4 Detailed Implementation Plan (decided 2026-08-11)
+
+### Summary
+
+Stage 4 will ship as ten checkpoint PRs after `stage3-session-management` is merged and the outstanding Stage 3 EN/HE viewport regression passes. The selected scope is in-app notifications plus browser push, SSE live updates, admin-configurable swap expiry, team reminder defaults with user overrides, user quiet hours, and notification collapse/summary controls.
+
+Email, SMS, multi-shift trades, and bulk future-session editing remain deferred.
+
+### Checkpoints
+
+1. **Architecture and timezone foundation:** Record the notification/event/recipient ADR and convert `PracticeSession.startsAt` from pseudo-UTC wall time to real UTC instants while preserving each existing session's displayed team-local time. Generate recurrences and process session edits through IANA-timezone helpers; reject invalid timezones and test Israeli DST boundaries.
+2. **Coordination and notification settings:** Add admin settings for swap expiry (default 24h, 1-168h), reminder offsets (default 1440/120 minutes, maximum four), and escalation lead time (default 120 minutes, greater than the fixed 60-minute admin alert). Add per-member reminder overrides, enable/disable controls, push categories, and quiet hours defaulting to 22:00-07:00 team time.
+3. **Outbox and worker foundation:** Add durable `OutboxEvent`, `UserNotification`, `NotificationDelivery`, and `ScheduledTask` models. Start a separate BullMQ worker process, use PostgreSQL as the source of truth, deterministic job IDs, startup reconciliation, idempotent processors, and exponential retry/backoff as recommended by [BullMQ's job guidance](https://docs.bullmq.io/patterns/idempotent-jobs).
+4. **In-app notification pipeline:** Retrofit every existing team-changing command so its transaction writes the domain mutation, audit entry, and typed outbox event together. Fan events out to all active team members, add cursor-paginated notification APIs, unread/dismiss state, and a bilingual `/notifications` center with team context.
+5. **SSE and deep links:** Add a credentialed team-scoped SSE stream with replay from `Last-Event-ID`, heartbeat, and reconnect behavior supported by [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events). Use Web Locks for one SSE leader tab and BroadcastChannel for cross-tab updates, following the documented [leader-election](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and [cross-tab communication](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API) patterns.
+6. **Browser push delivery:** Add VAPID configuration, a browser service worker, explicit permission/subscription UI, an injectable `WebPushProvider`, delivery logs, invalid-subscription cleanup, and safe notification-click routing. Active visible tabs receive the in-app event instead of a duplicate OS notification.
+7. **Swap backend:** Add one-way `SwapRequest` lifecycle commands for pending, accepted, declined, expired, and cancelled. Keep the holder assigned while pending, enforce one active request per shift with a database constraint, cap expiry at session start, and use the stored shift version for acceptance CAS.
+8. **Swap web workflow:** Replace Home's placeholder with real pending counts; add request, sent/inbox, detail, cancel, accept, and decline UI. Only the holder can accept/decline and only the requester can cancel; other team members receive read-only lifecycle notifications.
+9. **Reminders:** Create/reschedule durable reminder tasks when assignments, session time, team defaults, or user overrides change. At execution, revalidate the live assignment and render current session, direction, collection-point, and player details; defer quiet-hour reminders until quiet hours end or suppress them if the session has passed.
+10. **Emergency and closure:** Add confirmed `cannotMakeIt`, emergency-open shifts, atomic replacement claims, automatic lead-time escalation, and the fixed one-hour admin unresolved alert. Finish with race/recovery testing, real browser-push verification, two-user/two-tab manual walkthroughs, and desktop/tablet/mobile EN/HE regression.
+
+### Public Interfaces
+
+- Extend contracts with typed notification event/category/severity payloads, notification pages, settings, swap summaries, scheduled-task types, and `emergency_open` shift state.
+- Add `GET/PATCH /teams/:teamId/coordination-settings`, `GET/PATCH /teams/:teamId/notification-settings`, and `PATCH /users/me/preferences`.
+- Add notification list/count/stream/read/dismiss/read-all endpoints plus `GET /push-subscriptions/config`; retain the existing subscription create/delete endpoints.
+- Add swap list/detail/create/accept/decline/cancel endpoints and `POST /teams/:teamId/shifts/:shiftId/cannot-make-it`.
+- Standardize deep links as `/schedule?team=<teamId>&session=<sessionId>&shift=<shiftId>`; authentication redirects may preserve only validated app-relative `next` paths.
+- Change session-update input to local date plus local time so the API, not the browser, converts through the team timezone.
+
+### Policies and Tests
+
+All swap lifecycle events are broadcast team-wide; the actor receives the in-app record but no redundant push. In-app history cannot be disabled. Push preferences apply by category; enabled emergency events bypass quiet hours and throttling.
+
+Non-urgent pushes collapse repeated entity changes for 60 seconds. After five non-urgent pushes per recipient/team within five minutes, further events become one team-update summary while every underlying event remains visible in-app.
+
+Tests will cover schema validation, multi-team authorization, one-active-swap enforcement, accept/release/claim/expiry races, duplicate worker execution, crash reconciliation, retry logging, quiet-hour deferral, collapse/summary behavior, stale reminders, emergency replacement races, and DST transitions. Every checkpoint runs the existing full quality gate, adds tests, receives code review, manually verifies observable behavior, and updates `PLAN.md`.
