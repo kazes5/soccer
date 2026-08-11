@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
 
 const paramsSchema = z.object({ teamId: z.string().uuid() });
 const memberParamsSchema = z.object({ teamId: z.string().uuid(), userId: z.string().uuid() });
@@ -66,6 +67,7 @@ export default async function memberRoutes(app: FastifyInstance) {
 
     const target = await app.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+      include: { user: { select: { name: true } } },
     });
     if (!target) {
       throw new HttpError(404, 'This person is not on the team.');
@@ -99,6 +101,14 @@ export default async function memberRoutes(app: FastifyInstance) {
         afterState: { role: changed.role },
       });
 
+      await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: body.role === 'admin' ? 'member_promoted' : 'member_demoted',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: params.userId, userName: target.user.name },
+      });
+
       return changed;
     });
 
@@ -112,6 +122,7 @@ export default async function memberRoutes(app: FastifyInstance) {
 
     const target = await app.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+      include: { user: { select: { name: true } } },
     });
     if (!target) {
       throw new HttpError(404, 'This person is not on the team.');
@@ -140,6 +151,7 @@ export default async function memberRoutes(app: FastifyInstance) {
           status: 'claimed',
           session: { teamId: params.teamId },
         },
+        include: { point: true, session: true },
       });
       for (const heldShift of heldShifts) {
         await tx.shift.updateMany({
@@ -158,6 +170,23 @@ export default async function memberRoutes(app: FastifyInstance) {
             version: heldShift.version,
           },
           afterState: { status: 'open' },
+        });
+
+        await recordOutboxEvent(tx, {
+          teamId: params.teamId,
+          eventType: 'shift_released',
+          category: 'shift_changes',
+          recipientScope: { type: 'team_broadcast' },
+          payload: {
+            sessionId: heldShift.sessionId,
+            shiftId: heldShift.id,
+            pointId: heldShift.pointId,
+            pointName: heldShift.point.name,
+            direction: heldShift.direction,
+            sessionStartsAt: heldShift.session.startsAt.toISOString(),
+            byUserName: target.user.name,
+            reason: 'member_removed',
+          },
         });
       }
 
@@ -179,6 +208,14 @@ export default async function memberRoutes(app: FastifyInstance) {
         targetEntity: 'team_member',
         targetId: params.userId,
         beforeState: { role: target.role },
+      });
+
+      await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'member_removed',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: params.userId, userName: target.user.name },
       });
     });
 

@@ -17,6 +17,7 @@ import healthRoutes from './routes/health';
 import inviteRoutes from './routes/invites';
 import memberPreferencesRoutes from './routes/member-preferences';
 import memberRoutes from './routes/members';
+import notificationRoutes from './routes/notifications';
 import notificationSettingsRoutes from './routes/notification-settings';
 import playerRoutes from './routes/players';
 import pushSubscriptionRoutes from './routes/push-subscriptions';
@@ -72,6 +73,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(coordinationSettingsRoutes);
   app.register(notificationSettingsRoutes);
   app.register(memberPreferencesRoutes);
+  app.register(notificationRoutes);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HttpError) {

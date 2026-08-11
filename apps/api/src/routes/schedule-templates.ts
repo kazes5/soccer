@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
+import { recordOutboxEvent } from '../lib/outbox';
 import { combineDateAndTime, generateOccurrences } from '../lib/recurrence';
 import { wallClockToInstant } from '../lib/timezone';
 import type { Prisma } from '../../generated/prisma/client';
@@ -165,6 +166,19 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         afterState: { recurrenceRule: template.recurrenceRule, sessionsCreated },
       });
 
+      await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'schedule_template_created',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          templateId: template.id,
+          defaultTime: template.defaultTime,
+          defaultFieldLocation: template.defaultFieldLocation,
+          sessionsCreated,
+        },
+      });
+
       return { template, sessionsCreated };
     });
 
@@ -294,6 +308,19 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
         afterState: {
           ...effective,
           collectionPointIds: points.map((point) => point.id),
+          sessionsCreated,
+        },
+      });
+
+      await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'schedule_template_updated',
+        category: 'shift_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: {
+          templateId: updated.id,
+          defaultTime: effective.defaultTime,
+          defaultFieldLocation: effective.defaultFieldLocation,
           sessionsCreated,
         },
       });

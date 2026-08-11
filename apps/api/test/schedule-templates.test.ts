@@ -92,6 +92,20 @@ describe('schedule templates', () => {
       where: { teamId, actionType: 'schedule_template_created' },
     });
     expect(auditEntries).toHaveLength(1);
+
+    const outboxEvents = await app.prisma.outboxEvent.findMany({
+      where: { teamId, eventType: 'schedule_template_created' },
+    });
+    expect(outboxEvents).toHaveLength(1);
+    expect(outboxEvents[0]).toMatchObject({
+      category: 'shift_changes',
+      recipientScope: 'team_broadcast',
+    });
+    expect(outboxEvents[0]?.payload).toMatchObject({
+      defaultTime: '18:00',
+      defaultFieldLocation: 'Central Field',
+      sessionsCreated: body.sessionsCreated,
+    });
   });
 
   it('accepts a duplicated (but otherwise valid) collection point id without falsely rejecting it', async () => {
@@ -470,6 +484,15 @@ describe('schedule templates', () => {
         where: { teamId, actionType: 'schedule_template_updated' },
       });
       expect(auditEntries).toHaveLength(1);
+
+      const outboxEvents = await app.prisma.outboxEvent.findMany({
+        where: { teamId, eventType: 'schedule_template_updated' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+      expect(outboxEvents[0]).toMatchObject({
+        category: 'shift_changes',
+        recipientScope: 'team_broadcast',
+      });
     });
 
     it('records a real before/after diff when only collectionPointIds changes (no other field)', async () => {

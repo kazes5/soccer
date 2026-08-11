@@ -106,8 +106,13 @@ describe('worker queue plumbing', () => {
 
     const counts = await reconcile(app.prisma, outboxQueue, scheduledTaskQueue);
 
-    expect(counts.outboxEvents).toBe(1);
-    expect(counts.scheduledTasks).toBe(1);
+    // reconcile() is deliberately global, not team-scoped (it runs once for
+    // the whole system at worker startup) — other tests running against the
+    // same shared dev database may have their own unprocessed rows in flight
+    // concurrently, so assert on this test's own specific ids rather than an
+    // exact total count.
+    expect(counts.outboxEvents).toBeGreaterThanOrEqual(1);
+    expect(counts.scheduledTasks).toBeGreaterThanOrEqual(1);
     expect(await outboxQueue.getJob(pending.id)).toBeDefined();
     expect(await outboxQueue.getJob(alreadyProcessed.id)).toBeUndefined();
     expect(await scheduledTaskQueue.getJob(pendingTask.id)).toBeDefined();
