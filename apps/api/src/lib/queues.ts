@@ -35,15 +35,59 @@ export function createScheduledTaskQueue(connection: IORedis): Queue<{ scheduled
   return new Queue(SCHEDULED_TASK_QUEUE_NAME, { connection: connection as ConnectionOptions });
 }
 
-export function enqueueOutboxEvent(queue: Queue<{ outboxEventId: string }>, outboxEventId: string) {
-  return queue.add('process', { outboxEventId }, { jobId: outboxEventId, ...RETRY_OPTIONS });
+/**
+ * `queue.add()` with a `jobId` that already exists in Redis — in *any*
+ * state, including a terminal `failed` one — is treated by BullMQ as a
+ * duplicate and returns the existing job without re-queuing it. A
+ * deterministic jobId alone is therefore only a no-op guard for jobs still
+ * pending/active; for a job that has exhausted its retries and landed in
+ * `failed`, calling `add()` again on worker restart would silently do
+ * nothing, leaving the row stuck until `removeOnFail`'s age-based cleanup
+ * finally clears the old job hash — up to 24h later, regardless of how many
+ * times the worker restarts.
+ *
+ * This checks the existing job's state first: `retry()` a failed one back
+ * onto the wait list, `remove()` a stray completed one (so the caller's
+ * fresh `add()` can proceed — this shouldn't normally happen, since a
+ * completed job implies the row's own terminal timestamp is already set),
+ * and leave anything still pending/active alone. Returns 'failed' or
+ * 'completed' if a terminal-state job existed, `null` if absent or still
+ * pending/active.
+ */
+async function terminalStateOf(
+  queue: Queue<{ outboxEventId: string } | { scheduledTaskId: string }>,
+  jobId: string,
+): Promise<'failed' | 'completed' | null> {
+  const existing = await queue.getJob(jobId);
+  if (!existing) return null;
+  const state = await existing.getState();
+  if (state === 'failed') {
+    await existing.retry('failed');
+    return 'failed';
+  }
+  if (state === 'completed') {
+    await existing.remove();
+    return 'completed';
+  }
+  return null;
 }
 
-export function enqueueScheduledTask(
+export async function enqueueOutboxEvent(
+  queue: Queue<{ outboxEventId: string }>,
+  outboxEventId: string,
+): Promise<void> {
+  const terminalState = await terminalStateOf(queue, outboxEventId);
+  if (terminalState === 'failed') return; // retry() above already revived it
+  await queue.add('process', { outboxEventId }, { jobId: outboxEventId, ...RETRY_OPTIONS });
+}
+
+export async function enqueueScheduledTask(
   queue: Queue<{ scheduledTaskId: string }>,
   scheduledTaskId: string,
   runAt: Date,
-) {
+): Promise<void> {
+  const terminalState = await terminalStateOf(queue, scheduledTaskId);
+  if (terminalState === 'failed') return; // retry() above already revived it
   const delay = Math.max(0, runAt.getTime() - Date.now());
-  return queue.add('run', { scheduledTaskId }, { jobId: scheduledTaskId, delay, ...RETRY_OPTIONS });
+  await queue.add('run', { scheduledTaskId }, { jobId: scheduledTaskId, delay, ...RETRY_OPTIONS });
 }

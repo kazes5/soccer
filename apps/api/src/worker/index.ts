@@ -16,6 +16,28 @@ import { reconcile } from './reconcile';
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+/**
+ * Runs `process`, and on failure best-effort records the attempt/error onto
+ * the row before rethrowing so BullMQ's own retry/backoff still applies —
+ * shared by both workers below, which otherwise differ only in which table
+ * they record onto.
+ */
+async function withAttemptTracking<T>(
+  process: () => Promise<T>,
+  recordFailure: (message: string) => Promise<unknown>,
+): Promise<T> {
+  try {
+    return await process();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await recordFailure(message).catch(() => {
+      // The row may already be gone (team deleted, cascade); the BullMQ
+      // retry/backoff below is what actually matters here.
+    });
+    throw error;
+  }
+}
+
 async function main() {
   const outboxQueue = createOutboxQueue(createRedisConnection());
   const scheduledTaskQueue = createScheduledTaskQueue(createRedisConnection());
@@ -27,46 +49,29 @@ async function main() {
 
   const outboxWorker = new Worker<{ outboxEventId: string }>(
     OUTBOX_QUEUE_NAME,
-    async (job) => {
-      try {
-        await processOutboxEvent(prisma, job.data.outboxEventId);
-      } catch (error) {
-        await prisma.outboxEvent
-          .update({
+    (job) =>
+      withAttemptTracking(
+        () => processOutboxEvent(prisma, job.data.outboxEventId),
+        (lastError) =>
+          prisma.outboxEvent.update({
             where: { id: job.data.outboxEventId },
-            data: {
-              attempts: { increment: 1 },
-              lastError: error instanceof Error ? error.message : String(error),
-            },
-          })
-          .catch(() => {
-            // The event may already be gone (team deleted, cascade); the
-            // BullMQ retry/backoff below is what actually matters here.
-          });
-        throw error;
-      }
-    },
+            data: { attempts: { increment: 1 }, lastError },
+          }),
+      ),
     { connection: createRedisConnection() },
   );
 
   const scheduledTaskWorker = new Worker<{ scheduledTaskId: string }>(
     SCHEDULED_TASK_QUEUE_NAME,
-    async (job) => {
-      try {
-        await processScheduledTask(prisma, job.data.scheduledTaskId);
-      } catch (error) {
-        await prisma.scheduledTask
-          .update({
+    (job) =>
+      withAttemptTracking(
+        () => processScheduledTask(prisma, job.data.scheduledTaskId),
+        (lastError) =>
+          prisma.scheduledTask.update({
             where: { id: job.data.scheduledTaskId },
-            data: {
-              attempts: { increment: 1 },
-              lastError: error instanceof Error ? error.message : String(error),
-            },
-          })
-          .catch(() => {});
-        throw error;
-      }
-    },
+            data: { attempts: { increment: 1 }, lastError },
+          }),
+      ),
     { connection: createRedisConnection() },
   );
 

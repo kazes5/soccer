@@ -26,17 +26,15 @@ export async function reconcile(
     where: { processedAt: null },
     select: { id: true },
   });
-  for (const event of pendingEvents) {
-    await enqueueOutboxEvent(outboxQueue, event.id);
-  }
+  await Promise.all(pendingEvents.map((event) => enqueueOutboxEvent(outboxQueue, event.id)));
 
   const pendingTasks = await prisma.scheduledTask.findMany({
     where: { completedAt: null, cancelledAt: null },
     select: { id: true, runAt: true },
   });
-  for (const task of pendingTasks) {
-    await enqueueScheduledTask(scheduledTaskQueue, task.id, task.runAt);
-  }
+  await Promise.all(
+    pendingTasks.map((task) => enqueueScheduledTask(scheduledTaskQueue, task.id, task.runAt)),
+  );
 
   return { outboxEvents: pendingEvents.length, scheduledTasks: pendingTasks.length };
 }
