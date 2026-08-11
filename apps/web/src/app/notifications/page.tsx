@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { describeNotification } from '@/lib/notifications';
+import { useNotificationStream } from '@/lib/use-notification-stream';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -133,6 +134,15 @@ function NotificationsWorkspace({ teamId, timeZone }: { teamId: string; timeZone
       .then(applyLoadResult)
       .catch(() => setLoadState('error'));
   }
+
+  const handleLiveNotification = useCallback((notification: Notification) => {
+    setNotifications((prev) => {
+      if (!prev || prev.some((n) => n.id === notification.id)) return prev;
+      return [notification, ...prev];
+    });
+    setUnreadCount((count) => count + 1);
+  }, []);
+  useNotificationStream(teamId, handleLiveNotification);
 
   async function handleLoadMore() {
     if (!nextCursor) return;
