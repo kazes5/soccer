@@ -25,9 +25,13 @@ pnpm db:seed
 ```
 
 The seed is intended for local development. It creates a sample `U-12 Wildcats`
-team, one admin, two parents, two players, two collection points, and a recurring
-schedule. It also creates a Hebrew demo team, Hebrew users and players, Hebrew
-collection-point names, and a recurring schedule for RTL testing.
+team, one admin, five parents, two players, two collection points, and a
+recurring schedule. It also creates a Hebrew demo team with the same shape
+(one admin, five parents, two players), Hebrew collection-point names, and a
+recurring schedule for RTL testing. Every seeded user gets a long-lived,
+seed-only invite so it can register a real passkey (see the tables below) —
+useful for manually testing behavior that needs several distinct logged-in
+users at once, such as live cross-tab notification delivery.
 
 ## Configuration
 
@@ -86,34 +90,50 @@ credential and can't be pre-seeded into the database. The seeded demo teams have
 data to look at (schedule, players, collection points), but none of the accounts
 have a registered passkey initially.
 
-| Demo user       | Role   | Phone           | Credential status                       |
-| --------------- | ------ | --------------- | --------------------------------------- |
-| English admin   | Admin  | `+15550000001`  | No password; passkey must be registered |
-| English parent  | Parent | `+15550000002`  | No password; passkey must be registered |
-| English parent  | Parent | `+15550000003`  | No password; passkey must be registered |
-| Hebrew admin    | Admin  | `+972501234567` | No password; passkey must be registered |
-| Hebrew parent 1 | Parent | `+972502345678` | No password; passkey must be registered |
-| Hebrew parent 2 | Parent | `+972503456789` | No password; passkey must be registered |
+| Demo user        | Role   | Phone           | Credential status                       |
+| ---------------- | ------ | --------------- | --------------------------------------- |
+| English admin    | Admin  | `+15550000001`  | No password; passkey must be registered |
+| English parent 1 | Parent | `+15550000002`  | No password; passkey must be registered |
+| English parent 2 | Parent | `+15550000003`  | No password; passkey must be registered |
+| English parent 3 | Parent | `+15550000004`  | No password; passkey must be registered |
+| English parent 4 | Parent | `+15550000005`  | No password; passkey must be registered |
+| English parent 5 | Parent | `+15550000006`  | No password; passkey must be registered |
+| Hebrew admin     | Admin  | `+972501234567` | No password; passkey must be registered |
+| Hebrew parent 1  | Parent | `+972502345678` | No password; passkey must be registered |
+| Hebrew parent 2  | Parent | `+972503456789` | No password; passkey must be registered |
+| Hebrew parent 3  | Parent | `+972504567890` | No password; passkey must be registered |
+| Hebrew parent 4  | Parent | `+972505678901` | No password; passkey must be registered |
+| Hebrew parent 5  | Parent | `+972506789012` | No password; passkey must be registered |
 
 To click through the logged-in app yourself, either create a new team at
-`/teams/new` or open one of the Hebrew demo invite links below. Each invite
-prompts you to register a real passkey on your device immediately afterward,
-using your platform's built-in authenticator (Face ID, Touch ID, Windows Hello)
-or a security key:
+`/teams/new` or open one of the demo invite links below. Each invite prompts
+you to register a real passkey on your device immediately afterward, using
+your platform's built-in authenticator (Face ID, Touch ID, Windows Hello) or a
+security key:
 
-| User            | Invite URL                                          |
-| --------------- | --------------------------------------------------- |
-| Hebrew admin    | `http://localhost:3000/invite/hebrew-admin-demo`    |
-| Hebrew parent 1 | `http://localhost:3000/invite/hebrew-parent-1-demo` |
-| Hebrew parent 2 | `http://localhost:3000/invite/hebrew-parent-2-demo` |
+| User             | Invite URL                                           |
+| ---------------- | ---------------------------------------------------- |
+| English admin    | `http://localhost:3000/invite/english-admin-demo`    |
+| English parent 1 | `http://localhost:3000/invite/english-parent-1-demo` |
+| English parent 2 | `http://localhost:3000/invite/english-parent-2-demo` |
+| English parent 3 | `http://localhost:3000/invite/english-parent-3-demo` |
+| English parent 4 | `http://localhost:3000/invite/english-parent-4-demo` |
+| English parent 5 | `http://localhost:3000/invite/english-parent-5-demo` |
+| Hebrew admin     | `http://localhost:3000/invite/hebrew-admin-demo`     |
+| Hebrew parent 1  | `http://localhost:3000/invite/hebrew-parent-1-demo`  |
+| Hebrew parent 2  | `http://localhost:3000/invite/hebrew-parent-2-demo`  |
+| Hebrew parent 3  | `http://localhost:3000/invite/hebrew-parent-3-demo`  |
+| Hebrew parent 4  | `http://localhost:3000/invite/hebrew-parent-4-demo`  |
+| Hebrew parent 5  | `http://localhost:3000/invite/hebrew-parent-5-demo`  |
 
 These seed-only invites use a far-future expiry and will not expire during local
 testing. Re-running `pnpm db:seed` resets them to `pending`, so you can repeat
 passkey onboarding. Use a separate browser profile or device for each user when
-testing multiple accounts. There is no vendor to configure; the real WebAuthn
-ceremony (`@simplewebauthn/server`) runs against
-`WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in `apps/api/.env`, defaulted for local
-development against `localhost`.
+testing multiple accounts — e.g. to watch a live notification/SSE update
+delivered to one logged-in user right after another user makes a change. There
+is no vendor to configure; the real WebAuthn ceremony (`@simplewebauthn/server`)
+runs against `WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in `apps/api/.env`, defaulted
+for local development against `localhost`.
 
 ## Database changes
 
