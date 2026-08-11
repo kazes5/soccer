@@ -1,4 +1,8 @@
-import { teamMemberListResponseSchema, updateMemberRoleRequestSchema } from '@soccer/contracts';
+import {
+  teamMemberListResponseSchema,
+  teamRosterResponseSchema,
+  updateMemberRoleRequestSchema,
+} from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
@@ -28,6 +32,28 @@ export default async function memberRoutes(app: FastifyInstance) {
         email: member.user.email,
         role: member.role,
         joinedAt: member.joinedAt.toISOString(),
+      })),
+    });
+  });
+
+  // Parent-readable roster: name + role only, no phone/email — see the
+  // schema's own doc comment for why this can't just reuse GET /members.
+  app.get('/teams/:teamId/roster', async (request) => {
+    const params = paramsSchema.parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
+
+    const members = await app.prisma.teamMember.findMany({
+      where: { teamId: params.teamId },
+      include: { user: { select: { name: true } } },
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    return teamRosterResponseSchema.parse({
+      members: members.map((member) => ({
+        userId: member.userId,
+        name: member.user.name,
+        role: member.role,
       })),
     });
   });

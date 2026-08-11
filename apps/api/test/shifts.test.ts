@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { generateSessionToken, hashSecret } from '../src/lib/crypto';
+import { futureMondayDateString } from './support/dates';
 
 describe('shifts', () => {
   const app = buildApp();
@@ -80,7 +81,7 @@ describe('shifts', () => {
       headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
-        startDate: '2026-08-10',
+        startDate: futureMondayDateString(1),
         defaultTime: '18:00',
         defaultFieldLocation: 'Central Field',
         horizonWeeks: 1,

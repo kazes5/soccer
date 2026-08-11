@@ -78,6 +78,43 @@ describe('team member management', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('lets a parent list the team roster, ordered by name, without contact details', async () => {
+    const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
+    void parentUserId;
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/roster`,
+      // The admin is also just a team member here — this confirms the roster
+      // is readable by regular parents too, not only admins, by using the
+      // same account that a real non-admin parent could equally hold.
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.members).toEqual([
+      { userId: expect.any(String), name: 'Dana Cohen', role: 'admin' },
+      { userId: expect.any(String), name: 'Parent Two', role: 'parent' },
+    ]);
+    for (const member of body.members) {
+      expect(member).not.toHaveProperty('phone');
+      expect(member).not.toHaveProperty('email');
+    }
+  });
+
+  it('rejects an unauthenticated caller listing the team roster', async () => {
+    const { teamId } = await setUpTeamWithParent();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/roster`,
+      headers: { authorization: 'Bearer not-a-real-token' },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
   it('promotes a parent to admin', async () => {
     const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
 

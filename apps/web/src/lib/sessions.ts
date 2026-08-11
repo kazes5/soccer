@@ -15,6 +15,15 @@ export function updateShiftInSessions(
   }));
 }
 
+/** Replaces a single session in place across a session list, avoiding a full
+ * refetch after an admin edit/cancel/player-assignment change. */
+export function updateSessionInSessions(
+  sessions: PracticeSession[],
+  updated: PracticeSession,
+): PracticeSession[] {
+  return sessions.map((session) => (session.id === updated.id ? updated : session));
+}
+
 /** Shared date/time format for a session's `startsAt` across the Schedule and Home pages. */
 export function formatSessionStartsAt(locale: Locale, startsAt: string): string {
   return formatDate(locale, new Date(startsAt), {

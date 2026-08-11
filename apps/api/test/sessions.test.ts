@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { futureMondayDateString, pastMondayDateString } from './support/dates';
 
 describe('sessions', () => {
   const app = buildApp();
@@ -13,7 +14,7 @@ describe('sessions', () => {
     createdUserIds.length = 0;
   });
 
-  async function setUpTeamWithSession() {
+  async function setUpTeamWithSession(startDate: string = futureMondayDateString(1)) {
     const teamResponse = await app.inject({
       method: 'POST',
       url: '/teams',
@@ -44,7 +45,7 @@ describe('sessions', () => {
       headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
-        startDate: '2026-08-10',
+        startDate,
         defaultTime: '18:00',
         defaultFieldLocation: 'Central Field',
         horizonWeeks: 1,
@@ -149,6 +150,64 @@ describe('sessions', () => {
       url: `/teams/${teamId}/sessions/${sessionId}`,
       headers: { authorization: `Bearer ${adminToken}` },
       payload: { fieldLocation: 'North Field' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('rejects editing a session that has already happened', async () => {
+    const { adminToken, teamId, sessionId } = await setUpTeamWithSession(pastMondayDateString(2));
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { fieldLocation: 'North Field' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('rejects cancelling a session that has already happened', async () => {
+    const { adminToken, teamId, sessionId } = await setUpTeamWithSession(pastMondayDateString(2));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/sessions/${sessionId}/cancel`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('rejects changing player assignments on a session that has already happened', async () => {
+    const { adminToken, teamId, sessionId, pointId, playerId } = await setUpTeamWithSession(
+      pastMondayDateString(2),
+    );
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}/points/${pointId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { direction: 'to_practice', playerIds: [playerId] },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('rejects changing player assignments on a cancelled session', async () => {
+    const { adminToken, teamId, sessionId, pointId, playerId } = await setUpTeamWithSession();
+
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/sessions/${sessionId}/cancel`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}/points/${pointId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { direction: 'to_practice', playerIds: [playerId] },
     });
 
     expect(response.statusCode).toBe(409);
