@@ -59,11 +59,14 @@ real reverse proxy that sets `X-Forwarded-For`.
 pnpm dev
 ```
 
-This starts the Next.js web app and Fastify API in watch mode. To run one app:
+This starts the Next.js web app, the Fastify API, and the notification worker
+(a separate process consuming BullMQ jobs — see `docs/architecture.md`) in
+watch mode. To run one at a time:
 
 ```bash
 pnpm --filter @soccer/web dev
 pnpm --filter @soccer/api dev
+pnpm --filter @soccer/api worker:dev
 ```
 
 Use `Ctrl-C` to stop the foreground processes. Stop the containers when they are

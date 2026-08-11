@@ -30,21 +30,24 @@ flowchart LR
     Browser --> Tokens[Shared UI tokens]
     API --> Prisma[Prisma data access]
     Prisma --> Postgres[(PostgreSQL)]
-    API -.-> Redis[(Redis, provisioned for planned jobs)]
+    API --> Redis[(Redis / BullMQ queues)]
+    Redis --> Worker[Notification worker process]
+    Worker --> Prisma
     API --> Audit[Audit log in PostgreSQL]
     API -.-> Provider[WebAuthn verifier interface]
 ```
 
 ### Applications and packages
 
-| Area       | Location             | Responsibility                                                                                 | Current state                                                                                               |
-| ---------- | -------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Web client | `apps/web`           | Next.js App Router pages, responsive UI, cookies/CSRF API client, English/Hebrew and RTL shell | Implemented for onboarding, home, and parent schedule flows                                                 |
-| API        | `apps/api`           | Fastify routes, authorization, validation, transactions, audit writes, Prisma integration      | Implemented for identity, membership, schedule, collection points, sessions, and atomic shift claim/release |
-| Contracts  | `packages/contracts` | Zod request/response schemas and shared domain types                                           | Implemented and tested                                                                                      |
-| i18n       | `packages/i18n`      | English/Hebrew messages, locale helpers, RTL direction, date/number helpers                    | Implemented; Hebrew copy still needs native-speaker review                                                  |
-| UI tokens  | `packages/ui-tokens` | Cross-platform semantic design tokens for status, focus, spacing, motion, and typography       | Implemented and tested                                                                                      |
-| Config     | `packages/config`    | Shared TypeScript and ESLint configuration                                                     | Implemented                                                                                                 |
+| Area                | Location              | Responsibility                                                                                                                                                                                                                               | Current state                                                                                                                                                                       |
+| ------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web client          | `apps/web`            | Next.js App Router pages, responsive UI, cookies/CSRF API client, English/Hebrew and RTL shell                                                                                                                                               | Implemented for onboarding, home, and parent schedule flows                                                                                                                         |
+| API                 | `apps/api`            | Fastify routes, authorization, validation, transactions, audit writes, Prisma integration                                                                                                                                                    | Implemented for identity, membership, schedule, collection points, sessions, and atomic shift claim/release                                                                         |
+| Notification worker | `apps/api/src/worker` | Separate long-running process (`pnpm --filter @soccer/api worker:dev`) consuming BullMQ jobs backed by `OutboxEvent`/`ScheduledTask` rows: recipient fan-out into `UserNotification`, in-app delivery, startup reconciliation, retry/backoff | Foundation implemented (schema, queues, idempotent processors, reconciliation) — no route yet writes an `OutboxEvent`, so nothing flows through it in production use. See ADR 0001. |
+| Contracts           | `packages/contracts`  | Zod request/response schemas and shared domain types                                                                                                                                                                                         | Implemented and tested                                                                                                                                                              |
+| i18n                | `packages/i18n`       | English/Hebrew messages, locale helpers, RTL direction, date/number helpers                                                                                                                                                                  | Implemented; Hebrew copy still needs native-speaker review                                                                                                                          |
+| UI tokens           | `packages/ui-tokens`  | Cross-platform semantic design tokens for status, focus, spacing, motion, and typography                                                                                                                                                     | Implemented and tested                                                                                                                                                              |
+| Config              | `packages/config`     | Shared TypeScript and ESLint configuration                                                                                                                                                                                                   | Implemented                                                                                                                                                                         |
 
 ## Runtime boundaries
 
@@ -168,10 +171,12 @@ an older request winning after a release-and-reclaim cycle.
 
 The following are target capabilities, not current runtime behavior:
 
-- Add Swap, Notifications, Reminders, Escalations, Reporting, and AI modules to
-  the same modular API process.
-- Add a transactional outbox and Redis/BullMQ workers for retries, scheduled
-  reminders, swap expiry, escalation processing, and notification fan-out.
+- Add Swap, Reminders, Escalations, Reporting, and AI modules to the same
+  modular API process. The transactional-outbox/BullMQ-worker foundation
+  itself is implemented (see the Notification worker row above and ADR 0001)
+  — retrofitting every mutating route to write an `OutboxEvent`, the in-app
+  notification center, real-time SSE delivery, and scheduled
+  reminders/escalation are still planned, landing incrementally.
 - Deliver browser push and in-app notifications through provider adapters, with
   optional email/SMS channels after the hosting/provider decisions are made.
 - Add admin UI for schedule templates, collection points, roster assignment,

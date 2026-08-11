@@ -7,7 +7,7 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "concurrently -n web,api -c blue,green \"pnpm --filter @soccer/web dev\" \"pnpm --filter @soccer/api dev\"",
+    "dev": "concurrently -n web,api,worker -c blue,green,magenta \"pnpm --filter @soccer/web dev\" \"pnpm --filter @soccer/api dev\" \"pnpm --filter @soccer/api worker:dev\"",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",

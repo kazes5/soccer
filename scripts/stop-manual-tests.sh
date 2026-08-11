@@ -36,6 +36,7 @@ stop_process_group() {
 
 stop_process_group "$STATE_DIR/api.pid" "API dev server"
 stop_process_group "$STATE_DIR/web.pid" "web dev server"
+stop_process_group "$STATE_DIR/worker.pid" "notification worker"
 
 if [ -f "$STATE_DIR/docker-was-running" ]; then
   echo "==> Postgres/Redis were already running before the test session — leaving them up."
