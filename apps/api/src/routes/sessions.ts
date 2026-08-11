@@ -25,6 +25,15 @@ const listQuerySchema = z.object({
 
 type SessionWithRelations = Awaited<ReturnType<typeof loadSession>>;
 
+/** A session becomes a read-only historical record once its start time has passed —
+ * whether or not anything ever flipped its status to `completed` (nothing does yet;
+ * see PLAN.md's Stage 3 note). Reused by every mutating session endpoint below. */
+function assertSessionNotPast(startsAt: Date, message: string) {
+  if (startsAt.getTime() <= Date.now()) {
+    throw new HttpError(409, message);
+  }
+}
+
 async function loadSession(prisma: FastifyInstance['prisma'], sessionId: string) {
   return prisma.practiceSession.findUnique({
     where: { id: sessionId },
@@ -115,6 +124,10 @@ export default async function sessionRoutes(app: FastifyInstance) {
     if (existing.status !== 'scheduled') {
       throw new HttpError(409, 'Only a scheduled, upcoming session can be edited.');
     }
+    assertSessionNotPast(
+      existing.startsAt,
+      'This session has already happened and can no longer be edited.',
+    );
 
     const session = await app.prisma.$transaction(async (tx) => {
       const updated = await tx.practiceSession.update({
@@ -157,6 +170,10 @@ export default async function sessionRoutes(app: FastifyInstance) {
     if (existing.status === 'cancelled') {
       throw new HttpError(409, 'This session is already cancelled.');
     }
+    assertSessionNotPast(
+      existing.startsAt,
+      'This session has already happened and can no longer be cancelled.',
+    );
 
     const session = await app.prisma.$transaction(async (tx) => {
       const updated = await tx.practiceSession.update({
@@ -203,6 +220,16 @@ export default async function sessionRoutes(app: FastifyInstance) {
     if (!assignment || assignment.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Session collection-point assignment not found.');
     }
+    if (assignment.session.status !== 'scheduled') {
+      throw new HttpError(
+        409,
+        "Only a scheduled, upcoming session's player assignments can be changed.",
+      );
+    }
+    assertSessionNotPast(
+      assignment.session.startsAt,
+      'This session has already happened and its player assignments can no longer be changed.',
+    );
 
     if (body.playerIds.length > 0) {
       const validPlayerCount = await app.prisma.player.count({

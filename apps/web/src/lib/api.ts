@@ -16,12 +16,17 @@ import {
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
+  type PlayerListResponse,
+  type PracticeSession,
   type ScheduleTemplateListResponse,
   type SessionListResponse,
   type ShiftStatsResponse,
   type ShiftSummary,
+  type TeamRosterResponse,
   type UpdateScheduleTemplateRequest,
   type UpdateScheduleTemplateResponse,
+  type UpdateSessionPointPlayersRequest,
+  type UpdateSessionRequest,
   acceptInviteResponseSchema,
   authSessionResponseSchema,
   collectionPointListResponseSchema,
@@ -32,10 +37,13 @@ import {
   invitePreviewSchema,
   inviteSummarySchema,
   passkeyChallengeResponseSchema,
+  playerListResponseSchema,
+  practiceSessionSchema,
   scheduleTemplateListResponseSchema,
   sessionListResponseSchema,
   shiftStatsResponseSchema,
   shiftSummarySchema,
+  teamRosterResponseSchema,
   updateScheduleTemplateResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
@@ -248,4 +256,37 @@ export const api = {
       `/teams/${encodeURIComponent(teamId)}/schedule-templates/${encodeURIComponent(templateId)}`,
       { method: 'PATCH', body, responseSchema: updateScheduleTemplateResponseSchema },
     ),
+
+  updateSession: (teamId: string, sessionId: string, body: UpdateSessionRequest) =>
+    request<PracticeSession>(
+      `/teams/${encodeURIComponent(teamId)}/sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'PATCH', body, responseSchema: practiceSessionSchema },
+    ),
+
+  cancelSession: (teamId: string, sessionId: string) =>
+    request<PracticeSession>(
+      `/teams/${encodeURIComponent(teamId)}/sessions/${encodeURIComponent(sessionId)}/cancel`,
+      { method: 'POST', responseSchema: practiceSessionSchema },
+    ),
+
+  updateSessionPointPlayers: (
+    teamId: string,
+    sessionId: string,
+    pointId: string,
+    body: UpdateSessionPointPlayersRequest,
+  ) =>
+    request<PracticeSession>(
+      `/teams/${encodeURIComponent(teamId)}/sessions/${encodeURIComponent(sessionId)}/points/${encodeURIComponent(pointId)}`,
+      { method: 'PATCH', body, responseSchema: practiceSessionSchema },
+    ),
+
+  listPlayers: (teamId: string) =>
+    request<PlayerListResponse>(`/teams/${encodeURIComponent(teamId)}/players`, {
+      responseSchema: playerListResponseSchema,
+    }),
+
+  listTeamRoster: (teamId: string) =>
+    request<TeamRosterResponse>(`/teams/${encodeURIComponent(teamId)}/roster`, {
+      responseSchema: teamRosterResponseSchema,
+    }),
 };
