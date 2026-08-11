@@ -17,3 +17,15 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
 export const shiftStatusSchema = z.enum(['open', 'claimed', 'pending_swap']);
 export type ShiftStatus = z.infer<typeof shiftStatusSchema>;
+
+export const notificationCategorySchema = z.enum([
+  'shift_changes',
+  'swaps',
+  'reminders',
+  'escalations',
+  'admin_changes',
+]);
+export type NotificationCategory = z.infer<typeof notificationCategorySchema>;
+
+export const notificationChannelSchema = z.enum(['push', 'sms', 'email']);
+export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
