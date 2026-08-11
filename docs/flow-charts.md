@@ -1,6 +1,9 @@
 # Admin and User Flow Charts
 
-This guide summarizes the currently shipped web MVP flows as Mermaid diagrams.
+This guide summarizes the currently shipped web MVP flows as separate Mermaid
+diagrams. Each chart covers one focused journey so it can be read, reviewed,
+and updated independently.
+
 It complements [user-guide.md](./user-guide.md): that guide explains the same
 behavior in prose, while this page shows the route and decision flow at a
 glance.
@@ -8,130 +11,146 @@ glance.
 For this document, **user** means a non-admin team member in the current MVP,
 which is typically a **parent**.
 
-## Admin flow
+## Admin creates a team
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B{New admin<br/>or returning admin?}
-
-    B -->|New admin| C[Open teams/new]
-    C --> D[Enter team, season, name, and phone]
-    D --> E[Submit create-team form]
-    E --> F[API creates team and signs admin in]
-    F --> G{Passkey setup succeeds?}
-    G -->|No| H[Stay on passkey retry screen]
-    H --> G
-    G -->|Yes| I[Land on home]
-
-    B -->|Returning admin| J[Open login]
-    J --> K[Enter phone or email]
-    K --> L[Complete passkey login]
-    L --> M{Login succeeds?}
-    M -->|No| N[Show error and retry login]
-    N --> J
-    M -->|Yes| I
-
-    I --> O{Belongs to multiple teams?}
-    O -->|Yes| P[Choose active team]
-    O -->|No| Q[Use default team]
-    P --> R[Review Home workspace]
-    Q --> R
-
-    R --> S{Need to invite a parent?}
-    S -->|Yes| T[Use invite form on `/home`]
-    T --> U[Copy generated invite link]
-    U --> V[Send link through the team's communication channel]
-    V --> W[Continue in Home or Schedule]
-    S -->|No| W
-
-    W --> X[Open schedule when needed]
-    X --> Y[Review sessions and shift status]
-    Y --> Z{Claim or release a shift?}
-    Z -->|Claim open shift| AA[Shift becomes assigned to admin]
-    Z -->|Release own shift| AB[Shift becomes open again]
-    Z -->|No| AC[Keep browsing]
-    AA --> AD{Conflict returned?}
-    AB --> AE{Conflict returned?}
-    AD -->|Yes| AF[Show conflict toast and refresh]
-    AD -->|No| AC
-    AE -->|Yes| AF
-    AE -->|No| AC
-    AF --> AC
-
-    AC --> AG{Log out?}
-    AG -->|Yes| AH[Open log-out confirmation]
-    AH --> AI[Session is revoked]
-    AI --> AJ([End])
-    AG -->|No| W
+    A([Start]) --> B[Open `/teams/new`]
+    B --> C[Enter team, season, name, and phone or email]
+    C --> D[Submit create-team form]
+    D --> E[API creates team and signs admin in]
+    E --> F{Passkey setup succeeds?}
+    F -->|No| G[Stay on passkey retry screen]
+    G --> F
+    F -->|Yes| H[Land on Home]
+    H --> I([Continue to team and Home flow])
 ```
 
-## User flow
+## User accepts an invite
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B{First-time join<br/>or returning user?}
+    A([Start]) --> B[Receive invite link from an admin]
+    B --> C[Open `/invite/[code]`]
+    C --> D{Invite exists and is still pending?}
+    D -->|No| E[Show invalid or expired state]
+    E --> F[Ask admin for a new invite]
+    F --> G([End])
+    D -->|Yes| H[Review team preview]
+    H --> I[Enter name and optional linked players]
+    I --> J[Submit join-team form]
+    J --> K[API accepts invite and creates or links membership]
+    K --> L{Passkey setup succeeds?}
+    L -->|No| M[Stay on passkey retry screen]
+    M --> L
+    L -->|Yes| N[Land on Home]
+    N --> O([Continue to team and Home flow])
+```
 
-    B -->|First-time join| C[Receive invite link from admin]
-    C --> D[Open invite link]
-    D --> E{Invite exists and is still pending?}
-    E -->|No| F[Show invalid or expired state]
-    F --> G[Ask admin for a new invite]
-    G --> H([End])
-    E -->|Yes| I[Review team preview]
-    I --> J[Enter name and optional linked players]
-    J --> K[Submit join-team form]
-    K --> L[API accepts invite and creates or links membership]
-    L --> M{Passkey setup succeeds?}
-    M -->|No| N[Stay on passkey retry screen]
-    N --> M
-    M -->|Yes| O[Land on home]
+## User signs in with a passkey
 
-    B -->|Returning user| P[Open login]
-    P --> Q[Enter phone or email]
-    Q --> R[Complete passkey login]
-    R --> S{Login succeeds?}
-    S -->|No| T[Show error and retry login]
-    T --> P
-    S -->|Yes| O
+```mermaid
+flowchart TD
+    A([Start]) --> B[Open `/login`]
+    B --> C[Enter phone or email]
+    C --> D[Start passkey login]
+    D --> E{Login succeeds?}
+    E -->|No| F[Show error and retry login]
+    F --> B
+    E -->|Yes| G[Receive authenticated session]
+    G --> H[Land on Home]
+    H --> I([Continue to team and Home flow])
+```
 
-    O --> U{Belongs to multiple teams?}
-    U -->|Yes| V[Choose active team]
-    U -->|No| W[Use default team]
-    V --> X[Review Home workspace]
-    W --> X
+## User selects a team and reviews Home
 
-    X --> Y{Need a shift now?}
-    Y -->|Yes| Z[Claim from Home help-needed list or open schedule]
-    Y -->|No| AA[Review upcoming assignments and stats]
-    Z --> AB[Select Claim on an open shift]
-    AB --> AC{Claim succeeds?}
-    AC -->|No, someone else claimed first| AD[Show conflict toast and refresh]
-    AC -->|Yes| AE[Shift now appears as assigned to you]
-    AD --> AF[Keep browsing schedule]
-    AE --> AG{Release later?}
-    AG -->|Yes| AH[Select Release on your shift]
-    AH --> AI{Release succeeds?}
-    AI -->|No| AJ[Show release conflict and refresh]
-    AI -->|Yes| AK[Shift becomes open again]
-    AJ --> AF
-    AK --> AF
-    AG -->|No| AF
-    AA --> AF
+```mermaid
+flowchart TD
+    A([Authenticated user]) --> B{Belongs to multiple teams?}
+    B -->|Yes| C[Choose active team with the team switcher]
+    B -->|No| D[Use the default team]
+    C --> E[Load Home workspace for active team]
+    D --> E
+    E --> F[Review next action, assignments, help-needed shifts, and stats]
+    F --> G{Open another destination?}
+    G -->|Schedule| H[Open `/schedule`]
+    G -->|Admin screen| I[Open the selected admin destination]
+    G -->|Stay on Home| F
+    H --> J([Continue to schedule flow])
+    I --> K([Continue to admin management flow])
+```
 
-    AF --> AL{Log out?}
-    AL -->|Yes| AM[Open log-out confirmation]
-    AM --> AN[Session is revoked]
-    AN --> AO([End])
-    AL -->|No| X
+## Admin manages schedule data
+
+```mermaid
+flowchart TD
+    A([Admin on Home]) --> B{What needs changing?}
+    B -->|Collection point| C[Open `/admin/collection-points`]
+    C --> D[Create, edit, or delete a collection point]
+    D --> E{Validation or scheduled-shift conflict?}
+    E -->|Yes| F[Show error and keep current data]
+    F --> C
+    E -->|No| G[Save change and update the list]
+    B -->|Schedule template| H[Open `/admin/schedule-templates`]
+    H --> I[Create or edit recurrence, time, location, and points]
+    I --> J[Generate or preserve future sessions as allowed]
+    J --> K[Show saved template and session count]
+    B -->|Individual session| L[Open `/schedule`]
+    L --> M[Edit time or location, manage players, or cancel]
+    M --> N{Session is historical?}
+    N -->|Yes| O[Keep controls read-only]
+    N -->|No| P[Save change or confirm cancellation]
+    G --> Q([Return to admin navigation])
+    K --> Q
+    O --> Q
+    P --> Q
+```
+
+## User claims or releases a shift
+
+```mermaid
+flowchart TD
+    A([User on Home or Schedule]) --> B{Need a shift now?}
+    B -->|No| C[Review upcoming assignments and stats]
+    C --> D([Continue browsing])
+    B -->|Yes| E[Select an open shift]
+    E --> F[Submit Claim]
+    F --> G{Claim succeeds?}
+    G -->|No, another user won the race| H[Show conflict toast and refresh canonical state]
+    H --> D
+    G -->|Yes| I[Shift becomes assigned to the user]
+    I --> J{Release later?}
+    J -->|No| D
+    J -->|Yes| K[Select Release on the assigned shift]
+    K --> L{Release succeeds?}
+    L -->|No| M[Show release conflict and refresh canonical state]
+    M --> D
+    L -->|Yes| N[Shift becomes open again]
+    N --> D
+```
+
+## User logs out
+
+```mermaid
+flowchart TD
+    A([Authenticated user]) --> B[Choose Log out]
+    B --> C[Open confirmation dialog]
+    C --> D{Confirm logout?}
+    D -->|No| E[Close dialog and remain on current page]
+    E --> F([Continue current flow])
+    D -->|Yes| G[API revokes the session and clears cookies]
+    G --> H[Redirect to `/login`]
+    H --> I([End])
 ```
 
 ## Notes
 
-- Role is scoped per team. The same person can be an admin in one team and a
-  parent in another.
+- The team and Home flow is shared by admins and parents; available admin
+  destinations are determined by the active membership role.
 - A returning user with an already registered passkey uses `/login`; a first
   join from an invite uses `/invite/[code]`.
-- Current admin-only web UI is limited to team creation, invite generation from
-  `/home`, and any shared shift claim/release actions already available to all
-  members. Full admin schedule, roster, and member-management screens are still
-  planned rather than shipped.
+- A user can claim or release each direction independently. The API remains
+  authoritative when concurrent actions produce a conflict.
+- Current admin UI covers collection points, schedule templates, individual
+  session management, team invites, and shared shift actions. Future admin
+  operations remain tracked in [PLAN.md](../PLAN.md).
