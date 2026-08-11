@@ -30,7 +30,7 @@ export function Tooltip({ label, children }: TooltipProps) {
       <span
         role="tooltip"
         id={id}
-        className={`pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface shadow-raised transition-opacity duration-150 ${
+        className={`pointer-events-none absolute end-0 top-full z-20 mt-1.5 w-max max-w-36 text-end rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface shadow-raised transition-opacity duration-150 ${
           visible ? 'opacity-100' : 'opacity-0'
         }`}
       >
