@@ -17,6 +17,10 @@ export interface RecordOutboxEventInput {
   severity?: NotificationSeverity;
   payload: Prisma.InputJsonValue;
   recipientScope: RecipientScopeInput;
+  /** The acting user, if any — gets the in-app record like every other
+   *  recipient but no redundant push about their own action. See the
+   *  `OutboxEvent.actorId` doc comment in schema.prisma. */
+  actorId?: string;
 }
 
 /**
@@ -34,6 +38,7 @@ export function recordOutboxEvent(
       eventType: input.eventType,
       category: input.category,
       severity: input.severity ?? 'normal',
+      actorId: input.actorId ?? null,
       payload: input.payload,
       recipientScope: input.recipientScope.type,
       participantUserIds:

@@ -10,6 +10,7 @@ import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort } from '../lib/queues';
+import { resolveSwapRequestOutcome, swapRequestInclude } from '../lib/swap-requests';
 
 const paramsSchema = z.object({ teamId: z.string().uuid() });
 const memberParamsSchema = z.object({ teamId: z.string().uuid(), userId: z.string().uuid() });
@@ -146,6 +147,30 @@ export default async function memberRoutes(app: FastifyInstance) {
       await tx.teamMember.delete({
         where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
       });
+
+      // Any open swaps involving them (as requester or holder) are
+      // cancelled, per CLAUDE.md §4.2 — resolved *before* the held-shift
+      // release below, since a shift with a pending swap sits in
+      // `pending_swap`, not `claimed`, and only reverts to `claimed` once
+      // its swap is resolved; the release query right after this one only
+      // matches `claimed` shifts.
+      const pendingSwaps = await tx.swapRequest.findMany({
+        where: {
+          teamId: params.teamId,
+          status: 'pending',
+          OR: [{ requestingUserId: params.userId }, { currentHolderId: params.userId }],
+        },
+        include: swapRequestInclude,
+      });
+      for (const pendingSwap of pendingSwaps) {
+        const swapOutboxEventId = await resolveSwapRequestOutcome(
+          tx,
+          pendingSwap,
+          'cancelled',
+          currentUser.id,
+        );
+        eventIds.push(swapOutboxEventId);
+      }
 
       // Any shifts they held on this team are returned to open, per CLAUDE.md
       // §4.2 — otherwise a removed user's login is revoked and the shift can

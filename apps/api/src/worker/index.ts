@@ -74,7 +74,7 @@ async function main() {
     SCHEDULED_TASK_QUEUE_NAME,
     (job) =>
       withAttemptTracking(
-        () => processScheduledTask(prisma, job.data.scheduledTaskId),
+        () => processScheduledTask(prisma, job.data.scheduledTaskId, outboxQueue),
         (lastError) =>
           prisma.scheduledTask.update({
             where: { id: job.data.scheduledTaskId },

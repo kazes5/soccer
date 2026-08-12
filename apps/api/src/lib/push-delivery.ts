@@ -85,6 +85,12 @@ async function deliverToRecipient(
   webPush: WebPushProvider,
   now: Date,
 ): Promise<void> {
+  // The actor already knows what they just did — the in-app record (already
+  // written by processOutboxEvent before this runs) is enough; a push would
+  // just be a redundant self-notification. See OutboxEvent.actorId's doc
+  // comment in schema.prisma.
+  if (event.actorId && event.actorId === notification.userId) return;
+
   const subscriptions = await prisma.pushSubscription.findMany({
     where: { userId: notification.userId },
   });

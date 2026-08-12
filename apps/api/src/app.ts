@@ -25,6 +25,7 @@ import pushSubscriptionRoutes from './routes/push-subscriptions';
 import scheduleTemplateRoutes from './routes/schedule-templates';
 import sessionRoutes from './routes/sessions';
 import shiftRoutes from './routes/shifts';
+import swapRequestRoutes from './routes/swap-requests';
 import teamRoutes from './routes/teams';
 
 declare module 'fastify' {
@@ -85,6 +86,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(scheduleTemplateRoutes);
   app.register(sessionRoutes);
   app.register(shiftRoutes);
+  app.register(swapRequestRoutes);
   app.register(coordinationSettingsRoutes);
   app.register(notificationSettingsRoutes);
   app.register(memberPreferencesRoutes);
