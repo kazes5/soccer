@@ -1,6 +1,8 @@
 import type IORedis from 'ioredis';
 import type { OutboxEvent, Prisma, PrismaClient } from '../../../generated/prisma/client';
 import { publishNotificationFanoutBestEffort } from '../../lib/notification-bus';
+import { deliverPushNotifications } from '../../lib/push-delivery';
+import type { WebPushProvider } from '../../lib/web-push';
 
 async function resolveRecipientIds(prisma: PrismaClient, event: OutboxEvent): Promise<string[]> {
   switch (event.recipientScope) {
@@ -34,11 +36,16 @@ async function resolveRecipientIds(prisma: PrismaClient, event: OutboxEvent): Pr
  * makes delivery eventually-consistent even with no publisher at all, which
  * is what every existing caller of this function (worker/reconcile tests)
  * relies on by omitting it.
+ *
+ * `webPush`, if given, is handed to `deliverPushNotifications` after the
+ * same commit — also optional and never required for existing callers, and
+ * a no-op by itself if its VAPID config is unset (see `web-push.ts`).
  */
 export async function processOutboxEvent(
   prisma: PrismaClient,
   outboxEventId: string,
   publisher?: IORedis,
+  webPush?: WebPushProvider,
 ): Promise<void> {
   const event = await prisma.outboxEvent.findUnique({ where: { id: outboxEventId } });
   if (!event || event.processedAt) return;
@@ -83,5 +90,9 @@ export async function processOutboxEvent(
       teamId: event.teamId,
       userIds: recipientIds,
     });
+  }
+
+  if (recipientIds.length > 0 && webPush) {
+    await deliverPushNotifications(prisma, event, webPush);
   }
 }
