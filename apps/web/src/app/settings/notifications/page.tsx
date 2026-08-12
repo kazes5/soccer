@@ -18,6 +18,7 @@ import {
   FormError,
   buttonClassName,
   inputClassName,
+  secondaryButtonClassName,
 } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { IconButton } from '@/components/ui/icon-button';
@@ -27,6 +28,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { disablePush, enablePush, getPushStatus, type PushStatus } from '@/lib/push';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 
 export default function NotificationPreferencesPage() {
@@ -371,6 +373,113 @@ function PreferencesForm({
       <button type="submit" disabled={isSubmitting} className={`${buttonClassName} self-end`}>
         {isSubmitting ? t('settingsNotifications.saving') : t('settingsNotifications.save')}
       </button>
+
+      <PushNotificationSection />
     </form>
+  );
+}
+
+/**
+ * A separate, immediate-action section, not part of the form's own Save
+ * flow — enabling/disabling push happens on click (each requiring its own
+ * browser permission prompt / service-worker round trip), not batched with
+ * the category/quiet-hours preferences above. `type="button"` throughout so
+ * neither action submits the surrounding form.
+ */
+function PushNotificationSection() {
+  const { t } = useLocale();
+  const [status, setStatus] = useState<PushStatus | 'loading'>('loading');
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPushStatus()
+      .then((result) => {
+        if (!cancelled) setStatus(result);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('unsupported');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleEnable() {
+    setError(null);
+    setIsPending(true);
+    try {
+      await enablePush();
+      setStatus('subscribed');
+    } catch {
+      setError(t('settingsNotifications.pushError'));
+      setStatus(await getPushStatus());
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function handleDisable() {
+    setError(null);
+    setIsPending(true);
+    try {
+      await disablePush();
+      setStatus('granted-not-subscribed');
+    } catch {
+      setError(t('settingsNotifications.pushError'));
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  if (status === 'loading') return null;
+
+  return (
+    <fieldset className="flex flex-col gap-3 border-t border-surface-border pt-6">
+      <legend className="text-sm font-semibold text-ink">
+        {t('settingsNotifications.pushSectionTitle')}
+      </legend>
+
+      {status === 'unsupported' && (
+        <p className="text-sm text-ink-muted">{t('settingsNotifications.pushNotSupported')}</p>
+      )}
+      {status === 'denied' && (
+        <p className="text-sm text-ink-muted">{t('settingsNotifications.pushBlocked')}</p>
+      )}
+      {status === 'subscribed' && (
+        <>
+          <p className="text-sm text-ink-muted">{t('settingsNotifications.pushEnabledOnDevice')}</p>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleDisable}
+            className={`${secondaryButtonClassName} self-start`}
+          >
+            {isPending
+              ? t('settingsNotifications.pushDisabling')
+              : t('settingsNotifications.disablePushButton')}
+          </button>
+        </>
+      )}
+      {(status === 'default' || status === 'granted-not-subscribed') && (
+        <>
+          <p className="text-sm text-ink-muted">
+            {t('settingsNotifications.pushNotEnabledOnDevice')}
+          </p>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleEnable}
+            className={`${buttonClassName} self-start`}
+          >
+            {isPending
+              ? t('settingsNotifications.pushEnabling')
+              : t('settingsNotifications.enablePushButton')}
+          </button>
+        </>
+      )}
+      {error && <FormError>{error}</FormError>}
+    </fieldset>
   );
 }

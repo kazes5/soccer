@@ -1,6 +1,7 @@
 import type { MemberNotificationPreferences, TeamNotificationSettings } from '@soccer/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
+import { disablePush, enablePush, getPushStatus } from '@/lib/push';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import NotificationPreferencesPage from './page';
 
@@ -25,6 +26,12 @@ vi.mock('@/lib/api', async (importOriginal) => {
     },
   };
 });
+
+vi.mock('@/lib/push', () => ({
+  getPushStatus: vi.fn(),
+  enablePush: vi.fn(),
+  disablePush: vi.fn(),
+}));
 
 const user = {
   user: {
@@ -71,6 +78,9 @@ describe('NotificationPreferencesPage', () => {
     vi.mocked(api.getMemberPreferences).mockReset();
     vi.mocked(api.updateMemberPreferences).mockReset();
     vi.mocked(api.getNotificationSettings).mockReset();
+    vi.mocked(getPushStatus).mockReset().mockResolvedValue('unsupported');
+    vi.mocked(enablePush).mockReset();
+    vi.mocked(disablePush).mockReset();
   });
 
   it('redirects to /login when the session lookup fails', async () => {
@@ -149,5 +159,71 @@ describe('NotificationPreferencesPage', () => {
         }),
       ),
     );
+  });
+
+  it('shows an unsupported message and no button when the browser lacks push support', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(getPushStatus).mockResolvedValue('unsupported');
+
+    renderWithProviders(<NotificationPreferencesPage />);
+
+    expect(
+      await screen.findByText('Push notifications are not supported in this browser.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Enable push notifications on this device' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lets a parent enable push notifications', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(getPushStatus).mockResolvedValue('default');
+    vi.mocked(enablePush).mockResolvedValue(undefined);
+
+    renderWithProviders(<NotificationPreferencesPage />);
+    const button = await screen.findByRole('button', {
+      name: 'Enable push notifications on this device',
+    });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(enablePush).toHaveBeenCalled());
+    expect(await screen.findByText('Enabled on this device')).toBeInTheDocument();
+  });
+
+  it('lets a parent disable push notifications once subscribed', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(getPushStatus).mockResolvedValue('subscribed');
+    vi.mocked(disablePush).mockResolvedValue(undefined);
+
+    renderWithProviders(<NotificationPreferencesPage />);
+    const button = await screen.findByRole('button', { name: 'Disable on this device' });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(disablePush).toHaveBeenCalled());
+    expect(await screen.findByText('Not enabled on this device')).toBeInTheDocument();
+  });
+
+  it('shows an error message when enabling push fails', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(getPushStatus).mockResolvedValue('default');
+    vi.mocked(enablePush).mockRejectedValue(new Error('permission denied'));
+
+    renderWithProviders(<NotificationPreferencesPage />);
+    const button = await screen.findByRole('button', {
+      name: 'Enable push notifications on this device',
+    });
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByText("Couldn't update push notifications on this device."),
+    ).toBeInTheDocument();
   });
 });
