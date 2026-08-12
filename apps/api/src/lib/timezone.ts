@@ -58,3 +58,31 @@ export function localDateTimeToInstant(date: string, time: string, timeZone: str
   }
   return dt.toJSDate();
 }
+
+function minutesSinceMidnight(time: string): number {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * True if `instant`, expressed in `timeZone`'s wall-clock time, falls inside
+ * the `[start, end)` quiet-hours window — used to gate browser push per ADR
+ * 0001 ("except emergency events, which bypass... quiet hours"). Handles a
+ * window that spans midnight (the documented default, 22:00-07:00) the same
+ * way as one that doesn't: `start === end` is treated as never-quiet (a
+ * zero-length window can't usefully mean "always quiet").
+ */
+export function isWithinQuietHours(
+  instant: Date,
+  timeZone: string,
+  start: string,
+  end: string,
+): boolean {
+  const nowMinutes = minutesSinceMidnight(instantToWallClock(instant, timeZone).time);
+  const startMinutes = minutesSinceMidnight(start);
+  const endMinutes = minutesSinceMidnight(end);
+
+  if (startMinutes === endMinutes) return false;
+  if (startMinutes < endMinutes) return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+  return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+}

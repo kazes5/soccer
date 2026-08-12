@@ -26,6 +26,16 @@ const envSchema = z.object({
   // so this only bounds request volume/enumeration on the unauthenticated login-options
   // endpoint, not a guessable-secret attack.
   WEBAUTHN_LOGIN_MAX_REQUESTS_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(20),
+  // VAPID identifies this server to browser push services (no vendor account needed, unlike
+  // FCM/APNs — it's a self-generated keypair, `pnpm exec web-push generate-vapid-keys`). All
+  // three are optional and travel together: browser push is simply unavailable (the config
+  // route reports no public key, and the worker skips push delivery with one log line) when
+  // any is unset, so local dev and CI never need real keys just to run the app or test suite.
+  VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+  // A contact URI push services may use to reach the sender about this key pair — conventionally
+  // `mailto:` per the Web Push protocol (RFC 8292), though an `https://` contact page also works.
+  VAPID_SUBJECT: z.string().min(1).optional(),
 });
 
 export const env = envSchema.parse(process.env);

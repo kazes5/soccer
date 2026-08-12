@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   instantToWallClock,
   isValidTimeZone,
+  isWithinQuietHours,
   localDateTimeToInstant,
   wallClockToInstant,
 } from './timezone';
@@ -126,5 +127,35 @@ describe('DST boundary (Asia/Jerusalem)', () => {
     expect(instantToWallClock(afterInstant, 'Asia/Jerusalem').time).toBe('18:00');
     const hoursApart = (afterInstant.getTime() - beforeInstant.getTime()) / (60 * 60 * 1000);
     expect(hoursApart).toBe(25);
+  });
+});
+
+describe('isWithinQuietHours', () => {
+  // 2026-08-11 is deep in Israeli DST (summer, UTC+3) throughout these tests.
+  function instantAt(hour: number, minute = 0): Date {
+    return wallClockToInstant(new Date(Date.UTC(2026, 7, 11, hour, minute)), 'Asia/Jerusalem');
+  }
+
+  it('is true in the middle of a midnight-spanning window (the documented default)', () => {
+    expect(isWithinQuietHours(instantAt(23, 30), 'Asia/Jerusalem', '22:00', '07:00')).toBe(true);
+    expect(isWithinQuietHours(instantAt(3, 0), 'Asia/Jerusalem', '22:00', '07:00')).toBe(true);
+  });
+
+  it('is false in the middle of the day, outside a midnight-spanning window', () => {
+    expect(isWithinQuietHours(instantAt(14, 0), 'Asia/Jerusalem', '22:00', '07:00')).toBe(false);
+  });
+
+  it('treats the start boundary as inclusive and the end boundary as exclusive', () => {
+    expect(isWithinQuietHours(instantAt(22, 0), 'Asia/Jerusalem', '22:00', '07:00')).toBe(true);
+    expect(isWithinQuietHours(instantAt(7, 0), 'Asia/Jerusalem', '22:00', '07:00')).toBe(false);
+  });
+
+  it('handles a same-day (non-midnight-spanning) window correctly', () => {
+    expect(isWithinQuietHours(instantAt(12, 0), 'Asia/Jerusalem', '09:00', '17:00')).toBe(true);
+    expect(isWithinQuietHours(instantAt(20, 0), 'Asia/Jerusalem', '09:00', '17:00')).toBe(false);
+  });
+
+  it('treats an equal start and end as never quiet, not always quiet', () => {
+    expect(isWithinQuietHours(instantAt(3, 0), 'Asia/Jerusalem', '22:00', '22:00')).toBe(false);
   });
 });
