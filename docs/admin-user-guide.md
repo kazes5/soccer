@@ -194,17 +194,22 @@ Open **Coordination & notification settings** from the admin navigation.
   Individual members can override it in their personal **Settings** page.
 
 Select **Save** and wait for the confirmation message. **Swap request expiry**
-is already live and functional (see [Shift swaps](#shift-swaps) below); the
-other three settings control quiet-hours timing today, plus reminder and
-escalation timing once those checkpoints build the features that consume
-them. In-app notification delivery is already live (see
-[Review notifications](#review-notifications) above), and opted-in browser
-push now delivers as well, gated by the same quiet hours and per-category
-preferences; email/SMS delivery and reminders/escalations themselves are not
-yet implemented — see [Current limitations](#current-limitations). Browser
-push additionally requires the server operator to have configured a VAPID
-keypair; if it isn't configured, members simply won't see the option to
-enable push on their device.
+and **Reminders** are already live and functional (see
+[Shift swaps](#shift-swaps) below and the reminders note in
+[Current limitations](#current-limitations)); **Escalation lead time** is not
+yet consumed by anything — no-show/escalation handling was removed from MVP
+scope (see [CLAUDE.md](../CLAUDE.md)'s §3.12 revision note). **Default quiet
+hours** already governs both in-app/push delivery timing and reminder timing:
+a reminder that would otherwise fire during quiet hours is deferred to the
+moment quiet hours end, or silently dropped if that deferred moment would
+land after the session has already started. In-app notification delivery is
+already live (see [Review notifications](#review-notifications) above), and
+opted-in browser push now delivers as well, gated by the same quiet hours and
+per-category preferences; email/SMS delivery is not yet implemented — see
+[Current limitations](#current-limitations). Browser push additionally
+requires the server operator to have configured a VAPID keypair; if it isn't
+configured, members simply won't see the option to enable push on their
+device.
 
 ## Shift swaps
 
@@ -254,9 +259,10 @@ action and the `/swaps` page).
   sessions is not available.
 - Only plain one-way swap requests are supported — offering one of your own
   shifts in trade is not yet available.
-- In-app notification delivery and opted-in browser push are both live.
-  Reminders, no-show escalations, and delivery to email or SMS are not yet
-  implemented.
+- In-app notification delivery, opted-in browser push, and pre-shift
+  reminders are all live. Delivery to email or SMS is not yet implemented.
+  No-show / last-minute escalation was removed from MVP scope (see
+  [CLAUDE.md](../CLAUDE.md)'s §3.12 revision note) and is not implemented.
 - Audit logs, reports, CSV export, and archive management do not yet have admin
   screens.
 
