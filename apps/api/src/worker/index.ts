@@ -10,6 +10,7 @@ import {
   SCHEDULED_TASK_QUEUE_NAME,
 } from '../lib/queues';
 import { createRedisConnection } from '../lib/redis';
+import { VapidWebPushProvider } from '../lib/web-push';
 import { processOutboxEvent } from './processors/outbox';
 import { processScheduledTask } from './processors/scheduled-task';
 import { reconcile } from './reconcile';
@@ -43,6 +44,12 @@ async function main() {
   const outboxQueue = createOutboxQueue(createRedisConnection());
   const scheduledTaskQueue = createScheduledTaskQueue(createRedisConnection());
   const notificationPublisher = createRedisConnection();
+  const webPush = new VapidWebPushProvider();
+  console.log(
+    webPush.isConfigured
+      ? '[worker] Browser push delivery is configured.'
+      : '[worker] Browser push delivery is disabled (VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT not set).',
+  );
 
   const counts = await reconcile(prisma, outboxQueue, scheduledTaskQueue);
   console.log(
@@ -53,7 +60,7 @@ async function main() {
     OUTBOX_QUEUE_NAME,
     (job) =>
       withAttemptTracking(
-        () => processOutboxEvent(prisma, job.data.outboxEventId, notificationPublisher),
+        () => processOutboxEvent(prisma, job.data.outboxEventId, notificationPublisher, webPush),
         (lastError) =>
           prisma.outboxEvent.update({
             where: { id: job.data.outboxEventId },

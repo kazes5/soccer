@@ -248,6 +248,29 @@ flowchart TD
     L --> M([Return to current team])
 ```
 
+### Admin enables browser push notifications
+
+```mermaid
+flowchart TD
+    A([Admin]) --> B[Open `/settings/notifications`]
+    B --> C{Browser supports push and not blocked?}
+    C -->|No| D[Show unsupported or blocked message]
+    D --> Z([Continue on Settings])
+    C -->|Yes, not yet enabled| E[Select Enable push notifications on this device]
+    E --> F[Browser prompts for notification permission]
+    F --> G{Permission granted?}
+    G -->|No| H[Show error and remain not enabled]
+    H --> Z
+    G -->|Yes| I[Register service worker and push subscription]
+    I --> J{Subscription saved to server?}
+    J -->|No| H
+    J -->|Yes| K[Show Enabled on this device]
+    K --> L{Select Disable on this device?}
+    L -->|Yes| M[Remove subscription from this device and server]
+    M --> Z
+    L -->|No| Z
+```
+
 ### Admin logs out
 
 ```mermaid
@@ -395,6 +418,29 @@ flowchart TD
     L --> M([Return to current team])
 ```
 
+### Parent enables browser push notifications
+
+```mermaid
+flowchart TD
+    A([Parent]) --> B[Open `/settings/notifications`]
+    B --> C{Browser supports push and not blocked?}
+    C -->|No| D[Show unsupported or blocked message]
+    D --> Z([Continue on Settings])
+    C -->|Yes, not yet enabled| E[Select Enable push notifications on this device]
+    E --> F[Browser prompts for notification permission]
+    F --> G{Permission granted?}
+    G -->|No| H[Show error and remain not enabled]
+    H --> Z
+    G -->|Yes| I[Register service worker and push subscription]
+    I --> J{Subscription saved to server?}
+    J -->|No| H
+    J -->|Yes| K[Show Enabled on this device]
+    K --> L{Select Disable on this device?}
+    L -->|Yes| M[Remove subscription from this device and server]
+    M --> Z
+    L -->|No| Z
+```
+
 ### Parent logs out
 
 ```mermaid
@@ -428,6 +474,14 @@ flowchart TD
 - Opening a notification linked to a specific session or shift scrolls to and
   briefly highlights that row on Schedule, instead of only opening the
   team's full schedule.
+- Browser push is an opt-in, per-device addition to the in-app notification
+  center, not a replacement for it — every event still appears in full there
+  regardless of push settings. Push respects the same category and
+  quiet-hours preferences shown above, and a rapid burst of unrelated events
+  for one team collapses into a single summary push rather than one per
+  event. It requires the server operator to have configured push credentials;
+  if unavailable, the Settings page explains that instead of offering the
+  enable control.
 - Following a link to a page that requires sign-in while signed out returns to
   that exact page — including its parameters, such as a notification's linked
   session or shift — once sign-in completes, instead of always landing on

@@ -15,6 +15,8 @@ import {
   type CreateScheduleTemplateResponse,
   type CoordinationSettings,
   type CoordinationSettingsRequest,
+  type CreatePushSubscriptionRequest,
+  type DeletePushSubscriptionRequest,
   type MemberNotificationPreferences,
   type NotificationListResponse,
   type PasskeyChallengeResponse,
@@ -22,6 +24,7 @@ import {
   type PasskeyVerifyRequest,
   type PlayerListResponse,
   type PracticeSession,
+  type PushConfigResponse,
   type ScheduleTemplateListResponse,
   type SessionListResponse,
   type ShiftStatsResponse,
@@ -50,6 +53,7 @@ import {
   passkeyChallengeResponseSchema,
   playerListResponseSchema,
   practiceSessionSchema,
+  pushConfigResponseSchema,
   scheduleTemplateListResponseSchema,
   sessionListResponseSchema,
   shiftStatsResponseSchema,
@@ -372,6 +376,21 @@ export const api = {
   markAllNotificationsRead: (teamId: string) =>
     request<unknown>(`/teams/${encodeURIComponent(teamId)}/notifications/read-all`, {
       method: 'POST',
+      responseSchema: z.unknown(),
+    }),
+
+  getPushConfig: () =>
+    request<PushConfigResponse>('/push-subscriptions/config', {
+      responseSchema: pushConfigResponseSchema,
+    }),
+
+  createPushSubscription: (body: CreatePushSubscriptionRequest) =>
+    request<unknown>('/push-subscriptions', { method: 'POST', body, responseSchema: z.unknown() }),
+
+  deletePushSubscription: (body: DeletePushSubscriptionRequest) =>
+    request<unknown>('/push-subscriptions', {
+      method: 'DELETE',
+      body,
       responseSchema: z.unknown(),
     }),
 };

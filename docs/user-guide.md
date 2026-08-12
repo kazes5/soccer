@@ -80,6 +80,28 @@ Use `/settings/notifications` to set your own quiet hours, reminder timing,
 and which categories of activity notify you, or to fall back to the team's
 defaults.
 
+### Browser push notifications
+
+The same page has a **Push notifications** section for enabling OS-level
+notifications on this device, so you can hear about team activity even when
+the app isn't the tab you're looking at:
+
+- **Enable push notifications on this device** prompts your browser for
+  notification permission, then registers this device to receive push. Your
+  browser may show its own permission prompt outside the app — allow it to
+  finish enabling.
+- Once enabled, the section shows **Enabled on this device** with a
+  **Disable on this device** option.
+- Push respects the same category and quiet-hours settings as the rest of
+  this page, and is per-device: enabling it on your phone doesn't enable it
+  on your laptop.
+- If your browser doesn't support push, or you've blocked notifications for
+  this site, the section explains that instead of showing the button.
+- A rapid burst of unrelated changes for the same team is collapsed into a
+  single summary push rather than one per change — every individual event
+  still appears in full on `/notifications`, only the OS notification is
+  reduced.
+
 ## Language and display direction
 
 Use the language toggle available in the web shell to switch between English and
@@ -91,10 +113,10 @@ Hebrew text is currently AI-drafted and still requires native-speaker review.
 ## Current limitations
 
 - Swap requests are not available in the current web UI.
-- In-app notifications are delivered live while a page is open. Delivery to a
-  device that isn't currently viewing the app — email, SMS, or browser push —
-  is not implemented yet. Pre-shift reminders and no-show escalations are not
-  implemented.
+- In-app notifications are delivered live while a page is open. Opted-in
+  browser push now delivers to a device that isn't currently viewing the app;
+  email and SMS delivery are not implemented. Pre-shift reminders and no-show
+  escalations are not implemented.
 - The admin UI supports collection points, schedule templates, individual
   sessions, and a read-only roster. Player editing, member/role management,
   reporting, and audit-log screens are not yet available.

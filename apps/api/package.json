@@ -24,6 +24,7 @@
     "@prisma/client": "^7.9.1",
     "@simplewebauthn/server": "^13.3.2",
     "@soccer/contracts": "workspace:*",
+    "@soccer/i18n": "workspace:*",
     "bullmq": "^6.0.11",
     "dotenv": "^17.4.2",
     "fastify": "^5.11.2",
@@ -32,6 +33,7 @@
     "luxon": "^3.7.2",
     "pg": "^8.22.0",
     "rrule": "^2.8.1",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -39,6 +41,7 @@
     "@types/luxon": "^3.7.4",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.20.4",
+    "@types/web-push": "^3.6.4",
     "eslint": "^10.8.0",
     "pino-pretty": "^13.1.3",
     "prisma": "^7.9.1",
