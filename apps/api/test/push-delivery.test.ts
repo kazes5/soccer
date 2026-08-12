@@ -122,11 +122,12 @@ describe('deliverPushNotifications', () => {
   async function seedPriorDelivery(
     teamId: string,
     userId: string,
-    options: { shiftId: string; createdAt: Date },
+    options: { shiftId: string; createdAt: Date; severity?: 'normal' | 'emergency' },
   ) {
     const { notification } = await createEventWithNotification(teamId, userId, {
       payload: { shiftId: options.shiftId, sessionId: 'session-1', pointName: 'Oak St' },
       createdAt: options.createdAt,
+      severity: options.severity,
     });
     await app.prisma.notificationDelivery.create({
       data: {
@@ -245,6 +246,27 @@ describe('deliverPushNotifications', () => {
     const webPushForSeventh = new FakeWebPushProvider();
     await deliverPushNotifications(app.prisma, seventh.event, webPushForSeventh, DAYTIME);
     expect(webPushForSeventh.sent).toHaveLength(0);
+  });
+
+  it('does not let a prior emergency delivery count toward the non-urgent collapse window', async () => {
+    const { teamId, userId } = await setUpTeam();
+    await subscribe(userId);
+    // An emergency push for the same shift 30s ago must not collapse the
+    // normal-severity push below — emergency deliveries bypass the
+    // collapse/throttle decision entirely and must not feed into it either.
+    await seedPriorDelivery(teamId, userId, {
+      shiftId: 'shift-1',
+      createdAt: new Date(DAYTIME.getTime() - 30_000),
+      severity: 'emergency',
+    });
+    const { event } = await createEventWithNotification(teamId, userId, {
+      payload: { shiftId: 'shift-1', sessionId: 'session-1', pointName: 'Oak St' },
+    });
+    const webPush = new FakeWebPushProvider();
+
+    await deliverPushNotifications(app.prisma, event, webPush, DAYTIME);
+
+    expect(webPush.sent).toHaveLength(1);
   });
 
   it('deletes a subscription the push service reports as gone (410)', async () => {

@@ -1,6 +1,10 @@
 import { QUIET_HOURS_END_DEFAULT, QUIET_HOURS_START_DEFAULT } from '@soccer/contracts';
 import type { Locale } from '@soccer/i18n';
-import type { OutboxEvent, PrismaClient } from '../../generated/prisma/client';
+import type {
+  OutboxEvent,
+  PrismaClient,
+  TeamNotificationSettings,
+} from '../../generated/prisma/client';
 import { decidePushAction, entityKeyFor, THROTTLE_WINDOW_MS } from './notification-throttle';
 import { buildPushPayload, buildSummaryPushPayload, type PushPayloadContent } from './push-payload';
 import { isWithinQuietHours } from './timezone';
@@ -37,24 +41,36 @@ export async function deliverPushNotifications(
   if (!webPush.isConfigured) return;
 
   try {
-    const [notifications, team] = await Promise.all([
+    const [notifications, team, teamSettings] = await Promise.all([
       prisma.userNotification.findMany({
         where: { outboxEventId: event.id },
         select: { id: true, userId: true },
       }),
       prisma.team.findUnique({ where: { id: event.teamId }, select: { timezone: true } }),
+      // Identical for every recipient of this one event, unlike
+      // memberSettings (per-user quiet-hours override) — fetched once here
+      // rather than once per recipient inside the loop below.
+      prisma.teamNotificationSettings.findUnique({ where: { teamId: event.teamId } }),
     ]);
     if (!team) return;
 
-    for (const notification of notifications) {
-      await deliverToRecipient(prisma, event, notification, team.timezone, webPush, now).catch(
-        (error: unknown) => {
+    await Promise.allSettled(
+      notifications.map((notification) =>
+        deliverToRecipient(
+          prisma,
+          event,
+          notification,
+          team.timezone,
+          teamSettings,
+          webPush,
+          now,
+        ).catch((error: unknown) => {
           // One recipient's failure (a DB hiccup, an unexpected error
           // building the payload) must not stop delivery to the others.
           console.error(`[push] delivery failed for user ${notification.userId}:`, error);
-        },
-      );
-    }
+        }),
+      ),
+    );
   } catch (error) {
     console.error(`[push] delivery setup failed for outbox event ${event.id}:`, error);
   }
@@ -65,6 +81,7 @@ async function deliverToRecipient(
   event: OutboxEvent,
   notification: { id: string; userId: string },
   teamTimezone: string,
+  teamSettings: TeamNotificationSettings | null,
   webPush: WebPushProvider,
   now: Date,
 ): Promise<void> {
@@ -101,6 +118,7 @@ async function deliverToRecipient(
     event,
     notification,
     teamTimezone,
+    teamSettings,
     locale,
     now,
     isEmergency,
@@ -153,6 +171,7 @@ async function resolvePayload(
   event: OutboxEvent,
   notification: { id: string; userId: string },
   teamTimezone: string,
+  teamSettings: TeamNotificationSettings | null,
   locale: Locale,
   now: Date,
   isEmergency: boolean,
@@ -166,12 +185,9 @@ async function resolvePayload(
     });
   }
 
-  const [teamSettings, memberSettings] = await Promise.all([
-    prisma.teamNotificationSettings.findUnique({ where: { teamId: event.teamId } }),
-    prisma.memberNotificationSettings.findUnique({
-      where: { userId_teamId: { userId: notification.userId, teamId: event.teamId } },
-    }),
-  ]);
+  const memberSettings = await prisma.memberNotificationSettings.findUnique({
+    where: { userId_teamId: { userId: notification.userId, teamId: event.teamId } },
+  });
   const quietHoursStart =
     memberSettings?.quietHoursStart ?? teamSettings?.quietHoursStart ?? QUIET_HOURS_START_DEFAULT;
   const quietHoursEnd =
@@ -186,6 +202,10 @@ async function resolvePayload(
         userId: notification.userId,
         teamId: event.teamId,
         createdAt: { gte: new Date(now.getTime() - THROTTLE_WINDOW_MS) },
+        // Emergency pushes always send regardless of collapse/throttle (see
+        // the isEmergency branch above), so they must not count toward — or
+        // false-collapse-match against — a later non-urgent push's decision.
+        severity: 'normal',
       },
     },
     select: { createdAt: true, userNotification: { select: { eventType: true, payload: true } } },

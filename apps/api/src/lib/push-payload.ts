@@ -1,4 +1,4 @@
-import type { Locale } from '@soccer/i18n';
+import type { Locale, MessageKey } from '@soccer/i18n';
 import { translate } from '@soccer/i18n';
 
 export interface PushPayloadContent {
@@ -29,6 +29,32 @@ function scheduleUrl(teamId: string, sessionId: string): string | null {
     : null;
 }
 
+/** Shared by the `shift_claimed`/`shift_released` cases below — identical
+ * shape, differing only in which title/body message keys to use. */
+function shiftPushPayload(
+  locale: Locale,
+  teamId: string,
+  payload: Record<string, unknown>,
+  titleKey: MessageKey,
+  bodyKey: MessageKey,
+): PushPayloadContent {
+  const pointName = asString(payload, 'pointName');
+  const direction = directionLabel(locale, payload.direction);
+  const sessionId = asString(payload, 'sessionId');
+  const shiftId = asString(payload, 'shiftId');
+  return {
+    title: translate(locale, titleKey),
+    body: translate(locale, bodyKey, {
+      byUserName: asString(payload, 'byUserName'),
+      direction,
+      pointName,
+    }),
+    url: sessionId
+      ? `/schedule?team=${encodeURIComponent(teamId)}&session=${encodeURIComponent(sessionId)}&shift=${encodeURIComponent(shiftId)}`
+      : null,
+  };
+}
+
 /**
  * Builds the title/body/deep-link a browser push notification shows,
  * localized to the RECIPIENT's own language preference (not the actor's).
@@ -49,41 +75,23 @@ export function buildPushPayload(
   const { eventType, payload } = notification;
 
   switch (eventType) {
-    case 'shift_claimed': {
-      const pointName = asString(payload, 'pointName');
-      const direction = directionLabel(locale, payload.direction);
-      const sessionId = asString(payload, 'sessionId');
-      const shiftId = asString(payload, 'shiftId');
-      return {
-        title: translate(locale, 'push.shiftClaimed.title'),
-        body: translate(locale, 'push.shiftClaimed.body', {
-          byUserName: asString(payload, 'byUserName'),
-          direction,
-          pointName,
-        }),
-        url: sessionId
-          ? `/schedule?team=${encodeURIComponent(teamId)}&session=${encodeURIComponent(sessionId)}&shift=${encodeURIComponent(shiftId)}`
-          : null,
-      };
-    }
+    case 'shift_claimed':
+      return shiftPushPayload(
+        locale,
+        teamId,
+        payload,
+        'push.shiftClaimed.title',
+        'push.shiftClaimed.body',
+      );
 
-    case 'shift_released': {
-      const pointName = asString(payload, 'pointName');
-      const direction = directionLabel(locale, payload.direction);
-      const sessionId = asString(payload, 'sessionId');
-      const shiftId = asString(payload, 'shiftId');
-      return {
-        title: translate(locale, 'push.shiftReleased.title'),
-        body: translate(locale, 'push.shiftReleased.body', {
-          byUserName: asString(payload, 'byUserName'),
-          direction,
-          pointName,
-        }),
-        url: sessionId
-          ? `/schedule?team=${encodeURIComponent(teamId)}&session=${encodeURIComponent(sessionId)}&shift=${encodeURIComponent(shiftId)}`
-          : null,
-      };
-    }
+    case 'shift_released':
+      return shiftPushPayload(
+        locale,
+        teamId,
+        payload,
+        'push.shiftReleased.title',
+        'push.shiftReleased.body',
+      );
 
     case 'session_updated':
       return {
