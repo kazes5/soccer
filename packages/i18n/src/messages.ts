@@ -262,6 +262,9 @@ export const en = {
   'notifications.event.swapExpired': 'A swap request for {pointName} expired unanswered',
   'notifications.event.swapCancelled':
     '{requestingUserName} cancelled their swap request for {pointName}',
+  'notifications.event.shiftReminder':
+    'Reminder: {direction} at {pointName} on {when}, {fieldLocation}. Players: {players}',
+  'notifications.event.shiftReminderNoPlayers': 'none listed',
   'notifications.event.unknown': 'Team update ({eventType})',
 
   // Browser push notification title/body — deliberately shorter than the
@@ -300,6 +303,8 @@ export const en = {
   'push.swapExpired.body': 'A swap request for {pointName} went unanswered',
   'push.swapCancelled.title': 'Swap cancelled',
   'push.swapCancelled.body': '{requestingUserName} cancelled their swap request for {pointName}',
+  'push.shiftReminder.title': 'Upcoming shift reminder',
+  'push.shiftReminder.body': '{direction} at {pointName}',
   'push.summary.title': 'Team has updates',
   'push.summary.body': "Open the app to see what's new",
   'push.unknown.title': 'Team update',
@@ -639,6 +644,9 @@ export const he: Record<MessageKey, string> = {
   'notifications.event.swapExpired': 'בקשת החלפה עבור {pointName} פגה ללא מענה',
   'notifications.event.swapCancelled':
     '{requestingUserName} ביטל/ה את בקשת ההחלפה שלו/ה עבור {pointName}',
+  'notifications.event.shiftReminder':
+    'תזכורת: {direction} ב{pointName} בתאריך {when}, {fieldLocation}. שחקנים: {players}',
+  'notifications.event.shiftReminderNoPlayers': 'לא צוינו',
   'notifications.event.unknown': 'עדכון בקבוצה ({eventType})',
 
   'push.shiftClaimed.title': 'משמרת נתפסה',
@@ -673,6 +681,8 @@ export const he: Record<MessageKey, string> = {
   'push.swapExpired.body': 'בקשת החלפה עבור {pointName} נותרה ללא מענה',
   'push.swapCancelled.title': 'ההחלפה בוטלה',
   'push.swapCancelled.body': '{requestingUserName} ביטל/ה את בקשת ההחלפה עבור {pointName}',
+  'push.shiftReminder.title': 'תזכורת למשמרת קרובה',
+  'push.shiftReminder.body': '{direction} ב{pointName}',
   'push.summary.title': 'יש עדכונים בקבוצה',
   'push.summary.body': 'פתחו את האפליקציה כדי לראות מה חדש',
   'push.unknown.title': 'עדכון בקבוצה',

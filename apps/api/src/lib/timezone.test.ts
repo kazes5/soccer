@@ -5,6 +5,7 @@ import {
   isValidTimeZone,
   isWithinQuietHours,
   localDateTimeToInstant,
+  nextQuietHoursEndInstant,
   wallClockToInstant,
 } from './timezone';
 
@@ -157,5 +158,53 @@ describe('isWithinQuietHours', () => {
 
   it('treats an equal start and end as never quiet, not always quiet', () => {
     expect(isWithinQuietHours(instantAt(3, 0), 'Asia/Jerusalem', '22:00', '22:00')).toBe(false);
+  });
+});
+
+describe('nextQuietHoursEndInstant', () => {
+  // 2026-08-11 is deep in Israeli DST (summer, UTC+3) throughout these tests.
+  function instantAt(hour: number, minute = 0): Date {
+    return wallClockToInstant(new Date(Date.UTC(2026, 7, 11, hour, minute)), 'Asia/Jerusalem');
+  }
+
+  it("returns today's end time when it's still ahead (the early-morning half of a midnight-spanning window)", () => {
+    const result = nextQuietHoursEndInstant(instantAt(3, 0), 'Asia/Jerusalem', '07:00');
+    expect(instantToWallClock(result, 'Asia/Jerusalem')).toEqual({
+      date: '2026-08-11',
+      time: '07:00',
+    });
+  });
+
+  it("rolls to tomorrow's end time once today's has already passed (the late-evening half)", () => {
+    const result = nextQuietHoursEndInstant(instantAt(23, 30), 'Asia/Jerusalem', '07:00');
+    expect(instantToWallClock(result, 'Asia/Jerusalem')).toEqual({
+      date: '2026-08-12',
+      time: '07:00',
+    });
+  });
+
+  it('works the same way for a same-day (non-midnight-spanning) window', () => {
+    const result = nextQuietHoursEndInstant(instantAt(10, 0), 'Asia/Jerusalem', '17:00');
+    expect(instantToWallClock(result, 'Asia/Jerusalem')).toEqual({
+      date: '2026-08-11',
+      time: '17:00',
+    });
+  });
+
+  it('rolls over a DST boundary correctly (crossing into winter time)', () => {
+    // Israel typically ends DST in late October; 2026-10-24 23:30 local is
+    // still UTC+3 (summer); the deferred instant is the *next* calendar
+    // day's 07:00, which by then may already be UTC+2 (winter) — this only
+    // works correctly if the rollover goes through Luxon's zone-aware
+    // arithmetic, not fixed-offset date math.
+    const lateOctober = wallClockToInstant(
+      new Date(Date.UTC(2026, 9, 24, 23, 30)),
+      'Asia/Jerusalem',
+    );
+    const result = nextQuietHoursEndInstant(lateOctober, 'Asia/Jerusalem', '07:00');
+    expect(instantToWallClock(result, 'Asia/Jerusalem')).toEqual({
+      date: '2026-10-25',
+      time: '07:00',
+    });
   });
 });

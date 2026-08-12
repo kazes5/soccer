@@ -125,3 +125,16 @@ export async function enqueueScheduledTask(
   const delay = Math.max(0, runAt.getTime() - Date.now());
   await queue.add('run', { scheduledTaskId }, { jobId: scheduledTaskId, delay, ...RETRY_OPTIONS });
 }
+
+/** Same "don't make the caller wait on it or fail the request" reasoning as
+ *  {@link enqueueOutboxEventBestEffort} — a route can create several
+ *  reminder tasks in one transaction (one per offset) and enqueue all of
+ *  them without any one failure affecting the others or the response. */
+export function enqueueScheduledTaskBestEffort(
+  queue: Queue<{ scheduledTaskId: string }>,
+  tasks: { id: string; runAt: Date }[],
+): void {
+  for (const task of tasks) {
+    void enqueueScheduledTask(queue, task.id, task.runAt).catch(() => {});
+  }
+}

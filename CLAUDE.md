@@ -302,6 +302,8 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 ### 3.12 No-Show / Last-Minute Escalation
 
+**2026-08-12 revision note:** Deferred out of v1/MVP scope, at the explicit request of the product owner ("we need mvp, and it's not") — `cannotMakeIt`, emergency-open shifts, atomic replacement claims, automatic lead-time escalation, and the admin unresolved-coverage alert described below are **not being built for the initial pilot**. The rest of this section is retained as-written as the target design for when this work resumes; see the Roadmap (§12, v1.1) for its new placement and [PLAN.md](./PLAN.md)'s Stage 4 Checkpoint 10 note for the implementation-plan side of this decision.
+
 **Requirement 12: Urgent Coverage Request**
 - A parent who realizes they can't cover their assigned shift can flag "I can't make it" — distinct from a normal swap request.
 - This triggers an immediate, high-visibility broadcast (push + in-app alert) to all team parents: "X can't cover Y at [collection point]. Who can help?"
@@ -703,6 +705,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 ## 12. Roadmap (Future Versions)
 
 **v1.1**
+- No-show / last-minute escalation workflow (`cannotMakeIt`, emergency-open shifts, atomic replacement claims, automatic lead-time escalation, admin unresolved-coverage alert) — originally Requirement 12/v1, deferred here 2026-08-12; see the revision note at §3.12.
 - Notifications preferences (SMS, email, push) in addition to push-only.
 - Fairness-based recommendations ("You've done 3 pickups, 1 drop-off; consider a drop-off this week?").
 - Team messaging (in-app discussion board for session-specific logistics).

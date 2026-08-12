@@ -8,6 +8,8 @@ import { z } from 'zod';
 import type { NotificationCategory, Prisma, PrismaClient } from '../../generated/prisma/client';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { enqueueScheduledTaskBestEffort } from '../lib/queues';
+import { findShiftIdsForMember, syncRemindersForShifts } from '../lib/reminders';
 
 const teamQuerySchema = z.object({ teamId: z.string().uuid() });
 
@@ -62,6 +64,8 @@ export default async function memberPreferencesRoutes(app: FastifyInstance) {
 
     const before = await toDto(app.prisma, currentUser.id, body.teamId);
 
+    const reminders: { id: string; runAt: Date }[] = [];
+
     const after = await app.prisma.$transaction(async (tx) => {
       if (
         body.quietHoursStart !== undefined ||
@@ -96,6 +100,24 @@ export default async function memberPreferencesRoutes(app: FastifyInstance) {
           },
           update: { quietHoursStart, quietHoursEnd, reminderOffsetMinutes },
         });
+
+        // Only quiet-hours fields changed? Those affect *when* a delivery
+        // defers, checked live at reminder-fire time — no need to touch
+        // already-scheduled tasks. Only a genuine offset change moves which
+        // instants they should fire at.
+        const previousOffsets = fresh?.reminderOffsetMinutes ?? [];
+        if (
+          body.reminderOffsetMinutes !== undefined &&
+          (previousOffsets.length !== reminderOffsetMinutes.length ||
+            previousOffsets.some((value, index) => value !== reminderOffsetMinutes[index]))
+        ) {
+          reminders.push(
+            ...(await syncRemindersForShifts(
+              tx,
+              await findShiftIdsForMember(tx, currentUser.id, body.teamId),
+            )),
+          );
+        }
       }
 
       if (body.categoryPreferences) {
@@ -135,6 +157,8 @@ export default async function memberPreferencesRoutes(app: FastifyInstance) {
 
       return afterDto;
     });
+
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, reminders);
 
     return after;
   });

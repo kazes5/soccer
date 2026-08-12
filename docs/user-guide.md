@@ -147,8 +147,10 @@ Hebrew text is currently AI-drafted and still requires native-speaker review.
   shifts in trade is not yet available.
 - In-app notifications are delivered live while a page is open. Opted-in
   browser push now delivers to a device that isn't currently viewing the app;
-  email and SMS delivery are not implemented. Pre-shift reminders and no-show
-  escalations are not implemented.
+  email and SMS delivery are not implemented. Pre-shift reminders are sent
+  automatically before each of your shifts, timed by your own or your team's
+  reminder settings. No-show / last-minute escalation ("Can't make it") was
+  removed from MVP scope and is not implemented.
 - The admin UI supports collection points, schedule templates, individual
   sessions, and a read-only roster. Player editing, member/role management,
   reporting, and audit-log screens are not yet available.

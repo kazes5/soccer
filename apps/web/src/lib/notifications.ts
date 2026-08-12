@@ -207,6 +207,34 @@ export function describeNotification(
         href: `/swaps?team=${encodeURIComponent(teamId)}`,
       };
 
+    case 'shift_reminder': {
+      const sessionId = asString(payload, 'sessionId');
+      const shiftId = asString(payload, 'shiftId');
+      const playerNames = Array.isArray(payload.playerNames)
+        ? payload.playerNames.filter((name): name is string => typeof name === 'string')
+        : [];
+      return {
+        // CLAUDE.md §3.11 spells out every field this one notification
+        // type must carry (session date/time, field location, direction,
+        // collection point, and player names) — richer than the shorter
+        // push body for the same event, matching this file's own
+        // shorter-push/fuller-in-app split for every other event type.
+        text: t('notifications.event.shiftReminder', {
+          direction: directionLabel(t, payload.direction as ShiftDirection),
+          pointName: asString(payload, 'pointName'),
+          when: formatSessionStartsAt(locale, asString(payload, 'sessionStartsAt'), timeZone),
+          fieldLocation: asString(payload, 'fieldLocation'),
+          players:
+            playerNames.length > 0
+              ? playerNames.join(', ')
+              : t('notifications.event.shiftReminderNoPlayers'),
+        }),
+        href: sessionId
+          ? `/schedule?team=${encodeURIComponent(teamId)}&session=${encodeURIComponent(sessionId)}&shift=${encodeURIComponent(shiftId)}`
+          : null,
+      };
+    }
+
     default: {
       // Defensive fallback: `eventType`'s TS type is the exhaustive union
       // above, but this renders real API data at runtime — a future event

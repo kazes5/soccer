@@ -9,7 +9,8 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
-import { enqueueOutboxEventBestEffort } from '../lib/queues';
+import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
+import { syncShiftReminders } from '../lib/reminders';
 import { resolveSwapRequestOutcome, swapRequestInclude } from '../lib/swap-requests';
 
 const paramsSchema = z.object({ teamId: z.string().uuid() });
@@ -132,8 +133,9 @@ export default async function memberRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'This person is not on the team.');
     }
 
-    const outboxEventIds = await app.prisma.$transaction(async (tx) => {
+    const result = await app.prisma.$transaction(async (tx) => {
       const eventIds: string[] = [];
+      const reminders: { id: string; runAt: Date }[] = [];
 
       if (target.role === 'admin') {
         const otherAdminCount = await tx.teamMember.count({
@@ -219,6 +221,9 @@ export default async function memberRoutes(app: FastifyInstance) {
           },
         });
         eventIds.push(shiftOutboxEvent.id);
+        // Cancel-only in practice (the shift now has no assignee), but goes
+        // through the same shared sync every other assignment change uses.
+        reminders.push(...(await syncShiftReminders(tx, heldShift.id)));
       }
 
       const remainingMemberships = await tx.teamMember.count({
@@ -250,12 +255,13 @@ export default async function memberRoutes(app: FastifyInstance) {
       });
       eventIds.push(memberOutboxEvent.id);
 
-      return eventIds;
+      return { eventIds, reminders };
     });
 
-    for (const outboxEventId of outboxEventIds) {
+    for (const outboxEventId of result.eventIds) {
       enqueueOutboxEventBestEffort(app.outboxQueue, outboxEventId);
     }
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, result.reminders);
 
     reply.status(204).send();
   });

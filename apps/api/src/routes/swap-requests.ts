@@ -9,7 +9,12 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
-import { enqueueOutboxEventBestEffort, enqueueScheduledTask } from '../lib/queues';
+import {
+  enqueueOutboxEventBestEffort,
+  enqueueScheduledTask,
+  enqueueScheduledTaskBestEffort,
+} from '../lib/queues';
+import { syncShiftReminders } from '../lib/reminders';
 import { recordScheduledTask } from '../lib/scheduled-tasks';
 import {
   cancelPendingExpiryTask,
@@ -180,7 +185,7 @@ export default async function swapRequestRoutes(app: FastifyInstance) {
       throw new HttpError(409, 'This swap request is no longer pending.');
     }
 
-    const outboxEventId = await app.prisma.$transaction(async (tx) => {
+    const accepted = await app.prisma.$transaction(async (tx) => {
       // The acceptance CAS: reassigns the shift only if it's still exactly
       // where the swap request left it (pending_swap, same holder, same
       // version) — a stale request (the shift changed underneath it some
@@ -243,10 +248,17 @@ export default async function swapRequestRoutes(app: FastifyInstance) {
         },
       });
 
-      return outboxEvent.id;
+      // Accept is the only swap outcome that actually reassigns the shift
+      // (decline/cancel/expire all revert to the same original holder) —
+      // the only one that needs the reminder schedule re-derived: the old
+      // holder's pending reminders cancelled, the new holder's created.
+      const reminders = await syncShiftReminders(tx, existing.shiftId);
+
+      return { outboxEventId: outboxEvent.id, reminders };
     });
 
-    enqueueOutboxEventBestEffort(app.outboxQueue, outboxEventId);
+    enqueueOutboxEventBestEffort(app.outboxQueue, accepted.outboxEventId);
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, accepted.reminders);
 
     const updated = await loadSwapRequestWithRelations(app.prisma, params.swapRequestId);
     return swapRequestSchema.parse(toSwapRequestDto(updated!));
