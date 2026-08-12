@@ -44,4 +44,24 @@ describe('ConfirmDialog', () => {
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
   });
+
+  it('can disable both actions while a confirmation is being processed', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Remove member?"
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        closeLabel="Close"
+        confirmDisabled
+        cancelDisabled
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+  });
 });

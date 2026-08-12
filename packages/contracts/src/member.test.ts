@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { teamRosterResponseSchema } from './member';
+import { teamRosterResponseSchema, updateMemberRoleResponseSchema } from './member';
 
 describe('teamRosterResponseSchema', () => {
   it('accepts a roster entry with only userId, name, and role', () => {
@@ -12,7 +12,7 @@ describe('teamRosterResponseSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects an entry carrying contact details, since this is the parent-readable view', () => {
+  it('strips contact details from the parent-readable view', () => {
     const result = teamRosterResponseSchema.safeParse({
       members: [
         {
@@ -24,11 +24,35 @@ describe('teamRosterResponseSchema', () => {
       ],
     });
 
-    // Zod's default (non-strict) object parsing strips unknown keys rather than
-    // rejecting them — this asserts the strip actually happens, so a caller can
-    // never accidentally leak phone/email through this schema even if a future
-    // route handler passed the wrong DTO into it.
+    // Zod's default object parsing strips unknown keys. This prevents a caller
+    // from leaking contact details if a future handler passes the wrong DTO.
     expect(result.success).toBe(true);
     expect(result.data?.members[0]).not.toHaveProperty('phone');
+  });
+});
+
+describe('updateMemberRoleResponseSchema', () => {
+  it('accepts a role-change response', () => {
+    expect(
+      updateMemberRoleResponseSchema.safeParse({
+        userId: '11111111-1111-4111-8111-111111111111',
+        role: 'admin',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an unknown role', () => {
+    expect(
+      updateMemberRoleResponseSchema.safeParse({
+        userId: '11111111-1111-4111-8111-111111111111',
+        role: 'owner',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a malformed user id', () => {
+    expect(
+      updateMemberRoleResponseSchema.safeParse({ userId: 'not-a-uuid', role: 'parent' }).success,
+    ).toBe(false);
   });
 });

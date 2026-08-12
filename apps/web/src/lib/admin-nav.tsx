@@ -1,5 +1,5 @@
 import type { MessageKey } from '@soccer/i18n';
-import { ArrowLeftRight, Bell, Inbox, MapPin, Repeat, Settings } from 'lucide-react';
+import { ArrowLeftRight, Bell, Inbox, MapPin, Repeat, Settings, Users } from 'lucide-react';
 import type { ShellNavItem } from '@/components/ui/shell';
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
@@ -51,9 +51,15 @@ export function swapsNavItem(teamId: string, t: Translate, active = false): Shel
 export function adminNavItems(
   teamId: string,
   t: Translate,
-  activePage?: 'collection-points' | 'schedule-templates' | 'notification-settings',
+  activePage?: 'members' | 'collection-points' | 'schedule-templates' | 'notification-settings',
 ): ShellNavItem[] {
   return [
+    {
+      href: `/admin/members?team=${encodeURIComponent(teamId)}`,
+      label: t('adminMembers.title'),
+      icon: <Users className="size-full" />,
+      active: activePage === 'members',
+    },
     {
       href: `/admin/collection-points?team=${encodeURIComponent(teamId)}`,
       label: t('adminCollectionPoints.title'),

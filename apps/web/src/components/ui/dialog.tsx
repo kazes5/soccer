@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 interface DialogProps {
   open: boolean;
   onClose: () => void;
+  closeDisabled?: boolean;
   title: string;
   description?: string;
   children: ReactNode;
@@ -17,7 +18,15 @@ interface DialogProps {
  * Built on the native `<dialog>` element: `showModal()` gives us a focus trap,
  * Escape-to-close, and backdrop dimming for free, with no extra dependency.
  */
-export function Dialog({ open, onClose, title, description, children, closeLabel }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  closeDisabled = false,
+  title,
+  description,
+  children,
+  closeLabel,
+}: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -43,7 +52,12 @@ export function Dialog({ open, onClose, title, description, children, closeLabel
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       onClose={onClose}
-      onCancel={onClose}
+      onCancel={(event) => {
+        // Keep the native dialog controlled by React. In particular, Escape
+        // must not dismiss a confirmation while its mutation is in flight.
+        event.preventDefault();
+        if (!closeDisabled) onClose();
+      }}
       className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-surface-border bg-surface p-0 text-ink shadow-overlay backdrop:bg-ink/40"
     >
       <div className="flex items-start justify-between gap-4 p-5">
@@ -60,6 +74,7 @@ export function Dialog({ open, onClose, title, description, children, closeLabel
         <button
           type="button"
           onClick={onClose}
+          disabled={closeDisabled}
           aria-label={closeLabel}
           className={`-m-2 inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-soft hover:text-ink ${focusRingClassName}`}
         >

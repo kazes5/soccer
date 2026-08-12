@@ -6,6 +6,12 @@ export const updateMemberRoleRequestSchema = z.object({
 });
 export type UpdateMemberRoleRequest = z.infer<typeof updateMemberRoleRequestSchema>;
 
+export const updateMemberRoleResponseSchema = z.object({
+  userId: z.string().uuid(),
+  role: teamRoleSchema,
+});
+export type UpdateMemberRoleResponse = z.infer<typeof updateMemberRoleResponseSchema>;
+
 export const teamMemberSummarySchema = z.object({
   userId: z.string().uuid(),
   name: z.string(),

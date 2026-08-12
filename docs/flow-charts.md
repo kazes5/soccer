@@ -69,11 +69,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Admin on Home]) --> B[Find active team under Your teams]
-    B --> C[Enter parent phone number]
-    C --> D[Select Invite]
+    A([Admin]) --> B[Open `/admin/members`]
+    B --> C[Enter parent phone number or email]
+    C --> D[Select Create invite]
     D --> E{Invitation creation succeeds?}
-    E -->|No| F[Show error and keep admin on Home]
+    E -->|No| F[Show error and keep admin on Manage team]
     F --> C
     E -->|Yes| G[Show single-use, time-limited invite link]
     G --> H{Copy succeeds?}
@@ -82,6 +82,56 @@ flowchart TD
     I --> K[Admin sends link through a trusted channel]
     J --> K
     K --> L([Parent continues with invite acceptance flow])
+```
+
+### Admin promotes or demotes a team member
+
+```mermaid
+flowchart TD
+    A([Admin on `/admin/members`]) --> B[Search or filter the current member list]
+    B --> C[Choose a member]
+    C --> D{Current role?}
+    D -->|Parent| E[Select Make admin]
+    D -->|Admin| F{Only team admin?}
+    F -->|Yes| G[Keep Remove admin access disabled and explain why]
+    F -->|No| H[Select Remove admin access]
+    E --> I[Open role-change confirmation]
+    H --> I
+    I --> J{Confirm?}
+    J -->|No| K[Close dialog with no change]
+    J -->|Yes| L[API serializes the team role change]
+    L --> M{Admin invariant still valid?}
+    M -->|No| N[Reject change and reload current members]
+    M -->|Yes| O[Update role, audit change, and notify team]
+    G --> P([Continue managing members])
+    K --> P
+    N --> P
+    O --> P
+```
+
+### Admin removes a team member
+
+```mermaid
+flowchart TD
+    A([Admin on `/admin/members`]) --> B[Search or filter the current member list]
+    B --> C[Select Remove from team]
+    C --> D{Member is the only admin?}
+    D -->|Yes| E[Keep removal disabled and explain why]
+    D -->|No| F[Open destructive confirmation]
+    F --> G{Confirm removal?}
+    G -->|No| H[Close dialog with no change]
+    G -->|Yes| I[API locks team membership changes]
+    I --> J[Delete this team membership]
+    J --> K[Cancel open swaps and reopen claimed future trips]
+    K --> L[Preserve past assignments and audit attribution]
+    L --> M[Stop future team notifications]
+    M --> N{Any other team memberships?}
+    N -->|No| O[Deactivate account and revoke active sessions]
+    N -->|Yes| P[Keep account active for the other teams]
+    E --> Q([Continue managing members])
+    H --> Q
+    O --> Q
+    P --> Q
 ```
 
 ### Admin manages collection points

@@ -68,18 +68,36 @@ export default async function memberRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
-    const target = await app.prisma.teamMember.findUnique({
-      where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
-      include: { user: { select: { name: true } } },
-    });
-    if (!target) {
-      throw new HttpError(404, 'This person is not on the team.');
-    }
-    if (target.role === body.role) {
-      return { userId: target.userId, role: target.role };
-    }
-
     const updated = await app.prisma.$transaction(async (tx) => {
+      // Serialize every role/removal mutation for this team. Without this row
+      // lock, two admins could concurrently demote each other after both saw
+      // "one other admin", leaving the team with none.
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "teams" WHERE "id" = ${params.teamId} FOR UPDATE
+      `;
+
+      // Authorization is checked again after acquiring the lock so an admin
+      // concurrently demoted by the preceding transaction cannot still use a
+      // stale pre-lock authorization decision.
+      const actingMembership = await tx.teamMember.findUnique({
+        where: { teamId_userId: { teamId: params.teamId, userId: currentUser.id } },
+        select: { role: true },
+      });
+      if (actingMembership?.role !== 'admin') {
+        throw new HttpError(403, 'Admin access is required for this team.');
+      }
+
+      const target = await tx.teamMember.findUnique({
+        where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+        include: { user: { select: { name: true } } },
+      });
+      if (!target) {
+        throw new HttpError(404, 'This person is not on the team.');
+      }
+      if (target.role === body.role) {
+        return { changed: target, outboxEventId: null };
+      }
+
       if (target.role === 'admin' && body.role === 'parent') {
         const otherAdminCount = await tx.teamMember.count({
           where: { teamId: params.teamId, role: 'admin', userId: { not: params.userId } },
@@ -115,7 +133,9 @@ export default async function memberRoutes(app: FastifyInstance) {
       return { changed, outboxEventId: outboxEvent.id };
     });
 
-    enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+    if (updated.outboxEventId) {
+      enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+    }
 
     return { userId: updated.changed.userId, role: updated.changed.role };
   });
@@ -125,17 +145,29 @@ export default async function memberRoutes(app: FastifyInstance) {
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
 
-    const target = await app.prisma.teamMember.findUnique({
-      where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
-      include: { user: { select: { name: true } } },
-    });
-    if (!target) {
-      throw new HttpError(404, 'This person is not on the team.');
-    }
-
     const result = await app.prisma.$transaction(async (tx) => {
       const eventIds: string[] = [];
       const reminders: { id: string; runAt: Date }[] = [];
+
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "teams" WHERE "id" = ${params.teamId} FOR UPDATE
+      `;
+
+      const actingMembership = await tx.teamMember.findUnique({
+        where: { teamId_userId: { teamId: params.teamId, userId: currentUser.id } },
+        select: { role: true },
+      });
+      if (actingMembership?.role !== 'admin') {
+        throw new HttpError(403, 'Admin access is required for this team.');
+      }
+
+      const target = await tx.teamMember.findUnique({
+        where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+        include: { user: { select: { name: true } } },
+      });
+      if (!target) {
+        throw new HttpError(404, 'This person is not on the team.');
+      }
 
       if (target.role === 'admin') {
         const otherAdminCount = await tx.teamMember.count({
@@ -181,7 +213,11 @@ export default async function memberRoutes(app: FastifyInstance) {
         where: {
           assignedUserId: params.userId,
           status: 'claimed',
-          session: { teamId: params.teamId },
+          session: {
+            teamId: params.teamId,
+            status: 'scheduled',
+            startsAt: { gt: new Date() },
+          },
         },
         include: { point: true, session: true },
       });

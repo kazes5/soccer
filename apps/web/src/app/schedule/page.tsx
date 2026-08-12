@@ -403,8 +403,12 @@ function ScheduleSessions({
         cancelLabel={t('common.cancel')}
         closeLabel={t('common.close')}
         danger
+        confirmDisabled={isCancelling}
+        cancelDisabled={isCancelling}
         onConfirm={handleCancelConfirmed}
-        onCancel={() => setCancellingSession(null)}
+        onCancel={() => {
+          if (!isCancelling) setCancellingSession(null);
+        }}
       />
 
       {managingPoint && (
