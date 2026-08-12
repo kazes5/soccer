@@ -9,6 +9,8 @@ const push = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace }),
+  usePathname: () => '/home',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -122,7 +124,7 @@ describe('HomePage', () => {
 
     renderWithProviders(<HomePage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fhome'));
   });
 
   it('shows the user, their teams, and lets an admin send an invite', async () => {

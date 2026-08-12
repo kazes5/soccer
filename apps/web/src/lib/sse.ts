@@ -42,7 +42,8 @@ export function startNotificationStream(
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {};
 
   const seenIds = new Set<string>();
-  const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`notifications:${teamId}`) : null;
+  const channel =
+    'BroadcastChannel' in window ? new BroadcastChannel(`notifications:${teamId}`) : null;
   let eventSource: EventSource | null = null;
   let stopped = false;
   let releaseLock: (() => void) | null = null;
@@ -84,7 +85,10 @@ export function startNotificationStream(
         // (or vice versa mid-deploy) — drop it rather than crash the stream.
         if (!result.success) return;
         apply(result.data);
-        channel?.postMessage({ type: 'notification', notification: result.data } satisfies LeaderMessage);
+        channel?.postMessage({
+          type: 'notification',
+          notification: result.data,
+        } satisfies LeaderMessage);
       });
       releaseLock = () => {
         eventSource?.close();

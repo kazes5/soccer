@@ -8,6 +8,7 @@ const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/admin/notification-settings',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -84,7 +85,9 @@ describe('AdminNotificationSettingsPage', () => {
 
     renderWithProviders(<AdminNotificationSettingsPage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/login?next=%2Fadmin%2Fnotification-settings'),
+    );
   });
 
   it('redirects to /home when the user is not an admin on any team', async () => {

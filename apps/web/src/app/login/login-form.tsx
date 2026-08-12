@@ -11,6 +11,7 @@ import { useState, type FormEvent } from 'react';
 import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import { ApiError, api } from '@/lib/api';
+import { safeNextPath } from '@/lib/safe-redirect';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function LoginForm() {
         optionsJSON: options as PublicKeyCredentialRequestOptionsJSON,
       });
       await api.verifyPasskeyLogin({ challengeId, response });
-      router.push('/home');
+      router.push(safeNextPath(searchParams.get('next')));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

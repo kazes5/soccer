@@ -5,10 +5,11 @@ import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import LoginForm from './login-form';
 
 const push = vi.fn();
+let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@simplewebauthn/browser', async (importOriginal) => {
@@ -30,6 +31,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 describe('LoginForm', () => {
   beforeEach(async () => {
+    searchParams = new URLSearchParams();
     push.mockClear();
     vi.mocked(api.getPasskeyLoginOptions).mockReset();
     vi.mocked(api.verifyPasskeyLogin).mockReset();
@@ -74,6 +76,74 @@ describe('LoginForm', () => {
       challengeId: 'challenge-1',
       response: { id: 'credential-1' },
     });
+  });
+
+  it('redirects to a validated next path after login instead of /home', async () => {
+    searchParams = new URLSearchParams({
+      next: '/schedule?team=team-1&session=session-1&shift=shift-1',
+    });
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    vi.mocked(api.getPasskeyLoginOptions).mockResolvedValue({
+      challengeId: 'challenge-1',
+      options: { challenge: 'server-challenge' },
+    });
+    vi.mocked(startAuthentication).mockResolvedValue({ id: 'credential-1' } as never);
+    vi.mocked(api.verifyPasskeyLogin).mockResolvedValue({
+      sessionToken: 'token-abc',
+      expiresAt: '2026-09-01T00:00:00.000Z',
+      user: {
+        id: 'user-1',
+        name: 'Avi Levi',
+        phone: '+15550002222',
+        email: null,
+        languagePreference: 'en',
+      },
+      teamMemberships: [
+        { teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent', timezone: 'Asia/Jerusalem' },
+      ],
+    });
+
+    renderWithProviders(<LoginForm />);
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
+      target: { value: '+15550002222' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /continue with passkey/i }));
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith('/schedule?team=team-1&session=session-1&shift=shift-1'),
+    );
+  });
+
+  it('ignores an external next path and redirects to /home instead', async () => {
+    searchParams = new URLSearchParams({ next: 'https://evil.example/phish' });
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    vi.mocked(api.getPasskeyLoginOptions).mockResolvedValue({
+      challengeId: 'challenge-1',
+      options: { challenge: 'server-challenge' },
+    });
+    vi.mocked(startAuthentication).mockResolvedValue({ id: 'credential-1' } as never);
+    vi.mocked(api.verifyPasskeyLogin).mockResolvedValue({
+      sessionToken: 'token-abc',
+      expiresAt: '2026-09-01T00:00:00.000Z',
+      user: {
+        id: 'user-1',
+        name: 'Avi Levi',
+        phone: '+15550002222',
+        email: null,
+        languagePreference: 'en',
+      },
+      teamMemberships: [
+        { teamId: 'team-1', teamName: 'U-12 Wildcats', role: 'parent', timezone: 'Asia/Jerusalem' },
+      ],
+    });
+
+    renderWithProviders(<LoginForm />);
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
+      target: { value: '+15550002222' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /continue with passkey/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
   });
 
   it('shows an error when the phone is not recognized', async () => {

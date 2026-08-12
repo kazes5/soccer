@@ -2,7 +2,7 @@
 
 import type { CurrentUserResponse, Notification } from '@soccer/contracts';
 import { Calendar, Home, X } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClassName, secondaryButtonClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
@@ -15,11 +15,14 @@ import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { describeNotification } from '@/lib/notifications';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 import { useNotificationStream } from '@/lib/use-notification-stream';
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const requestedTeamId = useSearchParams().get('team');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedTeamId = searchParams.get('team');
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -47,9 +50,9 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [authStatus, router]);
+  }, [authStatus, router, pathname, searchParams]);
 
   if (authStatus !== 'ready' || !session) {
     return null;

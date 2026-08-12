@@ -8,16 +8,15 @@ export function DataList({ children, ariaLabel }: { children: ReactNode; ariaLab
   );
 }
 
-export const DataListItem = forwardRef<
-  HTMLLIElement,
-  { children: ReactNode; className?: string }
->(function DataListItem({ children, className = '' }, ref) {
-  return (
-    <li
-      ref={ref}
-      className={`rounded-xl border border-surface-border bg-surface p-4 shadow-raised ${className}`}
-    >
-      {children}
-    </li>
-  );
-});
+export const DataListItem = forwardRef<HTMLLIElement, { children: ReactNode; className?: string }>(
+  function DataListItem({ children, className = '' }, ref) {
+    return (
+      <li
+        ref={ref}
+        className={`rounded-xl border border-surface-border bg-surface p-4 shadow-raised ${className}`}
+      >
+        {children}
+      </li>
+    );
+  },
+);

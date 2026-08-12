@@ -12,7 +12,7 @@ import type { Locale } from '@soccer/i18n';
 import type { StatusTone } from '@soccer/ui-tokens';
 import { focusRingClassName } from '@soccer/ui-tokens';
 import { Ban, Calendar, Home, Pencil, Users } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Field,
@@ -34,6 +34,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
   formatSessionStartsAt,
   updateSessionInSessions,
@@ -55,6 +56,7 @@ function isSessionPast(startsAt: string): boolean {
 
 export default function SchedulePage() {
   const router = useRouter();
+  const pathname = usePathname();
   // Lets a link from another page (e.g. Home's "+N more" under a specific
   // team's help-needed list) open the schedule already scoped to that team,
   // instead of always defaulting to the user's first membership. `session`/
@@ -94,9 +96,9 @@ export default function SchedulePage() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [authStatus, router]);
+  }, [authStatus, router, pathname, searchParams]);
 
   if (authStatus !== 'ready' || !session) {
     return null;
@@ -337,9 +339,7 @@ function ScheduleSessions({
               isAdmin={isAdmin}
               playersById={playersById}
               pendingShiftId={pendingShiftId}
-              highlightShiftId={
-                practiceSession.id === highlightSessionId ? highlightShiftId : null
-              }
+              highlightShiftId={practiceSession.id === highlightSessionId ? highlightShiftId : null}
               isHighlighted={practiceSession.id === highlightSessionId}
               onClaim={handleClaim}
               onRelease={handleRelease}

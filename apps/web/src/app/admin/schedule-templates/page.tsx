@@ -11,7 +11,7 @@ import type {
 import { formatDate, type Locale, type MessageKey } from '@soccer/i18n';
 import { focusRingClassName } from '@soccer/ui-tokens';
 import { Calendar, Home, Pencil, Plus } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Field,
@@ -30,6 +30,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
   WEEKDAY_CODES,
   buildRecurrenceRule,
@@ -53,7 +54,9 @@ function parseHorizonWeeks(value: string): number | null {
 
 export default function AdminScheduleTemplatesPage() {
   const router = useRouter();
-  const requestedTeamId = useSearchParams().get('team');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedTeamId = searchParams.get('team');
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -82,9 +85,9 @@ export default function AdminScheduleTemplatesPage() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [authStatus, router]);
+  }, [authStatus, router, pathname, searchParams]);
 
   // No team where this user is admin — nothing on this page applies to them.
   useEffect(() => {

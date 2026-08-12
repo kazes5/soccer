@@ -128,7 +128,11 @@ describe('notification SSE stream', () => {
     }
   }
 
-  async function createBroadcastNotification(teamId: string, marker: string, publisher?: ReturnType<typeof createRedisConnection>) {
+  async function createBroadcastNotification(
+    teamId: string,
+    marker: string,
+    publisher?: ReturnType<typeof createRedisConnection>,
+  ) {
     const event = await app.prisma.outboxEvent.create({
       data: {
         teamId,

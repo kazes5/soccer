@@ -8,6 +8,7 @@ const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/settings/notifications',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -77,7 +78,9 @@ describe('NotificationPreferencesPage', () => {
 
     renderWithProviders(<NotificationPreferencesPage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/login?next=%2Fsettings%2Fnotifications'),
+    );
   });
 
   it('shows the team default quiet hours and all categories enabled with no stored preferences', async () => {

@@ -10,6 +10,7 @@ const push = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push }),
+  usePathname: () => '/notifications',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -97,7 +98,7 @@ describe('NotificationsPage', () => {
 
     renderWithProviders(<NotificationsPage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fnotifications'));
   });
 
   it('shows an empty state when there are no notifications', async () => {

@@ -12,7 +12,7 @@ import {
   type TeamNotificationSettings,
 } from '@soccer/contracts';
 import { Calendar, Home, Plus, Trash2 } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
@@ -23,6 +23,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 
 /** Only `admin` memberships apply to this page — kept as one helper so the
  * initial-team-pick effect and the render-time filter can never disagree. */
@@ -32,7 +33,9 @@ function adminMembershipsOf(memberships: TeamMembership[]): TeamMembership[] {
 
 export default function AdminNotificationSettingsPage() {
   const router = useRouter();
-  const requestedTeamId = useSearchParams().get('team');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedTeamId = searchParams.get('team');
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -61,9 +64,9 @@ export default function AdminNotificationSettingsPage() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [authStatus, router]);
+  }, [authStatus, router, pathname, searchParams]);
 
   useEffect(() => {
     if (

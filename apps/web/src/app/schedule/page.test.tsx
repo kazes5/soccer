@@ -14,6 +14,7 @@ let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/schedule',
   useSearchParams: () => searchParams,
 }));
 
@@ -153,7 +154,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fschedule'));
   });
 
   it('shows an open shift and lets a parent claim it', async () => {
