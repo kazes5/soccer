@@ -348,6 +348,57 @@ describe('reminders', () => {
     expect(stillPending[0]!.id).toBe(overriderTasksBefore.find((t) => t.cancelledAt === null)!.id);
   });
 
+  it('changing the team default also resyncs a shift that is currently pending_swap, not just claimed ones', async () => {
+    const { adminToken, teamId, shiftId, holder } = await setUpTeamWithClaimedShift();
+    const requester = await addParent(teamId, adminToken, 'Requester');
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/swap-requests`,
+      headers: { authorization: `Bearer ${requester.sessionToken}` },
+    });
+
+    const shift = await app.prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+    expect(shift.status).toBe('pending_swap');
+    expect(shift.assignedUserId).toBe(holder.userId);
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/coordination-settings`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { swapExpiryHours: 24, reminderOffsetMinutes: [60], escalationLeadMinutes: 90 },
+    });
+
+    const pendingTasks = (await findReminderTasks(teamId, shiftId)).filter(
+      (t) => t.cancelledAt === null,
+    );
+    expect(pendingTasks).toHaveLength(1);
+    const runAt = instantToWallClock(pendingTasks[0]!.runAt, 'Asia/Jerusalem');
+    const session = await app.prisma.practiceSession.findUniqueOrThrow({
+      where: { id: shift.sessionId },
+    });
+    expect(runAt.date).toBe(instantToWallClock(session.startsAt, 'Asia/Jerusalem').date);
+  });
+
+  it("setting a personal reminder-offset override resyncs a member's pending_swap shift too, not just claimed ones", async () => {
+    const { adminToken, teamId, shiftId, holder } = await setUpTeamWithClaimedShift();
+    const requester = await addParent(teamId, adminToken, 'Requester');
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/swap-requests`,
+      headers: { authorization: `Bearer ${requester.sessionToken}` },
+    });
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/users/me/preferences',
+      headers: { authorization: `Bearer ${holder.sessionToken}` },
+      payload: { teamId, reminderOffsetMinutes: [45] },
+    });
+
+    const tasks = (await findReminderTasks(teamId, shiftId)).filter((t) => t.cancelledAt === null);
+    expect(tasks).toHaveLength(1);
+  });
+
   it('setting a personal reminder-offset override resyncs only that member, and clearing it reverts to the team default', async () => {
     const { teamId, shiftId, holder } = await setUpTeamWithClaimedShift();
     expect(

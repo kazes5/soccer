@@ -1,5 +1,5 @@
 import { REMINDER_OFFSET_MINUTES_DEFAULT } from '@soccer/contracts';
-import type { Prisma } from '../../generated/prisma/client';
+import type { Prisma, ShiftStatus } from '../../generated/prisma/client';
 
 export interface ScheduledReminder {
   id: string;
@@ -104,9 +104,16 @@ export async function syncRemindersForShifts(
   return created;
 }
 
-/** Every currently-claimed, future, still-scheduled shift on `teamId` whose
- *  assignee has *no* personal reminder-offset override — the set that
- *  actually changes effective offsets when the team's own default changes. */
+/** Shift statuses `syncShiftReminders` will actually (re)schedule for —
+ *  `claimed` and `pending_swap` both still have a live `assignedUserId`
+ *  (see that function's own guard), so both need to be resynced here too, or
+ *  a shift mid-swap silently keeps stale offsets across a settings change. */
+const REMINDABLE_SHIFT_STATUSES: ShiftStatus[] = ['claimed', 'pending_swap'];
+
+/** Every currently-claimed-or-pending-swap, future, still-scheduled shift on
+ *  `teamId` whose assignee has *no* personal reminder-offset override — the
+ *  set that actually changes effective offsets when the team's own default
+ *  changes. */
 export async function findShiftIdsUsingTeamDefaultOffsets(
   tx: Prisma.TransactionClient,
   teamId: string,
@@ -117,7 +124,7 @@ export async function findShiftIdsUsingTeamDefaultOffsets(
   });
   const shifts = await tx.shift.findMany({
     where: {
-      status: 'claimed',
+      status: { in: REMINDABLE_SHIFT_STATUSES },
       assignedUserId: { notIn: overridden.map((m) => m.userId) },
       session: { teamId, status: 'scheduled', startsAt: { gt: new Date() } },
     },
@@ -126,9 +133,9 @@ export async function findShiftIdsUsingTeamDefaultOffsets(
   return shifts.map((s) => s.id);
 }
 
-/** Every currently-claimed, future, still-scheduled shift assigned to one
- *  member on one team — the set that changes when *their own* reminder
- *  override is set, changed, or cleared. */
+/** Every currently-claimed-or-pending-swap, future, still-scheduled shift
+ *  assigned to one member on one team — the set that changes when *their
+ *  own* reminder override is set, changed, or cleared. */
 export async function findShiftIdsForMember(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -136,7 +143,7 @@ export async function findShiftIdsForMember(
 ): Promise<string[]> {
   const shifts = await tx.shift.findMany({
     where: {
-      status: 'claimed',
+      status: { in: REMINDABLE_SHIFT_STATUSES },
       assignedUserId: userId,
       session: { teamId, status: 'scheduled', startsAt: { gt: new Date() } },
     },
