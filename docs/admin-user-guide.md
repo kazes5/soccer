@@ -173,9 +173,9 @@ and member/role changes for the active team.
   item from your own list only, not other members' copies.
 - **Load more** retrieves older history.
 
-Each member's own delivery preferences — quiet hours, reminder timing, and
-which categories notify them — are set on their personal **Settings** page,
-not here; team-wide defaults are set below.
+Each member's own delivery preferences — quiet hours, reminder timing, which
+categories notify them, and browser push (per-device opt-in) — are set on
+their personal **Settings** page, not here; team-wide defaults are set below.
 
 ## Configure coordination and notifications
 
@@ -192,11 +192,15 @@ Open **Coordination & notification settings** from the admin navigation.
   Individual members can override it in their personal **Settings** page.
 
 Select **Save** and wait for the confirmation message. These settings control
-reminder, escalation, and quiet-hours timing. In-app notification delivery
-itself is already live (see [Review notifications](#review-notifications)
-above); delivery to email, SMS, or browser push, and the reminders/escalations
-these settings will time once built, are not yet implemented — see
-[Current limitations](#current-limitations).
+reminder, escalation, and quiet-hours timing. In-app notification delivery is
+already live (see [Review notifications](#review-notifications) above), and
+opted-in browser push now delivers as well, gated by the same quiet hours and
+per-category preferences; email/SMS delivery and the reminders/escalations
+these settings will time once built are not yet implemented — see
+[Current limitations](#current-limitations). Browser push additionally
+requires the server operator to have configured a VAPID keypair; if it isn't
+configured, members simply won't see the option to enable push on their
+device.
 
 ## Account and security
 
@@ -234,8 +238,9 @@ these settings will time once built, are not yet implemented — see
 - Schedule templates cannot be deleted, and bulk editing of existing future
   sessions is not available.
 - Swap requests are not yet available in the web UI.
-- In-app notification delivery is live. Reminders, no-show escalations, and
-  delivery to email, SMS, or browser push are not yet implemented.
+- In-app notification delivery and opted-in browser push are both live.
+  Reminders, no-show escalations, and delivery to email or SMS are not yet
+  implemented.
 - Audit logs, reports, CSV export, and archive management do not yet have admin
   screens.
 
