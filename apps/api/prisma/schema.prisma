@@ -101,6 +101,15 @@ enum DeliveryChannel {
 enum ScheduledTaskType {
   reminder
   escalation
+  swap_expiry
+}
+
+enum SwapRequestStatus {
+  pending
+  accepted
+  declined
+  expired
+  cancelled
 }
 
 model User {
@@ -127,6 +136,8 @@ model User {
   assignedShifts             Shift[]                      @relation("ShiftsAssigned")
   memberNotificationSettings MemberNotificationSettings[]
   userNotifications          UserNotification[]
+  swapRequestsSent           SwapRequest[]                @relation("SwapRequestsRequested")
+  swapRequestsReceived       SwapRequest[]                @relation("SwapRequestsHeld")
 
   @@map("users")
 }
@@ -153,6 +164,7 @@ model Team {
   outboxEvents               OutboxEvent[]
   userNotifications          UserNotification[]
   scheduledTasks             ScheduledTask[]
+  swapRequests               SwapRequest[]
 
   @@map("teams")
 }
@@ -348,6 +360,14 @@ model OutboxEvent {
   eventType          String               @map("event_type")
   category           NotificationCategory
   severity           NotificationSeverity @default(normal)
+  /**
+   * Set only when the acting user should get the in-app record like every
+   * other recipient but not a redundant push about their own action (see
+   * `push-delivery.ts`) — currently only swap-lifecycle events set this;
+   * every other event type leaves it null, which is a no-op for push
+   * delivery (nobody gets excluded).
+   */
+  actorId            String?              @map("actor_id")
   recipientScope     RecipientScope       @map("recipient_scope")
   /**
    * Populated only when `recipientScope = participants`.
@@ -586,9 +606,51 @@ model Shift {
   session      PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   point        CollectionPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
   assignedUser User?           @relation("ShiftsAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  swapRequests SwapRequest[]
 
   @@unique([sessionId, pointId, direction])
   @@index([pointId])
   @@index([assignedUserId])
   @@map("shifts")
+}
+
+/**
+ * A one-way request from `requestingUser` to take over `currentHolder`'s
+ * claimed shift — CLAUDE.md §3.4's swap-consent flow. The shift stays
+ * assigned to `currentHolder` (status flips `claimed` -> `pending_swap`,
+ * blocking a competing claim/release/second-request on it) until this
+ * resolves one of four ways: `currentHolder` accepts (shift reassigns) or
+ * declines, `requestingUser` cancels, or it expires unresolved
+ * (`CoordinationSettings.swapExpiryHours` after creation, capped at the
+ * session's start time — a `ScheduledTask` of type `swap_expiry` drives
+ * this). Only one `pending` row may exist per shift at a time — enforced by
+ * both the `Shift.status` CAS on creation (primary guard: a second request
+ * can't even start once the first has flipped the shift to `pending_swap`)
+ * and a partial unique index added by hand in this model's migration
+ * (`swap_requests_pending_shift_unique`, `WHERE status = 'pending'` — not
+ * expressible in the Prisma schema DSL), per PLAN.md's explicit "enforce
+ * with a database constraint" instruction — defense in depth, not the only
+ * guard.
+ */
+model SwapRequest {
+  id               String            @id @default(uuid())
+  teamId           String            @map("team_id")
+  shiftId          String            @map("shift_id")
+  requestingUserId String            @map("requesting_user_id")
+  currentHolderId  String            @map("current_holder_id")
+  status           SwapRequestStatus @default(pending)
+  expiresAt        DateTime          @map("expires_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  team           Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  shift          Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  requestingUser User  @relation("SwapRequestsRequested", fields: [requestingUserId], references: [id])
+  currentHolder  User  @relation("SwapRequestsHeld", fields: [currentHolderId], references: [id])
+
+  @@index([shiftId])
+  @@index([teamId, status])
+  @@index([requestingUserId])
+  @@index([currentHolderId])
+  @@map("swap_requests")
 }

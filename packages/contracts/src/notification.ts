@@ -7,7 +7,9 @@ import { notificationCategorySchema } from './enums';
  * CLAUDE.md's Requirement 5 (or §4.2/§4.3) explicitly calls out as a
  * broadcast trigger. Settings changes, invite generation (as opposed to
  * acceptance), team bootstrap, and collection-point CRUD are deliberately
- * excluded — see the Stage 4 Checkpoint 4 Progress note in PLAN.md.
+ * excluded — see the Stage 4 Checkpoint 4 Progress note in PLAN.md. The five
+ * `swap_*` types (Checkpoint 7, CLAUDE.md §3.4/Requirement 4) were added
+ * later, following the same "every lifecycle transition broadcasts" rule.
  */
 export const notificationEventTypeSchema = z.enum([
   'shift_claimed',
@@ -21,6 +23,11 @@ export const notificationEventTypeSchema = z.enum([
   'member_demoted',
   'member_removed',
   'invite_accepted',
+  'swap_requested',
+  'swap_accepted',
+  'swap_declined',
+  'swap_expired',
+  'swap_cancelled',
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 

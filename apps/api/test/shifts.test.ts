@@ -140,7 +140,7 @@ describe('shifts', () => {
       headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE',
-        startDate: '2026-08-10',
+        startDate: futureMondayDateString(1),
         defaultTime: '18:00',
         defaultFieldLocation: 'Central Field',
         horizonWeeks: 1,

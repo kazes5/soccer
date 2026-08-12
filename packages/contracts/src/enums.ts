@@ -18,6 +18,15 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 export const shiftStatusSchema = z.enum(['open', 'claimed', 'pending_swap']);
 export type ShiftStatus = z.infer<typeof shiftStatusSchema>;
 
+export const swapRequestStatusSchema = z.enum([
+  'pending',
+  'accepted',
+  'declined',
+  'expired',
+  'cancelled',
+]);
+export type SwapRequestStatus = z.infer<typeof swapRequestStatusSchema>;
+
 export const notificationCategorySchema = z.enum([
   'shift_changes',
   'swaps',

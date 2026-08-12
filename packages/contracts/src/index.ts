@@ -16,3 +16,4 @@ export * from './coordination-settings';
 export * from './notification-settings';
 export * from './member-notification-preferences';
 export * from './notification';
+export * from './swap';

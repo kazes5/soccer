@@ -1,5 +1,5 @@
 import type { MessageKey } from '@soccer/i18n';
-import { Bell, Inbox, MapPin, Repeat, Settings } from 'lucide-react';
+import { ArrowLeftRight, Bell, Inbox, MapPin, Repeat, Settings } from 'lucide-react';
 import type { ShellNavItem } from '@/components/ui/shell';
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
@@ -26,6 +26,17 @@ export function notificationsNavItem(teamId: string, t: Translate, active = fals
     href: `/notifications?team=${encodeURIComponent(teamId)}`,
     label: t('nav.notifications'),
     icon: <Inbox className="size-full" />,
+    active,
+  };
+}
+
+/** Every team member's shift-swap inbox/sent list — team-scoped like
+ * `notificationsNavItem`, and equally available to parents and admins. */
+export function swapsNavItem(teamId: string, t: Translate, active = false): ShellNavItem {
+  return {
+    href: `/swaps?team=${encodeURIComponent(teamId)}`,
+    label: t('nav.swaps'),
+    icon: <ArrowLeftRight className="size-full" />,
     active,
   };
 }

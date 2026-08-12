@@ -63,6 +63,54 @@ describe('buildPushPayload', () => {
     expect(result.url).toBeNull();
   });
 
+  it('builds swap_requested content with a deep link to the swaps page', () => {
+    const result = buildPushPayload('en', 'team-1', {
+      eventType: 'swap_requested',
+      payload: { requestingUserName: 'Ron Mizrahi', pointName: 'Oak St' },
+    });
+
+    // The requester's name is in the title, not only the body — a collapsed
+    // OS notification often shows just the title, and "who wants my shift"
+    // must survive that.
+    expect(result.title).toBe('Ron Mizrahi wants to swap');
+    expect(result.body).toBe('Ron Mizrahi wants your Oak St shift');
+    expect(result.url).toBe('/swaps?team=team-1');
+  });
+
+  it('builds swap_accepted content in Hebrew', () => {
+    const result = buildPushPayload('he', 'team-1', {
+      eventType: 'swap_accepted',
+      payload: { requestingUserName: 'רון', currentHolderName: 'נועה', pointName: 'רחוב האלון' },
+    });
+
+    expect(result.title).toBe('ההחלפה אושרה');
+    expect(result.body).toBe('נועה אישר/ה החלפה עבור רחוב האלון');
+    expect(result.url).toBe('/swaps?team=team-1');
+  });
+
+  it('builds swap_declined, swap_expired, and swap_cancelled content', () => {
+    expect(
+      buildPushPayload('en', 'team-1', {
+        eventType: 'swap_declined',
+        payload: { currentHolderName: 'Noa Peretz', pointName: 'Oak St' },
+      }).body,
+    ).toBe('Noa Peretz declined a swap for Oak St');
+
+    expect(
+      buildPushPayload('en', 'team-1', {
+        eventType: 'swap_expired',
+        payload: { pointName: 'Oak St' },
+      }).body,
+    ).toBe('A swap request for Oak St went unanswered');
+
+    expect(
+      buildPushPayload('en', 'team-1', {
+        eventType: 'swap_cancelled',
+        payload: { requestingUserName: 'Ron Mizrahi', pointName: 'Oak St' },
+      }).body,
+    ).toBe('Ron Mizrahi cancelled their swap request for Oak St');
+  });
+
   it('falls back to a generic message for an event type this build does not recognize', () => {
     const result = buildPushPayload('en', 'team-1', {
       eventType: 'some_future_event_type',

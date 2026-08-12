@@ -5,6 +5,7 @@ import type {
   PracticeSession,
   SessionPoint,
   ShiftStatsResponse,
+  SwapRequest,
   TeamMembership,
 } from '@soccer/contracts';
 import type { Locale } from '@soccer/i18n';
@@ -27,7 +28,12 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
-import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
+import {
+  adminNavItems,
+  notificationsNavItem,
+  settingsNavItem,
+  swapsNavItem,
+} from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
@@ -110,6 +116,7 @@ export default function HomePage() {
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" />, active: true },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
     ...(activeMembership ? [notificationsNavItem(activeMembership.teamId, t)] : []),
+    ...(activeMembership ? [swapsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
   ];
@@ -196,7 +203,12 @@ function HomeWorkspace({
   const [sessionsState, setSessionsState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [stats, setStats] = useState<ShiftStatsResponse | null>(null);
   const [statsState, setStatsState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [pendingSwaps, setPendingSwaps] = useState<SwapRequest[] | null>(null);
+  const [pendingSwapsState, setPendingSwapsState] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  );
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null);
+  const [pendingSwapActionId, setPendingSwapActionId] = useState<string | null>(null);
 
   const loadSessions = useCallback(() => {
     return api.listSessions(teamId).then((data) => {
@@ -211,6 +223,22 @@ function HomeWorkspace({
       setStatsState('ready');
     });
   }, [teamId]);
+
+  // "Needs your response" for this widget — swap requests where the current
+  // user is the holder being asked to accept/decline, not every swap they're
+  // any part of (the full picture, including their own sent requests, lives
+  // on /swaps).
+  const loadPendingSwaps = useCallback(() => {
+    return api.listSwapRequests(teamId).then((data) => {
+      setPendingSwaps(
+        data.swapRequests.filter(
+          (swapRequest) =>
+            swapRequest.status === 'pending' && swapRequest.currentHolderId === currentUserId,
+        ),
+      );
+      setPendingSwapsState('ready');
+    });
+  }, [teamId, currentUserId]);
 
   // Initial fetch: `sessionsState`/`statsState` already start as 'loading' via
   // useState, so there's nothing to reset here — every setState happens inside
@@ -234,6 +262,16 @@ function HomeWorkspace({
       cancelled = true;
     };
   }, [loadStats]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPendingSwaps().catch(() => {
+      if (!cancelled) setPendingSwapsState('error');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPendingSwaps]);
 
   // Only used to resync after a claim/release conflict, where the local list is
   // known-stale — a normal success patches the one changed shift in place
@@ -287,6 +325,46 @@ function HomeWorkspace({
     }
   }
 
+  async function handleAcceptSwap(swapRequestId: string) {
+    setPendingSwapActionId(swapRequestId);
+    try {
+      await api.acceptSwapRequest(teamId, swapRequestId);
+      setPendingSwaps((prev) => (prev ? prev.filter((s) => s.id !== swapRequestId) : prev));
+      loadSessions().catch(() => setSessionsState('error'));
+      // Unlike decline (the holder keeps the shift), accepting hands it to
+      // the requester — the same "My Stats" refresh claim/release already do.
+      loadStats().catch(() => setStatsState('error'));
+    } catch (err) {
+      showToast(
+        err instanceof ApiError && err.status === 409
+          ? t('swaps.actionConflict')
+          : t('common.somethingWentWrong'),
+        'error',
+      );
+      loadPendingSwaps().catch(() => setPendingSwapsState('error'));
+    } finally {
+      setPendingSwapActionId(null);
+    }
+  }
+
+  async function handleDeclineSwap(swapRequestId: string) {
+    setPendingSwapActionId(swapRequestId);
+    try {
+      await api.declineSwapRequest(teamId, swapRequestId);
+      setPendingSwaps((prev) => (prev ? prev.filter((s) => s.id !== swapRequestId) : prev));
+    } catch (err) {
+      showToast(
+        err instanceof ApiError && err.status === 409
+          ? t('swaps.actionConflict')
+          : t('common.somethingWentWrong'),
+        'error',
+      );
+      loadPendingSwaps().catch(() => setPendingSwapsState('error'));
+    } finally {
+      setPendingSwapActionId(null);
+    }
+  }
+
   if (sessionsState === 'loading') {
     return <LoadingState label={t('home.workspaceLoading')} />;
   }
@@ -311,6 +389,8 @@ function HomeWorkspace({
   const openShifts = upcoming.filter((entry) => entry.point.shift.status === 'open');
   const visibleOpenShifts = openShifts.slice(0, HELP_NEEDED_DISPLAY_CAP);
   const remainingOpenCount = openShifts.length - visibleOpenShifts.length;
+  const visiblePendingSwaps = (pendingSwaps ?? []).slice(0, HELP_NEEDED_DISPLAY_CAP);
+  const remainingPendingSwapsCount = (pendingSwaps?.length ?? 0) - visiblePendingSwaps.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -386,11 +466,36 @@ function HomeWorkspace({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
           {t('home.pendingSwapsTitle')}
         </h2>
-        <DataList ariaLabel={t('home.pendingSwapsTitle')}>
-          <DataListItem>
-            <span className="text-sm text-ink-muted">{t('home.pendingSwapsPlaceholder')}</span>
-          </DataListItem>
-        </DataList>
+        {pendingSwapsState === 'error' && <ErrorState title={t('swaps.loadError')} />}
+        {pendingSwapsState === 'ready' &&
+          pendingSwaps &&
+          (visiblePendingSwaps.length === 0 ? (
+            <EmptyState title={t('home.pendingSwapsEmpty')} />
+          ) : (
+            <>
+              <DataList ariaLabel={t('home.pendingSwapsTitle')}>
+                {visiblePendingSwaps.map((swapRequest) => (
+                  <SwapRequestRow
+                    key={swapRequest.id}
+                    swapRequest={swapRequest}
+                    locale={locale}
+                    timeZone={timeZone}
+                    isPending={pendingSwapActionId === swapRequest.id}
+                    onAccept={() => handleAcceptSwap(swapRequest.id)}
+                    onDecline={() => handleDeclineSwap(swapRequest.id)}
+                  />
+                ))}
+              </DataList>
+              {remainingPendingSwapsCount > 0 && (
+                <Link
+                  href={`/swaps?team=${encodeURIComponent(teamId)}`}
+                  className="text-sm font-medium text-status-mine-on hover:underline"
+                >
+                  {t('home.pendingSwapsMore', { count: remainingPendingSwapsCount })}
+                </Link>
+              )}
+            </>
+          ))}
       </section>
 
       <section className="flex flex-col gap-3">
@@ -428,6 +533,58 @@ function HomeWorkspace({
         )}
       </section>
     </div>
+  );
+}
+
+function SwapRequestRow({
+  swapRequest,
+  locale,
+  timeZone,
+  isPending,
+  onAccept,
+  onDecline,
+}: {
+  swapRequest: SwapRequest;
+  locale: Locale;
+  timeZone: string;
+  isPending: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  const { t } = useLocale();
+  const formatted = formatSessionStartsAt(locale, swapRequest.sessionStartsAt, timeZone);
+  const directionLabel =
+    swapRequest.direction === 'to_practice' ? t('schedule.toPractice') : t('schedule.fromPractice');
+
+  return (
+    <DataListItem className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium">
+          {t('swaps.requestedBy', { name: swapRequest.requestingUserName })}
+        </p>
+        <p className="text-xs text-ink-muted">
+          {formatted} · {directionLabel} · {swapRequest.pointName}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          className={`${secondaryButtonClassName} text-sm`}
+          onClick={onDecline}
+        >
+          {isPending ? t('swaps.declining') : t('swaps.decline')}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          className={`${buttonClassName} text-sm`}
+          onClick={onAccept}
+        >
+          {isPending ? t('swaps.accepting') : t('swaps.accept')}
+        </button>
+      </div>
+    </DataListItem>
   );
 }
 

@@ -32,7 +32,12 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
-import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
+import {
+  adminNavItems,
+  notificationsNavItem,
+  settingsNavItem,
+  swapsNavItem,
+} from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
@@ -44,6 +49,7 @@ import { instantToWallClock } from '@/lib/timezone';
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   if (shift.status === 'open') return 'open';
+  if (shift.status === 'pending_swap') return 'pending';
   return shift.assignedUserId === currentUserId ? 'mine' : 'covered';
 }
 
@@ -117,6 +123,7 @@ export default function SchedulePage() {
       active: true,
     },
     ...(activeMembership ? [notificationsNavItem(activeMembership.teamId, t)] : []),
+    ...(activeMembership ? [swapsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
   ];
@@ -281,6 +288,28 @@ function ScheduleSessions({
     }
   }
 
+  async function handleRequestSwap(shiftId: string) {
+    setPendingShiftId(shiftId);
+    try {
+      // A swap request flips the shift to `pending_swap`, not a shape a plain
+      // `ShiftSummary` patch can express as cleanly as claim/release's
+      // single-field change — reload picks up every side effect (this shift
+      // plus a fresh session list) instead of hand-constructing one.
+      await api.createSwapRequest(teamId, shiftId);
+      reload();
+      showToast(t('swaps.requestSent'), 'success');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        showToast(t('schedule.requestSwapConflict'), 'error');
+        reload();
+      } else {
+        showToast(t('common.somethingWentWrong'), 'error');
+      }
+    } finally {
+      setPendingShiftId(null);
+    }
+  }
+
   function handleSessionSaved(updated: PracticeSession) {
     setSessions((prev) => (prev ? updateSessionInSessions(prev, updated) : prev));
     setEditingSession(null);
@@ -343,6 +372,7 @@ function ScheduleSessions({
               isHighlighted={practiceSession.id === highlightSessionId}
               onClaim={handleClaim}
               onRelease={handleRelease}
+              onRequestSwap={handleRequestSwap}
               onEdit={setEditingSession}
               onCancelRequest={setCancellingSession}
               onManagePlayers={(point) => setManagingPoint(point)}
@@ -406,6 +436,7 @@ function SessionCard({
   isHighlighted,
   onClaim,
   onRelease,
+  onRequestSwap,
   onEdit,
   onCancelRequest,
   onManagePlayers,
@@ -421,6 +452,7 @@ function SessionCard({
   isHighlighted: boolean;
   onClaim: (shiftId: string) => void;
   onRelease: (shiftId: string) => void;
+  onRequestSwap: (shiftId: string) => void;
   onEdit: (session: PracticeSession) => void;
   onCancelRequest: (session: PracticeSession) => void;
   onManagePlayers: (point: {
@@ -507,10 +539,13 @@ function SessionCard({
               ? t('schedule.statusMine')
               : tone === 'covered'
                 ? t('schedule.statusCoveredBy', { name: point.shift.assignedUserName ?? '' })
-                : t('schedule.statusOpen');
+                : tone === 'pending'
+                  ? t('schedule.statusSwapPending')
+                  : t('schedule.statusOpen');
           const isPending = pendingShiftId === point.shift.id;
           const canClaim = practiceSession.status === 'scheduled' && point.shift.status === 'open';
           const canRelease = practiceSession.status === 'scheduled' && tone === 'mine';
+          const canRequestSwap = practiceSession.status === 'scheduled' && tone === 'covered';
           const directionLabel =
             point.direction === 'to_practice'
               ? t('schedule.toPractice')
@@ -574,6 +609,16 @@ function SessionCard({
                     onClick={() => onRelease(point.shift.id)}
                   >
                     {isPending ? t('schedule.releasing') : t('schedule.release')}
+                  </button>
+                )}
+                {canRequestSwap && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    className={`${secondaryButtonClassName} text-sm`}
+                    onClick={() => onRequestSwap(point.shift.id)}
+                  >
+                    {isPending ? t('schedule.requestingSwap') : t('schedule.requestSwap')}
                   </button>
                 )}
               </div>

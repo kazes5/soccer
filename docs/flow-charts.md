@@ -206,6 +206,33 @@ flowchart TD
     J --> K
 ```
 
+### Admin requests a shift swap
+
+```mermaid
+flowchart TD
+    A([Admin on Schedule]) --> B[Select Request swap on a trip covered by someone else]
+    B --> C{Request succeeds?}
+    C -->|No, trip no longer available| D[Show conflict and reload canonical state]
+    C -->|Yes| E[Trip marked Swap pending for both holder and requester]
+    D --> F([Continue on Schedule])
+    E --> F
+```
+
+### Admin responds to or cancels a shift swap
+
+```mermaid
+flowchart TD
+    A([Admin on Home or `/swaps`]) --> B{Holds the requested trip, or sent the request?}
+    B -->|Holds the trip| C{Choose response}
+    C -->|Accept| D[Reassign trip to requester]
+    C -->|Decline| E[Trip stays with current holder]
+    B -->|Sent the request| F{Still pending?}
+    F -->|Yes| G[Select Cancel request]
+    G --> E
+    D --> H([Broadcast the outcome to the whole team])
+    E --> H
+```
+
 ### Admin reviews team notifications
 
 ```mermaid
@@ -376,6 +403,33 @@ flowchart TD
     J --> K
 ```
 
+### Parent requests a shift swap
+
+```mermaid
+flowchart TD
+    A([Parent on Schedule]) --> B[Select Request swap on a trip covered by someone else]
+    B --> C{Request succeeds?}
+    C -->|No, trip no longer available| D[Show conflict and reload canonical state]
+    C -->|Yes| E[Trip marked Swap pending for both holder and requester]
+    D --> F([Continue on Schedule])
+    E --> F
+```
+
+### Parent responds to or cancels a shift swap
+
+```mermaid
+flowchart TD
+    A([Parent on Home or `/swaps`]) --> B{Holds the requested trip, or sent the request?}
+    B -->|Holds the trip| C{Choose response}
+    C -->|Accept| D[Reassign trip to requester]
+    C -->|Decline| E[Trip stays with current holder]
+    B -->|Sent the request| F{Still pending?}
+    F -->|Yes| G[Select Cancel request]
+    G --> E
+    D --> H([Broadcast the outcome to the whole team])
+    E --> H
+```
+
 ### Parent reviews team notifications
 
 ```mermaid
@@ -486,6 +540,14 @@ flowchart TD
   that exact page — including its parameters, such as a notification's linked
   session or shift — once sign-in completes, instead of always landing on
   Home.
-- Swap-request UI, member and role management, reporting, and audit-log screens
-  are not yet part of the shipped web flows. See [PLAN.md](../PLAN.md) for their
-  delivery status.
+- A trip with a pending swap request shows a distinct "Swap pending" status
+  and can't be claimed, released, or requested again by someone else until
+  the request resolves — accepted, declined, cancelled by the requester, or
+  expired automatically after the team's configured swap-expiry window
+  (always capped at the session's own start time). Every swap request,
+  response, cancellation, and expiry is broadcast to the whole team, the
+  same as a claim or release, and every past request stays visible on
+  `/swaps` for transparency regardless of who was involved.
+- Member and role management, reporting, and audit-log screens are not yet
+  part of the shipped web flows. See [PLAN.md](../PLAN.md) for their delivery
+  status.

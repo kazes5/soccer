@@ -39,6 +39,12 @@ export function entityKeyFor(eventType: string, payload: Record<string, unknown>
     case 'member_removed':
     case 'invite_accepted':
       return typeof payload.userId === 'string' ? `member:${payload.userId}` : null;
+    case 'swap_requested':
+    case 'swap_accepted':
+    case 'swap_declined':
+    case 'swap_expired':
+    case 'swap_cancelled':
+      return typeof payload.swapRequestId === 'string' ? `swap:${payload.swapRequestId}` : null;
     default:
       return null;
   }

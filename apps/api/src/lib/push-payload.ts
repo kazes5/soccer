@@ -29,6 +29,10 @@ function scheduleUrl(teamId: string, sessionId: string): string | null {
     : null;
 }
 
+function swapsUrl(teamId: string): string {
+  return `/swaps?team=${encodeURIComponent(teamId)}`;
+}
+
 /** Shared by the `shift_claimed`/`shift_released` cases below — identical
  * shape, differing only in which title/body message keys to use. */
 function shiftPushPayload(
@@ -173,6 +177,62 @@ export function buildPushPayload(
           userName: asString(payload, 'userName'),
         }),
         url: null,
+      };
+
+    case 'swap_requested': {
+      // The requester's name goes in the title, not just the body — a
+      // collapsed OS notification (lock screen, notification-center summary
+      // row) often shows only the title, and "who wants my shift" is the one
+      // fact this notification can't be useful without.
+      const requestingUserName = asString(payload, 'requestingUserName');
+      return {
+        title: translate(locale, 'push.swapRequested.title', { requestingUserName }),
+        body: translate(locale, 'push.swapRequested.body', {
+          requestingUserName,
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: swapsUrl(teamId),
+      };
+    }
+
+    case 'swap_accepted':
+      return {
+        title: translate(locale, 'push.swapAccepted.title'),
+        body: translate(locale, 'push.swapAccepted.body', {
+          requestingUserName: asString(payload, 'requestingUserName'),
+          currentHolderName: asString(payload, 'currentHolderName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: swapsUrl(teamId),
+      };
+
+    case 'swap_declined':
+      return {
+        title: translate(locale, 'push.swapDeclined.title'),
+        body: translate(locale, 'push.swapDeclined.body', {
+          currentHolderName: asString(payload, 'currentHolderName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: swapsUrl(teamId),
+      };
+
+    case 'swap_expired':
+      return {
+        title: translate(locale, 'push.swapExpired.title'),
+        body: translate(locale, 'push.swapExpired.body', {
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: swapsUrl(teamId),
+      };
+
+    case 'swap_cancelled':
+      return {
+        title: translate(locale, 'push.swapCancelled.title'),
+        body: translate(locale, 'push.swapCancelled.body', {
+          requestingUserName: asString(payload, 'requestingUserName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: swapsUrl(teamId),
       };
 
     default:

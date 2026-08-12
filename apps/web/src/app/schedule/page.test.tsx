@@ -32,6 +32,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listTeamRoster: vi.fn(),
       claimShift: vi.fn(),
       releaseShift: vi.fn(),
+      createSwapRequest: vi.fn(),
       updateSession: vi.fn(),
       cancelSession: vi.fn(),
       updateSessionPointPlayers: vi.fn(),
@@ -93,7 +94,7 @@ const rosterFixture: TeamRosterResponse = {
 };
 
 function buildSessions(options: {
-  shiftStatus?: 'open' | 'claimed';
+  shiftStatus?: 'open' | 'claimed' | 'pending_swap';
   assignedUserId?: string | null;
   status?: 'scheduled' | 'cancelled';
   startsAt?: string;
@@ -146,6 +147,7 @@ describe('SchedulePage', () => {
     vi.mocked(api.listTeamRoster).mockReset().mockResolvedValue(emptyRoster);
     vi.mocked(api.claimShift).mockReset();
     vi.mocked(api.releaseShift).mockReset();
+    vi.mocked(api.createSwapRequest).mockReset();
     vi.mocked(api.updateSession).mockReset();
     vi.mocked(api.cancelSession).mockReset();
     vi.mocked(api.updateSessionPointPlayers).mockReset();
@@ -275,6 +277,71 @@ describe('SchedulePage', () => {
 
     await waitFor(() => expect(api.releaseShift).toHaveBeenCalledWith('team-1', 'shift-1'));
     expect(await screen.findByText('Open')).toBeInTheDocument();
+  });
+
+  it('lets a parent request a swap for a shift covered by someone else', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(
+      buildSessions({ shiftStatus: 'claimed', assignedUserId: 'user-2' }),
+    );
+    vi.mocked(api.createSwapRequest).mockResolvedValue({
+      id: 'swap-1',
+      teamId: 'team-1',
+      shiftId: 'shift-1',
+      sessionId: 'session-1',
+      sessionStartsAt: FUTURE_STARTS_AT,
+      pointId: 'point-1',
+      pointName: 'Oak St',
+      direction: 'to_practice',
+      requestingUserId: 'user-1',
+      requestingUserName: 'Dana Cohen',
+      currentHolderId: 'user-2',
+      currentHolderName: 'Avi Levi',
+      status: 'pending',
+      expiresAt: FUTURE_STARTS_AT,
+      createdAt: '2026-08-12T12:00:00.000Z',
+      updatedAt: '2026-08-12T12:00:00.000Z',
+    });
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('Covered by Avi Levi')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^request swap$/i }));
+
+    await waitFor(() => expect(api.createSwapRequest).toHaveBeenCalledWith('team-1', 'shift-1'));
+    expect(await screen.findByText('Swap request sent.')).toBeInTheDocument();
+  });
+
+  it('shows a friendly conflict message when requesting a swap loses the race', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(
+      buildSessions({ shiftStatus: 'claimed', assignedUserId: 'user-2' }),
+    );
+    vi.mocked(api.createSwapRequest).mockRejectedValue(
+      new ApiError(409, 'This shift is no longer available to request.'),
+    );
+
+    renderWithProviders(<SchedulePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^request swap$/i }));
+
+    expect(
+      await screen.findByText('This shift is no longer available to request.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a "Swap pending" badge and hides claim/release/request-swap while a swap is pending', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(
+      buildSessions({ shiftStatus: 'pending_swap', assignedUserId: 'user-2' }),
+    );
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('Swap pending')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^claim$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^release$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^request swap$/i })).not.toBeInTheDocument();
   });
 
   it('shows an empty state when there are no sessions yet', async () => {

@@ -22,6 +22,18 @@ describe('entityKeyFor', () => {
     expect(entityKeyFor('member_promoted', { userId: 'user-1' })).toBe('member:user-1');
   });
 
+  it('keys every swap lifecycle event by swapRequestId', () => {
+    for (const eventType of [
+      'swap_requested',
+      'swap_accepted',
+      'swap_declined',
+      'swap_expired',
+      'swap_cancelled',
+    ]) {
+      expect(entityKeyFor(eventType, { swapRequestId: 'swap-1' })).toBe('swap:swap-1');
+    }
+  });
+
   it('returns null for an unrecognized event type or a missing id', () => {
     expect(entityKeyFor('some_future_event_type', { shiftId: 'shift-1' })).toBeNull();
     expect(entityKeyFor('shift_claimed', {})).toBeNull();
