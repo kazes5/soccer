@@ -209,6 +209,76 @@ describe('POST /invites/:code/accept', () => {
     expect(recoveryOutboxEvents).toHaveLength(1);
   });
 
+  it('onboards an existing parent to a second invited team and returns both memberships', async () => {
+    const firstTeam = await createTeamWithAdmin(app, '+15551230108');
+    const secondTeam = await createTeamWithAdmin(app, '+15551230109');
+    createdTeamIds.push(firstTeam.teamId, secondTeam.teamId);
+    createdUserIds.push(firstTeam.adminId, secondTeam.adminId);
+
+    const parentPhone = '+15551230110';
+    const firstInvite = await createInvite(
+      app,
+      firstTeam.teamId,
+      firstTeam.sessionToken,
+      parentPhone,
+    );
+    const firstAccept = await app.inject({
+      method: 'POST',
+      url: `/invites/${firstInvite.code}/accept`,
+      payload: { name: 'Multi Team Parent', players: [{ name: 'First Player' }] },
+    });
+    expect(firstAccept.statusCode).toBe(201);
+    const parentUserId = firstAccept.json().user.id as string;
+    createdUserIds.push(parentUserId);
+
+    const secondInvite = await createInvite(
+      app,
+      secondTeam.teamId,
+      secondTeam.sessionToken,
+      parentPhone,
+    );
+    const secondAccept = await app.inject({
+      method: 'POST',
+      url: `/invites/${secondInvite.code}/accept`,
+      payload: { name: 'Multi Team Parent', players: [{ name: 'Second Player' }] },
+    });
+
+    expect(secondAccept.statusCode).toBe(201);
+    expect(secondAccept.json().user.id).toBe(parentUserId);
+
+    const memberships = await app.prisma.teamMember.findMany({
+      where: { userId: parentUserId },
+      orderBy: { teamId: 'asc' },
+    });
+    expect(memberships).toHaveLength(2);
+    expect(memberships.map((membership) => membership.teamId).sort()).toEqual(
+      [firstTeam.teamId, secondTeam.teamId].sort(),
+    );
+    expect(memberships.every((membership) => membership.role === 'parent')).toBe(true);
+
+    const optionsResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${secondInvite.code}/passkey/register/options`,
+    });
+    expect(optionsResponse.statusCode).toBe(201);
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: `/invites/${secondInvite.code}/passkey/register/verify`,
+      payload: {
+        challengeId: optionsResponse.json().challengeId,
+        response: { id: 'credential-multi-team-parent' },
+      },
+    });
+
+    expect(verifyResponse.statusCode).toBe(200);
+    expect(
+      verifyResponse
+        .json()
+        .teamMemberships.map((membership: { teamId: string }) => membership.teamId)
+        .sort(),
+    ).toEqual([firstTeam.teamId, secondTeam.teamId].sort());
+  });
+
   it('rejects an unknown invite code', async () => {
     const response = await app.inject({
       method: 'POST',

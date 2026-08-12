@@ -25,6 +25,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 - **Data model:** `User`, `Team`, `TeamMember`, `Player`, `PlayerParent`, `Invite`, `Passkey`, `WebauthnChallenge`, `Session`, `NotificationPreference`, `AuditLog` — migrated (`apps/api/prisma/migrations/20260806223652_identity_membership_core`, later revised by `20260810065615_passkey_authentication` and `20260810065735_invite_accepted_by_user`, which drop `OtpChallenge`/`OtpChannel` entirely — see the 2026-08-10 passkey-authentication Progress note below) and seeded.
 - **Backend API, all tested:**
   - `POST /teams` — bootstrap a team + its first admin, returns a session.
+  - `GET /teams/:teamId` — basic team metadata, available only to an authenticated member of that team.
   - `POST /teams/:teamId/invites` — admin-only, audited.
   - `GET /invites/:code` — preview an invite (team name) before accepting.
   - `POST /invites/:code/accept` — atomic accept: creates the parent + linked players, or joins an existing multi-team user; race-safe against double-accept.
@@ -889,3 +890,26 @@ Tests will cover schema validation, multi-team authorization, one-active-swap en
   - **Fixed** — `/swaps`'s "Team activity" filter used `Array.prototype.includes()` against two other filtered arrays inside a `.filter()` callback, an avoidable O(n²) membership check (negligible at this app's ~100-user scale, but needlessly indirect). Replaced with a single `Set` of already-classified ids built once, checked in O(1) per row.
 - **Blocker or risk:** None blocking. Known, explicitly-deferred gaps carried forward from Checkpoint 6, unchanged by this one: the three-way `eventType` switch drift risk (now a fourth consumer's worth of surface area, same accepted trade-off) and the two minor Checkpoint 6 DRY findings. New to this checkpoint: multi-shift trade offers (offering a different shift in exchange, not just a plain request) remain explicitly out of scope, per PLAN.md's roadmap ("Add optional multi-shift trade offers only after designing transactional reservation/acceptance semantics") — this checkpoint only ever implements "one-way" requests, as its own name states.
 - **Next concrete action:** Open the PR for this checkpoint, merge, then start Stage 4 Checkpoint 9 ("Reminders").
+
+## Cross-Cutting Adjustment: Invited-Team Visibility (2026-08-12)
+
+- **Date:** 2026-08-12
+- **Stage / item:** Cross-cutting parent onboarding and multi-team visibility clarification.
+- **Status:** Complete
+- **Requirement:** Parents may join more than one team, but can see only teams whose invitations they have accepted. A parent with one membership must enter that team directly without a selector, plural team copy, or any prompt suggesting that other teams are available. A parent with multiple memberships may switch only among those joined teams.
+- **Scope decisions:**
+  - Multi-team onboarding remains supported; no one-membership database constraint or removal of `TeamSwitcher` was introduced.
+  - The current invite-code/passkey behavior for an existing account is explicitly accepted for this stage at the user's direction and was not changed by this adjustment.
+  - Unknown `?team=` values fall back to the first membership already returned by `/auth/me`; the client never requests the unknown id and does not reveal whether it belongs to a real team.
+- **Implementation:**
+  - Home now mounts `TeamSwitcher` only when `teamMemberships.length > 1`. A single-team parent sees singular EN/HE **Your team / הקבוצה שלכם** headings and singular logout confirmation copy.
+  - Schedule, Notifications, Swaps, and personal notification settings already conditionally rendered the switcher only for multiple memberships; page-level regression tests now protect that behavior and the unknown-team fallback on each route.
+  - `GET /teams/:teamId` now uses the same `requireAuth` + `requireTeamRole(parent|admin)` boundary as every other team-scoped read, so an unauthenticated caller or a member of another team cannot use a guessed UUID to discover a team name, season, or timezone.
+- **Tests:**
+  - API integration coverage now proves member-only team metadata, unauthenticated rejection, cross-team rejection without metadata, and one existing parent successfully accepting two invitations and receiving both memberships after passkey registration.
+  - Web coverage now proves singular English and Hebrew copy for a single-team parent, absence of every parent-facing switcher, safe fallback from unknown team query parameters, and a functional two-membership Home switcher containing only the memberships returned by `/auth/me`.
+- **Verification:** Formatting, lint, type checks, and all 468 automated tests pass (4 UI tokens, 8 i18n, 58 contracts, 171 web, 227 API). The default Turbopack build cannot create its internal CSS worker port in this restricted execution environment; Next's supported webpack production build completed successfully across all routes after the build-blocker fix below. CI remains the authoritative check for the default Turbopack path.
+- **Code review:** Full diff reviewed after implementation. Two findings were fixed:
+  - Tightened the product wording from the absolute “team names are not discoverable without membership,” which contradicted the intentional invite-preview screen, to the precise authenticated-workspace/arbitrary-ID boundary actually implemented.
+  - The webpack verification exposed a pre-existing Next 16 route-contract violation on `admin/collection-points/page.tsx`: the route module exported `parseOptionalCoordinate` solely for its unit test. Moved that pure helper unchanged to adjacent `coordinates.ts` and updated the test import; this removes an unsupported route export and lets the production build type-check.
+- **Documentation:** Updated `CLAUDE.md`, both user guides, `docs/flow-charts.md`, and `docs/testing.md`. `docs/flow-charts.pdf` was deliberately not regenerated or modified.

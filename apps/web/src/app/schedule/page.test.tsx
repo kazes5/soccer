@@ -161,6 +161,19 @@ describe('SchedulePage', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fschedule'));
   });
 
+  it('shows no team selector for a single-team parent and ignores an unknown team query', async () => {
+    searchParams = new URLSearchParams({ team: 'uninvited-team' });
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+    vi.mocked(api.listSessions).mockResolvedValue({ sessions: [] });
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalledWith('team-1'));
+    expect(api.listSessions).not.toHaveBeenCalledWith('uninvited-team');
+  });
+
   it('shows an open shift and lets a parent claim it', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
     vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ shiftStatus: 'open' }));

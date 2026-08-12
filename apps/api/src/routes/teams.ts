@@ -2,6 +2,7 @@ import { createTeamRequestSchema, createTeamResponseSchema } from '@soccer/contr
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { recordAuditLog } from '../lib/audit';
 import { setSessionCookies } from '../lib/cookies';
 import { generateSessionToken, hashSecret } from '../lib/crypto';
@@ -84,6 +85,9 @@ export default async function teamRoutes(app: FastifyInstance) {
 
   app.get('/teams/:teamId', async (request) => {
     const params = z.object({ teamId: z.string().uuid() }).parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['parent', 'admin']);
+
     const team = await app.prisma.team.findUniqueOrThrow({ where: { id: params.teamId } });
     return {
       id: team.id,

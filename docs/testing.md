@@ -37,6 +37,8 @@ records; the current setup is not a disposable database per test run.
 - CORS behavior for the configured web origin and rejection of unsafe origins.
 - Invite creation authorization, invite preview, acceptance, expiry/reuse rules,
   existing-user multi-team joining, linked players, and concurrent acceptance.
+- Team metadata visibility: authentication and matching membership are required;
+  a member of another team receives no team details.
 - Team member listing, admin-only role changes, removal, session revocation, and
   protection against removing or demoting the last admin.
 - Push subscription registration, ownership/upsert behavior, and removal.
@@ -66,10 +68,14 @@ Web tests cover:
 - Team creation and invite-acceptance passkey setup, including retry after a
   cancelled ceremony without re-creating the team or re-accepting the invite.
 - Invite preview, acceptance, not-found, and error states.
-- Home authentication, team selection, admin invite creation, copy-link and
-  logout interactions, and parent/admin visibility differences.
+- Home authentication, singular single-team parent copy, multi-team selection,
+  admin invite creation, copy-link and logout interactions, and parent/admin
+  visibility differences.
 - Schedule loading, empty/error states, rendering sessions and shifts, claim,
   release, and conflict feedback.
+- Parent-facing Home, Schedule, Notifications, Swaps, and notification settings
+  hide switching controls for a single membership; unknown `?team=` values fall
+  back to the user's joined team and are never sent to team-scoped APIs.
 - Locale provider behavior, language toggle, document `lang`/`dir` updates, and
   RTL direction.
 - Dialogs, confirmation dialogs, icon buttons, status badges, tooltips, toasts,

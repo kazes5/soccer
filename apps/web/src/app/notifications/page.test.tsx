@@ -7,11 +7,12 @@ import NotificationsPage from './page';
 
 const replace = vi.fn();
 const push = vi.fn();
+let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push }),
   usePathname: () => '/notifications',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -54,6 +55,18 @@ const user = {
   ],
 };
 
+const parentUser = {
+  ...user,
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'parent' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
+};
+
 const unreadNotification: Notification = {
   id: 'notif-1',
   teamId: 'team-1',
@@ -84,6 +97,7 @@ const readNotification: Notification = {
 
 describe('NotificationsPage', () => {
   beforeEach(() => {
+    searchParams = new URLSearchParams();
     replace.mockClear();
     push.mockClear();
     vi.mocked(api.me).mockReset();
@@ -112,6 +126,23 @@ describe('NotificationsPage', () => {
     renderWithProviders(<NotificationsPage />);
 
     expect(await screen.findByText("You're all caught up.")).toBeInTheDocument();
+  });
+
+  it('shows no team selector for a single-team parent and ignores an unknown team query', async () => {
+    searchParams = new URLSearchParams({ team: 'uninvited-team' });
+    vi.mocked(api.me).mockResolvedValue(parentUser);
+    vi.mocked(api.listNotifications).mockResolvedValue({
+      notifications: [],
+      nextCursor: null,
+      unreadCount: 0,
+    });
+
+    renderWithProviders(<NotificationsPage />);
+
+    expect(await screen.findByText("You're all caught up.")).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
+    expect(api.listNotifications).toHaveBeenCalledWith('team-1');
+    expect(api.listNotifications).not.toHaveBeenCalledWith('uninvited-team');
   });
 
   it('renders unread and read notifications with the unread count', async () => {

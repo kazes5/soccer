@@ -365,14 +365,16 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 **Requirement 15: Household & Cross-Team Support**
 - A single parent account can be linked to more than one child (same or different teams).
 - A single parent account can belong to more than one team instance (e.g., one kid on Team A, another on Team B).
+- A parent's authenticated workspace lists only teams whose invitations they have accepted; arbitrary team IDs cannot be used to discover other team names or metadata.
 - Shifts, swaps, schedules, and notifications are scoped per-team (no cross-team confusion).
-- UI includes a **team switcher** (dropdown or tab) in the home screen; selecting a team shows only that team's schedule and shifts.
+- UI includes a **team switcher** (dropdown or tab) only when the account belongs to more than one team; selecting a team shows only that team's schedule and shifts. A single-team parent opens their only team directly and sees no team-selection or switching prompt.
 - Notifications explicitly state which team (e.g., "U-12 Wildcats: Alex's pickup is open").
 - Parent's audit log and shift stats are split by team.
 
 **Acceptance Criteria:**
 - User can add/link multiple players during onboarding or in settings
-- Team switcher visible and functional on home screen
+- Team switcher visible and functional only for accounts with multiple accepted team memberships
+- Single-team parents see singular team copy and no team-selection or switching controls
 - Schedule, shifts, and stats change when team is switched
 - Notifications labeled with team name
 - Player-to-team mapping in user profile

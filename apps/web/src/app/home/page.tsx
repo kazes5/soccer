@@ -111,6 +111,9 @@ export default function HomePage() {
   const activeMembership =
     session.teamMemberships.find((membership) => membership.teamId === activeTeamId) ??
     session.teamMemberships[0];
+  const hasMultipleTeams = session.teamMemberships.length > 1;
+  const isSingleTeamParent =
+    session.teamMemberships.length === 1 && activeMembership?.role === 'parent';
 
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" />, active: true },
@@ -141,15 +144,17 @@ export default function HomePage() {
           <p className="text-sm text-ink-muted">{session.user.phone ?? session.user.email}</p>
         </div>
 
-        <TeamSwitcher
-          ariaLabel={t('home.teamSwitcherLabel')}
-          options={session.teamMemberships.map((membership) => ({
-            id: membership.teamId,
-            label: membership.teamName,
-          }))}
-          activeId={activeMembership?.teamId ?? ''}
-          onChange={setActiveTeamId}
-        />
+        {hasMultipleTeams && (
+          <TeamSwitcher
+            ariaLabel={t('home.teamSwitcherLabel')}
+            options={session.teamMemberships.map((membership) => ({
+              id: membership.teamId,
+              label: membership.teamName,
+            }))}
+            activeId={activeMembership?.teamId ?? ''}
+            onChange={setActiveTeamId}
+          />
+        )}
 
         {/* Keyed on team so switching teams remounts this subtree and fetches
             fresh — avoids a synchronous setState-on-dependency-change effect. */}
@@ -164,10 +169,10 @@ export default function HomePage() {
 
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
-            {t('home.yourTeams')}
+            {t(isSingleTeamParent ? 'home.yourTeam' : 'home.yourTeams')}
           </h2>
           {activeMembership && (
-            <DataList ariaLabel={t('home.yourTeams')}>
+            <DataList ariaLabel={t(isSingleTeamParent ? 'home.yourTeam' : 'home.yourTeams')}>
               <TeamCard membership={activeMembership} />
             </DataList>
           )}
@@ -177,7 +182,9 @@ export default function HomePage() {
       <ConfirmDialog
         open={confirmingLogOut}
         title={t('home.logOutConfirmTitle')}
-        description={t('home.logOutConfirmBody')}
+        description={t(
+          isSingleTeamParent ? 'home.logOutConfirmBodySingleTeam' : 'home.logOutConfirmBody',
+        )}
         confirmLabel={t('home.logOut')}
         cancelLabel={t('common.cancel')}
         closeLabel={t('common.close')}
