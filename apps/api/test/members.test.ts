@@ -47,7 +47,16 @@ describe('team member management', () => {
     const parentBody = acceptResponse.json();
     createdUserIds.push(parentBody.user.id);
 
-    return { adminToken, teamId, parentUserId: parentBody.user.id as string };
+    const parentToken = generateSessionToken();
+    await app.prisma.session.create({
+      data: {
+        userId: parentBody.user.id,
+        tokenHash: hashSecret(parentToken),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return { adminToken, parentToken, teamId, parentUserId: parentBody.user.id as string };
   }
 
   it('lets an admin list team members', async () => {
@@ -66,29 +75,24 @@ describe('team member management', () => {
   });
 
   it('rejects a non-admin listing team members', async () => {
-    const { teamId, parentUserId } = await setUpTeamWithParent();
-    void parentUserId;
+    const { teamId, parentToken } = await setUpTeamWithParent();
 
     const response = await app.inject({
       method: 'GET',
       url: `/teams/${teamId}/members`,
-      headers: { authorization: 'Bearer not-a-real-token' },
+      headers: { authorization: `Bearer ${parentToken}` },
     });
 
-    expect(response.statusCode).toBe(401);
+    expect(response.statusCode).toBe(403);
   });
 
   it('lets a parent list the team roster, ordered by name, without contact details', async () => {
-    const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
-    void parentUserId;
+    const { parentToken, teamId } = await setUpTeamWithParent();
 
     const response = await app.inject({
       method: 'GET',
       url: `/teams/${teamId}/roster`,
-      // The admin is also just a team member here — this confirms the roster
-      // is readable by regular parents too, not only admins, by using the
-      // same account that a real non-admin parent could equally hold.
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: `Bearer ${parentToken}` },
     });
 
     expect(response.statusCode).toBe(200);
@@ -184,6 +188,41 @@ describe('team member management', () => {
     expect(response.statusCode).toBe(409);
   });
 
+  it('keeps one admin when two admins concurrently try to demote each other', async () => {
+    const { adminToken, parentToken, teamId, parentUserId } = await setUpTeamWithParent();
+    const originalAdmin = await app.prisma.teamMember.findFirstOrThrow({
+      where: { teamId, role: 'admin' },
+    });
+
+    const promotion = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/members/${parentUserId}/role`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { role: 'admin' },
+    });
+    expect(promotion.statusCode).toBe(200);
+
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: 'PATCH',
+        url: `/teams/${teamId}/members/${parentUserId}/role`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { role: 'parent' },
+      }),
+      app.inject({
+        method: 'PATCH',
+        url: `/teams/${teamId}/members/${originalAdmin.userId}/role`,
+        headers: { authorization: `Bearer ${parentToken}` },
+        payload: { role: 'parent' },
+      }),
+    ]);
+
+    const statusCodes = [first.statusCode, second.statusCode];
+    expect(statusCodes.filter((status) => status === 200)).toHaveLength(1);
+    expect(statusCodes.every((status) => [200, 403, 409].includes(status))).toBe(true);
+    expect(await app.prisma.teamMember.count({ where: { teamId, role: 'admin' } })).toBe(1);
+  });
+
   it('removes a parent, revokes their login, and preserves their audit trail', async () => {
     const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
 
@@ -218,8 +257,8 @@ describe('team member management', () => {
     });
   });
 
-  it('releases any shift the removed member held, back to open', async () => {
-    const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
+  it("reopens a removed member's future shift while preserving their past assignment", async () => {
+    const { adminToken, parentToken, teamId, parentUserId } = await setUpTeamWithParent();
 
     const point = await app.inject({
       method: 'POST',
@@ -227,34 +266,42 @@ describe('team member management', () => {
       headers: { authorization: `Bearer ${adminToken}` },
       payload: { name: 'Oak St', address: '123 Oak St', type: 'pickup' },
     });
-    await app.inject({
-      method: 'POST',
-      url: `/teams/${teamId}/schedule-templates`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
-        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
-        startDate: '2026-08-10',
-        defaultTime: '18:00',
-        defaultFieldLocation: 'Central Field',
-        horizonWeeks: 1,
-        collectionPointIds: [point.json().id],
-      },
-    });
-    const sessionsResponse = await app.inject({
-      method: 'GET',
-      url: `/teams/${teamId}/sessions`,
-      headers: { authorization: `Bearer ${adminToken}` },
-    });
-    const shiftId = sessionsResponse.json().sessions[0].points[0].shift.id as string;
-
-    const parentToken = generateSessionToken();
-    await app.prisma.session.create({
+    const futureSession = await app.prisma.practiceSession.create({
       data: {
-        userId: parentUserId,
-        tokenHash: hashSecret(parentToken),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        teamId,
+        startsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        fieldLocation: 'Central Field',
+        status: 'scheduled',
       },
     });
+    const futureShift = await app.prisma.shift.create({
+      data: {
+        sessionId: futureSession.id,
+        pointId: point.json().id,
+        direction: 'to_practice',
+        status: 'open',
+      },
+    });
+    const shiftId = futureShift.id;
+
+    const pastSession = await app.prisma.practiceSession.create({
+      data: {
+        teamId,
+        startsAt: new Date('2026-01-01T18:00:00.000Z'),
+        fieldLocation: 'Old Field',
+        status: 'scheduled',
+      },
+    });
+    const pastShift = await app.prisma.shift.create({
+      data: {
+        sessionId: pastSession.id,
+        pointId: point.json().id,
+        direction: 'to_practice',
+        status: 'claimed',
+        assignedUserId: parentUserId,
+      },
+    });
+
     await app.inject({
       method: 'POST',
       url: `/teams/${teamId}/shifts/${shiftId}/claim`,
@@ -271,6 +318,12 @@ describe('team member management', () => {
     const shift = await app.prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
     expect(shift.status).toBe('open');
     expect(shift.assignedUserId).toBeNull();
+
+    const historicalShift = await app.prisma.shift.findUniqueOrThrow({
+      where: { id: pastShift.id },
+    });
+    expect(historicalShift.status).toBe('claimed');
+    expect(historicalShift.assignedUserId).toBe(parentUserId);
 
     const auditEntries = await app.prisma.auditLog.findMany({
       where: { teamId, actionType: 'shift_released', targetId: shiftId },

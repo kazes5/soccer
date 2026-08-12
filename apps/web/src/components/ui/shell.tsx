@@ -16,8 +16,8 @@ export interface ShellNavItem {
 /**
  * Application shell: a mobile top bar + bottom tab bar under the md breakpoint,
  * a desktop sidebar above it. `navItems` is expected to grow as more
- * authenticated destinations (schedule, fairness stats, admin) land in later
- * stages — today there's a single "Home" destination.
+ * authenticated destinations (schedule, fairness stats, admin) land. The
+ * mobile bar becomes horizontally scrollable once its items no longer fit.
  */
 export function AppShell({
   brand,
@@ -68,7 +68,7 @@ export function AppShell({
 
       <nav
         aria-label={t('nav.primaryLabel')}
-        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-surface-border bg-surface md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around overflow-x-auto border-t border-surface-border bg-surface md:hidden"
       >
         {navItems.map((item) => (
           <BottomNavLink key={item.href} item={item} />
@@ -102,14 +102,14 @@ function BottomNavLink({ item }: { item: ShellNavItem }) {
     <Link
       href={item.href}
       aria-current={item.active ? 'page' : undefined}
-      className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${
+      className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${
         item.active ? 'text-status-mine-on' : 'text-ink-muted'
       } ${focusRingClassName}`}
     >
       <span className="size-5" aria-hidden="true">
         {item.icon}
       </span>
-      {item.label}
+      <span className="max-w-20 truncate px-1">{item.label}</span>
     </Link>
   );
 }

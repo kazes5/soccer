@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/components/locale-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { ApiError, api } from '@/lib/api';
-import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
+import { fireEvent, renderWithProviders, screen, waitFor, within } from '@/test/render';
 import { instantToWallClock } from '@/lib/timezone';
 import SchedulePage from './page';
 
@@ -467,6 +467,39 @@ describe('SchedulePage', () => {
 
     await waitFor(() => expect(api.cancelSession).toHaveBeenCalledWith('team-1', 'session-1'));
     expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+  });
+
+  it('disables the cancel-session dialog while the cancellation is in flight', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    const sessions = buildSessions({ shiftStatus: 'open' });
+    vi.mocked(api.listSessions).mockResolvedValue(sessions);
+    let resolveCancel: (value: (typeof sessions.sessions)[number]) => void;
+    vi.mocked(api.cancelSession).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCancel = resolve;
+      }),
+    );
+
+    renderWithProviders(<SchedulePage />);
+    await screen.findByText('Drop-off · Oak St');
+
+    fireEvent.click(screen.getByRole('button', { name: /^cancel/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^cancel session$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Cancelling…' })).toBeDisabled(),
+    );
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeDisabled();
+
+    const cancelEvent = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancelEvent);
+    expect(cancelEvent.defaultPrevented).toBe(true);
+    expect(dialog).toBeInTheDocument();
+
+    resolveCancel!({ ...sessions.sessions[0]!, status: 'cancelled' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it("lets an admin change a collection point's assigned players", async () => {

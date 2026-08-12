@@ -57,11 +57,10 @@ an admin.
 
 ## Invite a parent
 
-1. Open **Home** and, if the switcher is visible, select the correct team.
-2. Find the card for that team below the workspace.
-3. Enter the parent's phone number in **Invite a parent by phone**.
-4. Select **Invite**.
-5. Copy the generated `/invite/[code]` link and send it to the parent through a
+1. Open **Manage team** and, if the switcher is visible, select the correct team.
+2. Enter the parent's phone number or email address.
+3. Select **Create invite**.
+4. Copy the generated `/invite/[code]` link and send it to the parent through a
    trusted communication channel.
 
 The link is time-limited and can be accepted only once. The parent uses it to
@@ -69,6 +68,43 @@ confirm the team, enter their details and linked players, and register a
 passkey. The team does not appear in that parent's workspace until the invite
 is accepted. If a link expires or has already been used, create a new
 invitation.
+
+The phone-only invite form on **Home** remains available as a shortcut.
+
+## Manage team members and roles
+
+Open **Manage team** from the admin navigation. The member list contains the
+current team members only and shows each person's role and contact details.
+Use the search box to find a member by name, phone, or email, or filter the list
+to parents or admins.
+
+### Promote or demote an admin
+
+1. Find the team member.
+2. Select **Make admin** or **Remove admin access**.
+3. Review and confirm the change.
+
+A promoted member gains the team's admin tools. A demoted admin remains on the
+team as a parent and keeps normal schedule, shift, swap, and notification
+access. Every role change is audited and announced through the team's normal
+notification flow.
+
+### Remove a team member
+
+1. Find the team member and select **Remove from team**.
+2. Review the consequences in the confirmation dialog.
+3. Confirm **Remove from team**.
+
+Access to this team is revoked immediately. Open swaps involving that member
+are cancelled, their claimed future trips become available, future team
+notifications stop, and their past assignments remain attributed to them in
+history. If this was their only team, their active sessions are also revoked.
+
+Every team must retain an admin. For the only remaining admin, both **Remove
+admin access** and **Remove from team** are disabled with an explanation. Add or
+promote another admin first. The API enforces the same rule and serializes
+simultaneous admin changes, so two admins cannot accidentally leave the team
+without an administrator.
 
 ## Manage collection points
 
@@ -159,7 +195,8 @@ you, or covered by another member. Admins can claim and release trips in the
 same way as parents.
 
 The **Team members** section at the bottom of Schedule shows each member's name
-and role. This roster is currently read-only in the web app.
+and role to the team. Admin-only contact details and role/removal controls are
+available on **Manage team**.
 
 ## Review notifications
 
@@ -235,8 +272,9 @@ action and the `/swaps` page).
 ## Troubleshooting
 
 - **Admin navigation is missing:** switch to a team where your role is Admin.
-  If no such team exists, another admin must grant the role; role management is
-  not yet available in the web UI.
+  If no such team exists, another admin must grant the role from **Manage team**.
+- **Role or removal controls are disabled:** this person is the team's only
+  admin. Promote another member before changing or removing this admin.
 - **A collection point cannot be deleted:** it is still referenced by a
   scheduled session.
 - **Add template is disabled:** add at least one collection point first.
@@ -251,8 +289,8 @@ action and the `/swaps` page).
 
 ## Current limitations
 
-- The web app can display the roster but cannot add or edit players, promote or
-  demote admins, or remove team members.
+- The web app can display the roster and manage members, but cannot add or edit
+  players after onboarding.
 - The team-creation form uses `Asia/Jerusalem`; changing the team timezone is
   not yet available in the web UI.
 - Schedule templates cannot be deleted, and bulk editing of existing future

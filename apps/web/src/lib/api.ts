@@ -18,6 +18,9 @@ import {
   type CreatePushSubscriptionRequest,
   type DeletePushSubscriptionRequest,
   type MemberNotificationPreferences,
+  type TeamMemberListResponse,
+  type UpdateMemberRoleRequest,
+  type UpdateMemberRoleResponse,
   type NotificationListResponse,
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
@@ -63,9 +66,11 @@ import {
   swapRequestListResponseSchema,
   swapRequestSchema,
   teamNotificationSettingsSchema,
+  teamMemberListResponseSchema,
   teamRosterResponseSchema,
   unreadNotificationCountResponseSchema,
   updateScheduleTemplateResponseSchema,
+  updateMemberRoleResponseSchema,
 } from '@soccer/contracts';
 import { z, type ZodType } from 'zod';
 import { env } from '../env';
@@ -309,6 +314,23 @@ export const api = {
   listTeamRoster: (teamId: string) =>
     request<TeamRosterResponse>(`/teams/${encodeURIComponent(teamId)}/roster`, {
       responseSchema: teamRosterResponseSchema,
+    }),
+
+  listTeamMembers: (teamId: string) =>
+    request<TeamMemberListResponse>(`/teams/${encodeURIComponent(teamId)}/members`, {
+      responseSchema: teamMemberListResponseSchema,
+    }),
+
+  updateTeamMemberRole: (teamId: string, userId: string, body: UpdateMemberRoleRequest) =>
+    request<UpdateMemberRoleResponse>(
+      `/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
+      { method: 'PATCH', body, responseSchema: updateMemberRoleResponseSchema },
+    ),
+
+  removeTeamMember: (teamId: string, userId: string) =>
+    request<unknown>(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      responseSchema: z.unknown(),
     }),
 
   getCoordinationSettings: (teamId: string) =>

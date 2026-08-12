@@ -39,8 +39,9 @@ records; the current setup is not a disposable database per test run.
   existing-user multi-team joining, linked players, and concurrent acceptance.
 - Team metadata visibility: authentication and matching membership are required;
   a member of another team receives no team details.
-- Team member listing, admin-only role changes, removal, session revocation, and
-  protection against removing or demoting the last admin.
+- Team member listing, admin-only role changes, removal, session revocation,
+  future-shift reopening with historical assignment preservation, and a
+  concurrent two-admin demotion race that always leaves one admin.
 - Push subscription registration, ownership/upsert behavior, and removal.
 - Collection-point creation, listing, update, coordinate clearing, invalid team
   data, and deletion protection once scheduled shifts reference a point.
@@ -71,6 +72,9 @@ Web tests cover:
 - Home authentication, singular single-team parent copy, multi-team selection,
   admin invite creation, copy-link and logout interactions, and parent/admin
   visibility differences.
+- Admin member management: role/contact filters, phone/email invites,
+  confirmation-gated promotion, demotion and removal, local state updates,
+  final-admin disabled controls, and concurrent-conflict reload behavior.
 - Schedule loading, empty/error states, rendering sessions and shifts, claim,
   release, and conflict feedback.
 - Parent-facing Home, Schedule, Notifications, Swaps, and notification settings
@@ -125,8 +129,8 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 - No load test beyond the targeted ten-request shift claim race.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
-- No swap, reminder, escalation, reporting, AI, or native mobile tests because
-  those features are not implemented yet.
+- No audit-reporting, AI, or native mobile tests because those features are not
+  implemented yet. Emergency escalation was removed from MVP scope.
 - API integration tests currently use the shared configured database rather than
   an isolated disposable database for every run.
 

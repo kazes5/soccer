@@ -34,4 +34,21 @@ describe('Dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('prevents Escape and close-button dismissal while closing is disabled', () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog open closeDisabled onClose={onClose} title="Hello" closeLabel="Close">
+        Body
+      </Dialog>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const cancelEvent = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancelEvent);
+
+    expect(cancelEvent.defaultPrevented).toBe(true);
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
