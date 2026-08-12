@@ -9,6 +9,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { enqueueScheduledTaskBestEffort } from '../lib/queues';
+import { findShiftIdsUsingTeamDefaultOffsets, syncRemindersForShifts } from '../lib/reminders';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 
@@ -86,9 +88,26 @@ export default async function coordinationSettingsRoutes(app: FastifyInstance) {
         afterState: toDto(params.teamId, updated),
       });
 
-      return updated;
+      // Only re-derive reminders when the team default actually changed —
+      // it only affects members with no personal override, but re-deriving
+      // is otherwise indistinguishable from a no-op for everyone else, so
+      // skip the (bounded but real, at up to ~100 members) query work when
+      // nothing that matters to it moved.
+      const previousOffsets = toDto(params.teamId, existing).reminderOffsetMinutes;
+      const reminders =
+        previousOffsets.length !== body.reminderOffsetMinutes.length ||
+        previousOffsets.some((value, index) => value !== body.reminderOffsetMinutes[index])
+          ? await syncRemindersForShifts(
+              tx,
+              await findShiftIdsUsingTeamDefaultOffsets(tx, params.teamId),
+            )
+          : [];
+
+      return { updated, reminders };
     });
 
-    return coordinationSettingsSchema.parse(toDto(params.teamId, settings));
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, settings.reminders);
+
+    return coordinationSettingsSchema.parse(toDto(params.teamId, settings.updated));
   });
 }

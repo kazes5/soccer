@@ -111,6 +111,22 @@ describe('buildPushPayload', () => {
     ).toBe('Ron Mizrahi cancelled their swap request for Oak St');
   });
 
+  it('builds shift_reminder content with a deep link to the shift', () => {
+    const result = buildPushPayload('en', 'team-1', {
+      eventType: 'shift_reminder',
+      payload: {
+        direction: 'from_practice',
+        pointName: 'Oak St',
+        sessionId: 'session-1',
+        shiftId: 'shift-1',
+      },
+    });
+
+    expect(result.title).toBe('Upcoming shift reminder');
+    expect(result.body).toBe('Pick-up at Oak St');
+    expect(result.url).toBe('/schedule?team=team-1&session=session-1&shift=shift-1');
+  });
+
   it('falls back to a generic message for an event type this build does not recognize', () => {
     const result = buildPushPayload('en', 'team-1', {
       eventType: 'some_future_event_type',

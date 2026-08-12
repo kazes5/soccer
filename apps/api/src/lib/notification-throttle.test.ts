@@ -34,6 +34,13 @@ describe('entityKeyFor', () => {
     }
   });
 
+  it('keys a shift reminder in its own namespace, not the same one shift_claimed/released use', () => {
+    expect(entityKeyFor('shift_reminder', { shiftId: 'shift-1' })).toBe('reminder:shift-1');
+    expect(entityKeyFor('shift_reminder', { shiftId: 'shift-1' })).not.toBe(
+      entityKeyFor('shift_claimed', { shiftId: 'shift-1' }),
+    );
+  });
+
   it('returns null for an unrecognized event type or a missing id', () => {
     expect(entityKeyFor('some_future_event_type', { shiftId: 'shift-1' })).toBeNull();
     expect(entityKeyFor('shift_claimed', {})).toBeNull();

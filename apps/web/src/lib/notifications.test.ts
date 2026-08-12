@@ -144,4 +144,37 @@ describe('describeNotification', () => {
     });
     expect(cancelled.text).toContain('cancelled');
   });
+
+  it('renders shift_reminder with the full detail CLAUDE.md §3.11 requires and a deep link to the shift', () => {
+    const withPlayers = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'shift_reminder',
+      payload: {
+        sessionId: 'session-1',
+        shiftId: 'shift-1',
+        pointName: 'Oak St',
+        direction: 'to_practice',
+        sessionStartsAt: '2026-08-12T15:00:00.000Z',
+        fieldLocation: 'Central Field',
+        playerNames: ['Yossi Levi', 'Noa Katz'],
+      },
+    });
+    expect(withPlayers.text).toContain('Oak St');
+    expect(withPlayers.text).toContain('Central Field');
+    expect(withPlayers.text).toContain('Yossi Levi, Noa Katz');
+    expect(withPlayers.href).toBe('/schedule?team=team-1&session=session-1&shift=shift-1');
+
+    const noPlayers = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'shift_reminder',
+      payload: {
+        sessionId: 'session-1',
+        shiftId: 'shift-1',
+        pointName: 'Oak St',
+        direction: 'to_practice',
+        sessionStartsAt: '2026-08-12T15:00:00.000Z',
+        fieldLocation: 'Central Field',
+        playerNames: [],
+      },
+    });
+    expect(noPlayers.text).toContain('none listed');
+  });
 });

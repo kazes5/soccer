@@ -86,3 +86,25 @@ export function isWithinQuietHours(
   if (startMinutes < endMinutes) return nowMinutes >= startMinutes && nowMinutes < endMinutes;
   return nowMinutes >= startMinutes || nowMinutes < endMinutes;
 }
+
+/**
+ * The next real instant `end` (a wall-clock "HH:MM") occurs at or after
+ * `instant`, in `timeZone` — used to *defer* a reminder already known to
+ * fall inside quiet hours (see {@link isWithinQuietHours}) to the moment
+ * they end, rather than just skipping it the way push delivery's own
+ * quiet-hours gate does. Doesn't need to know whether the window spans
+ * midnight: today's `end` is the answer whenever it's still ahead of
+ * `instant` (the "early morning" half of a midnight-spanning window, or any
+ * same-day window); otherwise `end` has already passed today, so the next
+ * occurrence is tomorrow's (the "late evening" half).
+ */
+export function nextQuietHoursEndInstant(instant: Date, timeZone: string, end: string): Date {
+  const wallNow = instantToWallClock(instant, timeZone);
+  const todayEnd = localDateTimeToInstant(wallNow.date, end, timeZone);
+  if (todayEnd.getTime() > instant.getTime()) return todayEnd;
+
+  const tomorrow = DateTime.fromJSDate(instant, { zone: 'utc' })
+    .setZone(timeZone)
+    .plus({ days: 1 });
+  return localDateTimeToInstant(tomorrow.toFormat('yyyy-MM-dd'), end, timeZone);
+}

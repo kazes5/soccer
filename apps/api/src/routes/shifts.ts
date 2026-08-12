@@ -5,7 +5,8 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
-import { enqueueOutboxEventBestEffort } from '../lib/queues';
+import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
+import { syncShiftReminders } from '../lib/reminders';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
@@ -151,10 +152,13 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      return { result, outboxEventId: outboxEvent.id };
+      const reminders = await syncShiftReminders(tx, result.id);
+
+      return { result, outboxEventId: outboxEvent.id, reminders };
     });
 
     enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, updated.reminders);
 
     return shiftSummarySchema.parse(toDto(updated.result));
   });
@@ -222,10 +226,18 @@ export default async function shiftRoutes(app: FastifyInstance) {
         },
       });
 
-      return { result, outboxEventId: outboxEvent.id };
+      // No assignee left, so this only ever cancels the released shift's
+      // pending reminders — never creates new ones — but goes through the
+      // same shared sync as claim, rather than a bespoke "just cancel" call,
+      // so there's exactly one place that knows how to derive a shift's
+      // reminder schedule from its current state.
+      const reminders = await syncShiftReminders(tx, result.id);
+
+      return { result, outboxEventId: outboxEvent.id, reminders };
     });
 
     enqueueOutboxEventBestEffort(app.outboxQueue, updated.outboxEventId);
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, updated.reminders);
 
     return shiftSummarySchema.parse(toDto(updated.result));
   });

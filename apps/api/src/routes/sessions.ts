@@ -11,7 +11,8 @@ import { recordAuditLog } from '../lib/audit';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
-import { enqueueOutboxEventBestEffort } from '../lib/queues';
+import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
+import { syncRemindersForShifts } from '../lib/reminders';
 import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
@@ -192,10 +193,21 @@ export default async function sessionRoutes(app: FastifyInstance) {
         },
       });
 
-      return { updated, outboxEventId: outboxEvent.id };
+      // Only a real time change moves any reminder's target instant — a
+      // field-location-only edit doesn't, so skip the (harmless but
+      // pointless) resync when `newStartsAt` was never computed above.
+      const reminders = newStartsAt
+        ? await syncRemindersForShifts(
+            tx,
+            updated.shifts.map((shift) => shift.id),
+          )
+        : [];
+
+      return { updated, outboxEventId: outboxEvent.id, reminders };
     });
 
     enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, session.reminders);
 
     return practiceSessionSchema.parse(toSessionDto(session.updated));
   });
@@ -249,10 +261,19 @@ export default async function sessionRoutes(app: FastifyInstance) {
         },
       });
 
-      return { updated, outboxEventId: outboxEvent.id };
+      // A cancelled session's shifts have nothing left to remind anyone
+      // about — `syncShiftReminders` cancels each one's pending reminders
+      // itself once it sees `session.status !== 'scheduled'`.
+      const reminders = await syncRemindersForShifts(
+        tx,
+        updated.shifts.map((shift) => shift.id),
+      );
+
+      return { updated, outboxEventId: outboxEvent.id, reminders };
     });
 
     enqueueOutboxEventBestEffort(app.outboxQueue, session.outboxEventId);
+    enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, session.reminders);
 
     return practiceSessionSchema.parse(toSessionDto(session.updated));
   });

@@ -45,6 +45,11 @@ export function entityKeyFor(eventType: string, payload: Record<string, unknown>
     case 'swap_expired':
     case 'swap_cancelled':
       return typeof payload.swapRequestId === 'string' ? `swap:${payload.swapRequestId}` : null;
+    // Its own namespace, not `shift:${shiftId}` — a reminder isn't a
+    // "change" to the shift the way claim/release are, so it shouldn't
+    // collapse against (or be collapsed by) one of those.
+    case 'shift_reminder':
+      return typeof payload.shiftId === 'string' ? `reminder:${payload.shiftId}` : null;
     default:
       return null;
   }

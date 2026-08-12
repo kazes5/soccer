@@ -235,6 +235,21 @@ export function buildPushPayload(
         url: swapsUrl(teamId),
       };
 
+    case 'shift_reminder': {
+      const sessionId = asString(payload, 'sessionId');
+      const shiftId = asString(payload, 'shiftId');
+      return {
+        title: translate(locale, 'push.shiftReminder.title'),
+        body: translate(locale, 'push.shiftReminder.body', {
+          direction: directionLabel(locale, payload.direction),
+          pointName: asString(payload, 'pointName'),
+        }),
+        url: sessionId
+          ? `/schedule?team=${encodeURIComponent(teamId)}&session=${encodeURIComponent(sessionId)}&shift=${encodeURIComponent(shiftId)}`
+          : null,
+      };
+    }
+
     default:
       return {
         title: translate(locale, 'push.unknown.title'),
