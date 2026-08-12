@@ -12,7 +12,10 @@ features as if they were released.
 - **Parent:** accepts an invitation, signs in, views the team schedule, and
   claims or releases available driving shifts.
 
-A user can belong to multiple teams. Their role is independent in each team.
+A user can belong to multiple teams. Their role is independent in each team. A
+parent sees only teams whose invitations they have accepted. With one team, the
+workspace opens it directly and does not show a team selector or switching
+prompt; with two or more, the switcher lists only those joined teams.
 
 ## Admin onboarding
 
@@ -40,16 +43,18 @@ does not require the parent to already have an account.
    automatically right after joining and completes onboarding in one sitting;
    there's no separate login step for a first-time parent.
 
-After passkey setup succeeds, the user lands in the team-aware workspace. An
-existing user can accept another team's invite and keep their existing
-account; returning on a device that already has a registered passkey uses
-`/login` (enter the phone or email on file, then complete the passkey
-prompt) instead of the invite flow.
+After passkey setup succeeds, the user lands directly in the joined team's
+workspace. An existing user can accept another team's invite and keep their
+existing account. The team switcher appears after that second membership is
+created and contains only joined teams. Returning on a device that already has
+a registered passkey uses `/login` (enter the phone or email on file, then
+complete the passkey prompt) instead of the invite flow.
 
 ## Schedule and shifts
 
 1. Open `/schedule` from the workspace.
-2. Select a team when the account belongs to more than one team.
+2. If the account belongs to more than one joined team, select the team to
+   review. Single-team parents go straight to their schedule with no selector.
 3. Review upcoming sessions, field location, collection points, direction, and
    open or claimed shifts.
 4. Select **Claim** on an open shift to take responsibility for it.

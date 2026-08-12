@@ -55,6 +55,18 @@ const currentUser = {
   ],
 };
 
+const parentOnlyUser = {
+  ...currentUser,
+  teamMemberships: [
+    {
+      teamId: 'team-1',
+      teamName: 'U-12 Wildcats',
+      role: 'parent' as const,
+      timezone: 'Asia/Jerusalem',
+    },
+  ],
+};
+
 const emptySessions: SessionListResponse = { sessions: [] };
 
 const zeroStats: ShiftStatsResponse = {
@@ -202,12 +214,49 @@ describe('HomePage', () => {
   });
 
   it('does not show admin nav links for a parent-only membership', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+
+    renderWithProviders(<HomePage />);
+
+    expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Collection points' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Schedule templates' })).not.toBeInTheDocument();
+  });
+
+  it('shows a single-team parent their team directly without switching language or controls', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+
+    renderWithProviders(<HomePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Your team' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your teams' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
+    expect(screen.getByText('U-12 Wildcats')).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: /log out/i }));
+    expect(
+      await screen.findByText("You'll need to log in again to see your team."),
+    ).toBeInTheDocument();
+  });
+
+  it('uses singular Hebrew team copy for a single-team parent', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+
+    renderWithProviders(<HomePage />, { locale: 'he' });
+
+    expect(await screen.findByRole('heading', { name: 'הקבוצה שלכם' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'הקבוצות שלכם' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'החלפת קבוצה' })).not.toBeInTheDocument();
+  });
+
+  it('shows a switcher containing each onboarded team when a parent has multiple memberships', async () => {
     vi.mocked(api.me).mockResolvedValue({
-      ...currentUser,
+      ...parentOnlyUser,
       teamMemberships: [
+        ...parentOnlyUser.teamMemberships,
         {
-          teamId: 'team-1',
-          teamName: 'U-12 Wildcats',
+          teamId: 'team-2',
+          teamName: 'U-11 Strikers',
           role: 'parent' as const,
           timezone: 'Asia/Jerusalem',
         },
@@ -216,9 +265,14 @@ describe('HomePage', () => {
 
     renderWithProviders(<HomePage />);
 
-    expect(await screen.findByText('Welcome, Dana Cohen')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Collection points' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Schedule templates' })).not.toBeInTheDocument();
+    const switcher = await screen.findByRole('tablist', { name: 'Switch team' });
+    expect(within(switcher).getByRole('tab', { name: 'U-12 Wildcats' })).toBeInTheDocument();
+    const secondTeam = within(switcher).getByRole('tab', { name: 'U-11 Strikers' });
+
+    fireEvent.click(secondTeam);
+
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalledWith('team-2'));
+    expect(secondTeam).toHaveAttribute('aria-selected', 'true');
   });
 
   it('revokes the session on the server and navigates home on log out', async () => {

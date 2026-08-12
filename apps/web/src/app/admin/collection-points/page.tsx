@@ -27,6 +27,7 @@ import {
 } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
+import { parseOptionalCoordinate } from './coordinates';
 
 interface PointFormState {
   name: string;
@@ -42,19 +43,6 @@ const emptyForm: PointFormState = { name: '', address: '', type: 'pickup', gpsLa
  * initial-team-pick effect and the render-time filter can never disagree. */
 function adminMembershipsOf(memberships: TeamMembership[]): TeamMembership[] {
   return memberships.filter((m) => m.role === 'admin');
-}
-
-/** Exported for direct unit testing — jsdom's `<input type="number">` value
- * sanitization doesn't reliably reproduce every overflow/invalid case a real
- * browser (or a pasted/autofilled value) could still hand this function.
- *
- * `undefined` for blank; `null` for present-but-not-a-finite-number, so the
- * caller can show a field-specific error instead of letting a NaN silently
- * become JSON `null` and fail the server's `z.number().optional()` schema. */
-export function parseOptionalCoordinate(value: string): number | null | undefined {
-  if (value.trim() === '') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export default function AdminCollectionPointsPage() {

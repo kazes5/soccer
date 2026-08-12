@@ -2,7 +2,8 @@ import type { CollectionPoint } from '@soccer/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
-import AdminCollectionPointsPage, { parseOptionalCoordinate } from './page';
+import { parseOptionalCoordinate } from './coordinates';
+import AdminCollectionPointsPage from './page';
 
 describe('parseOptionalCoordinate', () => {
   it('treats a blank string as absent', () => {

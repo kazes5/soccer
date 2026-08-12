@@ -57,8 +57,8 @@ an admin.
 
 ## Invite a parent
 
-1. Open **Home** and select the correct team.
-2. In **Your teams**, find the card for that team.
+1. Open **Home** and, if the switcher is visible, select the correct team.
+2. Find the card for that team below the workspace.
 3. Enter the parent's phone number in **Invite a parent by phone**.
 4. Select **Invite**.
 5. Copy the generated `/invite/[code]` link and send it to the parent through a
@@ -66,7 +66,9 @@ an admin.
 
 The link is time-limited and can be accepted only once. The parent uses it to
 confirm the team, enter their details and linked players, and register a
-passkey. If a link expires or has already been used, create a new invitation.
+passkey. The team does not appear in that parent's workspace until the invite
+is accepted. If a link expires or has already been used, create a new
+invitation.
 
 ## Manage collection points
 

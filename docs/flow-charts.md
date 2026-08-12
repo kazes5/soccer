@@ -353,13 +353,13 @@ flowchart TD
     H --> I([Continue to parent Home flow])
 ```
 
-### Parent selects a team and reviews Home
+### Parent opens an onboarded team and reviews Home
 
 ```mermaid
 flowchart TD
     A([Parent opens `/home`]) --> B{Belongs to multiple teams?}
-    B -->|Yes| C[Choose active team]
-    B -->|No| D[Use default team]
+    B -->|Yes| C[Show switcher with joined teams only]
+    B -->|No| D[Open the only team directly; show no selector]
     C --> E[Load team workspace]
     D --> E
     E --> F[Review upcoming assignments]
@@ -375,13 +375,16 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Parent opens `/schedule`]) --> B[Select team]
-    B --> C[Review sessions, field locations, and cancellation status]
-    C --> D[Review players and coverage for each point and direction]
-    D --> E[Review team-member roster]
-    E --> F{Take a trip action?}
-    F -->|No| G([Continue browsing])
-    F -->|Claim or release| H([Continue to parent claim or release flow])
+    A([Parent opens `/schedule`]) --> B{More than one joined team?}
+    B -->|Yes| C[Select from joined teams]
+    B -->|No| D[Use the only team; show no selector]
+    C --> E[Review sessions, field locations, and cancellation status]
+    D --> E
+    E --> F[Review players and coverage for each point and direction]
+    F --> G[Review team-member roster]
+    G --> H{Take a trip action?}
+    H -->|No| I([Continue browsing])
+    H -->|Claim or release| J([Continue to parent claim or release flow])
 ```
 
 ### Parent claims or releases a trip
@@ -511,7 +514,9 @@ flowchart TD
 
 ## Shared behavior and current boundaries
 
-- Every team switch reloads data in the selected team's scope. Admin-only
+- Team selectors contain only the account's current memberships and are hidden
+  entirely for single-team parents. Every team switch reloads data in the
+  selected team's scope. Admin-only
   destinations appear only when the active membership has the admin role.
 - First-time parents register a passkey through their invite. Returning admins
   and parents use `/login` on a device with a registered passkey.

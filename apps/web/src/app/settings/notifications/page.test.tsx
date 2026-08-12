@@ -6,11 +6,12 @@ import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/render';
 import NotificationPreferencesPage from './page';
 
 const replace = vi.fn();
+let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   usePathname: () => '/settings/notifications',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -73,6 +74,7 @@ const noOverridePreferences: MemberNotificationPreferences = {
 
 describe('NotificationPreferencesPage', () => {
   beforeEach(() => {
+    searchParams = new URLSearchParams();
     replace.mockClear();
     vi.mocked(api.me).mockReset();
     vi.mocked(api.getMemberPreferences).mockReset();
@@ -104,6 +106,21 @@ describe('NotificationPreferencesPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Use custom quiet hours' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Shift changes' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Swap requests' })).toBeChecked();
+  });
+
+  it('shows no team selector for a single-team parent and ignores an unknown team query', async () => {
+    searchParams = new URLSearchParams({ team: 'uninvited-team' });
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+
+    renderWithProviders(<NotificationPreferencesPage />);
+
+    expect(await screen.findByText('Team default: 22:00–07:00')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
+    expect(api.getMemberPreferences).toHaveBeenCalledWith('team-1');
+    expect(api.getNotificationSettings).toHaveBeenCalledWith('team-1');
+    expect(api.getMemberPreferences).not.toHaveBeenCalledWith('uninvited-team');
   });
 
   it('lets a parent set a custom quiet-hours override', async () => {

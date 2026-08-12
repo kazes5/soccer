@@ -5,11 +5,12 @@ import { fireEvent, renderWithProviders, screen, waitFor, within } from '@/test/
 import SwapsPage from './page';
 
 const replace = vi.fn();
+let searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   usePathname: () => '/swaps',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -71,6 +72,7 @@ const emptyList: SwapRequestListResponse = { swapRequests: [] };
 
 describe('SwapsPage', () => {
   beforeEach(() => {
+    searchParams = new URLSearchParams();
     replace.mockClear();
     vi.mocked(api.me).mockReset();
     vi.mocked(api.listSwapRequests).mockReset().mockResolvedValue(emptyList);
@@ -95,6 +97,18 @@ describe('SwapsPage', () => {
     expect(await screen.findByText('No one has requested one of your shifts.')).toBeInTheDocument();
     expect(screen.getByText("You haven't requested any swaps.")).toBeInTheDocument();
     expect(screen.getByText('No other swap activity yet.')).toBeInTheDocument();
+  });
+
+  it('shows no team selector for a single-team parent and ignores an unknown team query', async () => {
+    searchParams = new URLSearchParams({ team: 'uninvited-team' });
+    vi.mocked(api.me).mockResolvedValue(currentUser);
+
+    renderWithProviders(<SwapsPage />);
+
+    expect(await screen.findByText('No one has requested one of your shifts.')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
+    expect(api.listSwapRequests).toHaveBeenCalledWith('team-1');
+    expect(api.listSwapRequests).not.toHaveBeenCalledWith('uninvited-team');
   });
 
   it("sorts requests into the right section based on the viewer's role", async () => {
