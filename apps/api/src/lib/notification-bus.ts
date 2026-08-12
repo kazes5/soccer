@@ -40,7 +40,13 @@ export function subscribeNotificationFanout(
   subscriber: IORedis,
   onMessage: (message: NotificationFanoutMessage) => void,
 ): void {
-  void subscriber.subscribe(NOTIFICATION_FANOUT_CHANNEL);
+  // Same fire-and-forget rationale as publishNotificationFanoutBestEffort
+  // above: a failed SUBSCRIBE (e.g. Redis briefly unreachable at startup)
+  // only costs latency, not correctness — ioredis re-subscribes
+  // automatically on reconnect, and the SSE route's own periodic poll is
+  // the fallback either way. Without this `.catch`, a rejection here is
+  // unhandled and can crash the whole process.
+  void subscriber.subscribe(NOTIFICATION_FANOUT_CHANNEL).catch(() => {});
   subscriber.on('message', (channel, raw) => {
     if (channel !== NOTIFICATION_FANOUT_CHANNEL) return;
     try {

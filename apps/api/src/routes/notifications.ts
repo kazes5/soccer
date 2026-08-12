@@ -202,15 +202,28 @@ export default async function notificationRoutes(app: FastifyInstance) {
       ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin } : {}),
       ...(corsCredentials ? { 'Access-Control-Allow-Credentials': corsCredentials } : {}),
     });
+    // Writes are guarded against an already-closed socket: `request.raw`'s
+    // 'close' handler below is the normal cleanup path, but a client
+    // disconnecting mid-tick can race a heartbeat/flush write against it,
+    // and writing to a destroyed response can throw or emit an unhandled
+    // stream 'error' rather than fail quietly.
+    function safeWrite(chunk: string) {
+      if (res.writableEnded || res.destroyed) return;
+      res.write(chunk);
+    }
+
     // Reconnect hint for the browser's automatic retry after a dropped
     // connection; independent of the server-side heartbeat interval below.
-    res.write('retry: 5000\n\n');
+    safeWrite('retry: 5000\n\n');
 
     let cursor: string | null = null;
     let isFlushing = false;
 
     function sendRow(row: UserNotificationRow) {
-      const dto = notificationSchema.parse({
+      // Always advances the cursor, even for a row this build's contract
+      // can't represent (e.g. a newer eventType from a rolling deploy) — a
+      // malformed row must not stall every future flush behind it forever.
+      const parsed = notificationSchema.safeParse({
         id: row.id,
         teamId: row.teamId,
         eventType: row.eventType,
@@ -221,8 +234,15 @@ export default async function notificationRoutes(app: FastifyInstance) {
         dismissedAt: row.dismissedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
       });
-      res.write(`id: ${row.id}\nevent: notification\ndata: ${JSON.stringify(dto)}\n\n`);
       cursor = row.id;
+      if (!parsed.success) {
+        app.log.error(
+          { err: parsed.error, notificationId: row.id },
+          'Skipping a notification row the SSE stream could not validate.',
+        );
+        return;
+      }
+      safeWrite(`id: ${row.id}\nevent: notification\ndata: ${JSON.stringify(parsed.data)}\n\n`);
     }
 
     // A pub/sub dispatch and the heartbeat's own poll can race to call this
@@ -241,6 +261,17 @@ export default async function notificationRoutes(app: FastifyInstance) {
       } finally {
         isFlushing = false;
       }
+    }
+
+    // `flush()` is also invoked from callbacks outside this handler's own
+    // promise chain (the registry dispatch below, and the heartbeat
+    // interval) — a rejection there isn't caught by anything, and would
+    // otherwise crash the process via Node's unhandledRejection handling,
+    // dropping every open SSE connection for every team, not just this one.
+    function flushSafely() {
+      flush().catch((error: unknown) => {
+        app.log.error({ err: error }, 'Notification stream flush failed.');
+      });
     }
 
     const lastEventIdHeader = request.headers['last-event-id'];
@@ -262,18 +293,18 @@ export default async function notificationRoutes(app: FastifyInstance) {
       });
       if (mostRecent) {
         cursor = mostRecent.id;
-        res.write(`id: ${mostRecent.id}\nevent: sync\ndata: {}\n\n`);
+        safeWrite(`id: ${mostRecent.id}\nevent: sync\ndata: {}\n\n`);
       }
     }
 
     const connectionId = randomUUID();
     app.sseRegistry.add({ id: connectionId, userId: currentUser.id, teamId: params.teamId }, () => {
-      void flush();
+      flushSafely();
     });
 
     const heartbeat = setInterval(() => {
-      res.write(': heartbeat\n\n');
-      void flush();
+      safeWrite(': heartbeat\n\n');
+      flushSafely();
     }, app.sseHeartbeatIntervalMs);
 
     request.raw.on('close', () => {

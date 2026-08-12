@@ -223,6 +223,48 @@ describe('notification SSE stream', () => {
     expect(payload.teamId).toBe(teamId);
   });
 
+  it('skips a malformed notification row instead of getting stuck on it', async () => {
+    // A row this build's contract can't parse (e.g. from a future eventType
+    // mid-rollout) must not stall or crash the whole connection — it should
+    // be skipped, with the next valid row still delivered normally.
+    const { adminToken, teamId } = await setUpTeam();
+    const admin = await app.prisma.user.findFirstOrThrow({
+      where: { teamMemberships: { some: { teamId } } },
+    });
+    const publisher = redisConnection();
+
+    const response = await fetch(`${baseUrl}/teams/${teamId}/notifications/stream`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(response.status).toBe(200);
+
+    const malformedEvent = await app.prisma.outboxEvent.create({
+      data: {
+        teamId,
+        eventType: 'not_a_real_event_type',
+        category: 'shift_changes',
+        recipientScope: 'self',
+        selfUserId: admin.id,
+        payload: {},
+      },
+    });
+    await app.prisma.userNotification.create({
+      data: {
+        outboxEventId: malformedEvent.id,
+        userId: admin.id,
+        teamId,
+        eventType: 'not_a_real_event_type',
+        category: 'shift_changes',
+        payload: {},
+      },
+    });
+    await createBroadcastNotification(teamId, 'after-malformed-row', publisher);
+
+    const received = await readUntil(response, (e) => e.event === 'notification', 700);
+    const payload = JSON.parse(received.data) as { payload: { marker: string } };
+    expect(payload.payload.marker).toBe('after-malformed-row');
+  });
+
   it('rejects a caller who is not a member of the team', async () => {
     const { teamId } = await setUpTeam();
     const { adminToken: otherTeamToken } = await setUpTeam();

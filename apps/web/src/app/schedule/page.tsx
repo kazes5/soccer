@@ -438,18 +438,32 @@ function SessionCard({
 
   // Deep-linking from a notification (`/schedule?team=&session=&shift=`)
   // should land the reader on the right row, not just the right team — scroll
-  // it into view and highlight it briefly on arrival. `isHighlighted` is
-  // fixed for this card's lifetime (derived from the URL at mount), so this
-  // only fires once per deep-link visit, not on every re-render.
+  // it into view and highlight it briefly on arrival. Reacts to `isHighlighted`/
+  // `highlightShiftId` themselves (not just mount) so clicking a second
+  // notification while /schedule stays mounted (client-side navigation,
+  // SessionCard never remounts since it's keyed by practiceSession.id, which
+  // doesn't change) re-scrolls to the new target and clears a still-showing
+  // stale highlight on the previous one, instead of only firing once.
+  // `showHighlight` is derived, not stored directly — `isHighlighted` flipping
+  // false (e.g. a second deep link changes which card is targeted) hides the
+  // highlight immediately via this expression, with no separate setState
+  // needed for that direction; `withinHighlightWindow` only tracks the
+  // decaying "still within 4s of arrival" half.
   const cardRef = useRef<HTMLLIElement>(null);
-  const [showHighlight, setShowHighlight] = useState(isHighlighted);
+  const [withinHighlightWindow, setWithinHighlightWindow] = useState(isHighlighted);
   useEffect(() => {
     if (!isHighlighted) return;
+    // Genuinely effect-driven, not a derivable render value: this starts a
+    // real 4s timer below, and re-arming that timer (on a new highlight
+    // target while the card stays mounted) is exactly what the reset here
+    // is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWithinHighlightWindow(true);
     cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const timeout = setTimeout(() => setShowHighlight(false), 4000);
+    const timeout = setTimeout(() => setWithinHighlightWindow(false), 4000);
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on arrival, not a reactive effect
-  }, []);
+  }, [isHighlighted, highlightShiftId]);
+  const showHighlight = isHighlighted && withinHighlightWindow;
 
   return (
     <DataListItem
