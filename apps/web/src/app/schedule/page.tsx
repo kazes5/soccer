@@ -12,8 +12,8 @@ import type { Locale } from '@soccer/i18n';
 import type { StatusTone } from '@soccer/ui-tokens';
 import { focusRingClassName } from '@soccer/ui-tokens';
 import { Ban, Calendar, Home, Pencil, Users } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Field,
   FieldsetGroup,
@@ -34,6 +34,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
   formatSessionStartsAt,
   updateSessionInSessions,
@@ -55,10 +56,17 @@ function isSessionPast(startsAt: string): boolean {
 
 export default function SchedulePage() {
   const router = useRouter();
+  const pathname = usePathname();
   // Lets a link from another page (e.g. Home's "+N more" under a specific
   // team's help-needed list) open the schedule already scoped to that team,
-  // instead of always defaulting to the user's first membership.
-  const requestedTeamId = useSearchParams().get('team');
+  // instead of always defaulting to the user's first membership. `session`/
+  // `shift` come from a notification's standardized deep link
+  // (`/schedule?team=&session=&shift=`) and scroll/highlight that specific
+  // row once the schedule loads.
+  const searchParams = useSearchParams();
+  const requestedTeamId = searchParams.get('team');
+  const highlightSessionId = searchParams.get('session');
+  const highlightShiftId = searchParams.get('shift');
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -88,9 +96,9 @@ export default function SchedulePage() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [authStatus, router]);
+  }, [authStatus, router, pathname, searchParams]);
 
   if (authStatus !== 'ready' || !session) {
     return null;
@@ -139,6 +147,8 @@ export default function SchedulePage() {
             currentUserId={session.user.id}
             isAdmin={activeMembership?.role === 'admin'}
             timeZone={activeMembership?.timezone ?? 'UTC'}
+            highlightSessionId={highlightSessionId}
+            highlightShiftId={highlightShiftId}
           />
         )}
       </div>
@@ -151,11 +161,15 @@ function ScheduleSessions({
   currentUserId,
   isAdmin,
   timeZone,
+  highlightSessionId,
+  highlightShiftId,
 }: {
   teamId: string;
   currentUserId: string;
   isAdmin: boolean;
   timeZone: string;
+  highlightSessionId: string | null;
+  highlightShiftId: string | null;
 }) {
   const { t, locale } = useLocale();
   const { showToast } = useToast();
@@ -325,6 +339,8 @@ function ScheduleSessions({
               isAdmin={isAdmin}
               playersById={playersById}
               pendingShiftId={pendingShiftId}
+              highlightShiftId={practiceSession.id === highlightSessionId ? highlightShiftId : null}
+              isHighlighted={practiceSession.id === highlightSessionId}
               onClaim={handleClaim}
               onRelease={handleRelease}
               onEdit={setEditingSession}
@@ -386,6 +402,8 @@ function SessionCard({
   isAdmin,
   playersById,
   pendingShiftId,
+  highlightShiftId,
+  isHighlighted,
   onClaim,
   onRelease,
   onEdit,
@@ -399,6 +417,8 @@ function SessionCard({
   isAdmin: boolean;
   playersById: Map<string, string>;
   pendingShiftId: string | null;
+  highlightShiftId: string | null;
+  isHighlighted: boolean;
   onClaim: (shiftId: string) => void;
   onRelease: (shiftId: string) => void;
   onEdit: (session: PracticeSession) => void;
@@ -416,8 +436,40 @@ function SessionCard({
   const canManage =
     isAdmin && practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt);
 
+  // Deep-linking from a notification (`/schedule?team=&session=&shift=`)
+  // should land the reader on the right row, not just the right team — scroll
+  // it into view and highlight it briefly on arrival. Reacts to `isHighlighted`/
+  // `highlightShiftId` themselves (not just mount) so clicking a second
+  // notification while /schedule stays mounted (client-side navigation,
+  // SessionCard never remounts since it's keyed by practiceSession.id, which
+  // doesn't change) re-scrolls to the new target and clears a still-showing
+  // stale highlight on the previous one, instead of only firing once.
+  // `showHighlight` is derived, not stored directly — `isHighlighted` flipping
+  // false (e.g. a second deep link changes which card is targeted) hides the
+  // highlight immediately via this expression, with no separate setState
+  // needed for that direction; `withinHighlightWindow` only tracks the
+  // decaying "still within 4s of arrival" half.
+  const cardRef = useRef<HTMLLIElement>(null);
+  const [withinHighlightWindow, setWithinHighlightWindow] = useState(isHighlighted);
+  useEffect(() => {
+    if (!isHighlighted) return;
+    // Genuinely effect-driven, not a derivable render value: this starts a
+    // real 4s timer below, and re-arming that timer (on a new highlight
+    // target while the card stays mounted) is exactly what the reset here
+    // is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWithinHighlightWindow(true);
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeout = setTimeout(() => setWithinHighlightWindow(false), 4000);
+    return () => clearTimeout(timeout);
+  }, [isHighlighted, highlightShiftId]);
+  const showHighlight = isHighlighted && withinHighlightWindow;
+
   return (
-    <DataListItem className="flex flex-col gap-4">
+    <DataListItem
+      ref={cardRef}
+      className={`flex flex-col gap-4 ${showHighlight ? 'ring-2 ring-status-mine' : ''}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-medium">{formatted}</p>
@@ -468,10 +520,16 @@ function SessionCard({
             .map((id) => playersById.get(id))
             .filter((name): name is string => Boolean(name));
 
+          const isHighlightedShift = showHighlight && point.shift.id === highlightShiftId;
+
           return (
             <div
               key={`${point.pointId}-${point.direction}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-surface-border bg-surface-soft p-3"
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${
+                isHighlightedShift
+                  ? 'border-status-mine bg-status-mine-subtle'
+                  : 'border-surface-border bg-surface-soft'
+              }`}
             >
               <div>
                 <p className="text-sm font-medium">{pointLabel}</p>

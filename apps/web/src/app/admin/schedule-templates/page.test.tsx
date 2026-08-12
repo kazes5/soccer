@@ -8,6 +8,7 @@ const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/admin/schedule-templates',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -100,7 +101,9 @@ describe('AdminScheduleTemplatesPage', () => {
 
     renderWithProviders(<AdminScheduleTemplatesPage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/login?next=%2Fadmin%2Fschedule-templates'),
+    );
   });
 
   it('redirects to /home when the user is not an admin on any team', async () => {

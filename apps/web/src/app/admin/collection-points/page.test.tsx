@@ -26,6 +26,7 @@ const replace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/admin/collection-points',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -99,7 +100,9 @@ describe('AdminCollectionPointsPage', () => {
 
     renderWithProviders(<AdminCollectionPointsPage />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/login?next=%2Fadmin%2Fcollection-points'),
+    );
   });
 
   it('redirects to /home when the user is not an admin on any team', async () => {

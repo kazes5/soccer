@@ -421,6 +421,17 @@ flowchart TD
   authoritative when members act concurrently.
 - Past and cancelled sessions are read-only. Template edits add missing future
   sessions but never rewrite sessions that already exist.
+- The notification center updates live while it stays open — new items
+  delivered by the server appear without a manual reload. If a live
+  connection can't be kept open, the list still catches up automatically
+  within a short interval, and always on the next visit or explicit reload.
+- Opening a notification linked to a specific session or shift scrolls to and
+  briefly highlights that row on Schedule, instead of only opening the
+  team's full schedule.
+- Following a link to a page that requires sign-in while signed out returns to
+  that exact page — including its parameters, such as a notification's linked
+  session or shift — once sign-in completes, instead of always landing on
+  Home.
 - Swap-request UI, member and role management, reporting, and audit-log screens
   are not yet part of the shipped web flows. See [PLAN.md](../PLAN.md) for their
   delivery status.

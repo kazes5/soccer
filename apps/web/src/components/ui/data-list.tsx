@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 
 export function DataList({ children, ariaLabel }: { children: ReactNode; ariaLabel: string }) {
   return (
@@ -8,18 +8,15 @@ export function DataList({ children, ariaLabel }: { children: ReactNode; ariaLab
   );
 }
 
-export function DataListItem({
-  children,
-  className = '',
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <li
-      className={`rounded-xl border border-surface-border bg-surface p-4 shadow-raised ${className}`}
-    >
-      {children}
-    </li>
-  );
-}
+export const DataListItem = forwardRef<HTMLLIElement, { children: ReactNode; className?: string }>(
+  function DataListItem({ children, className = '' }, ref) {
+    return (
+      <li
+        ref={ref}
+        className={`rounded-xl border border-surface-border bg-surface p-4 shadow-raised ${className}`}
+      >
+        {children}
+      </li>
+    );
+  },
+);

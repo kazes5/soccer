@@ -159,6 +159,24 @@ same way as parents.
 The **Team members** section at the bottom of Schedule shows each member's name
 and role. This roster is currently read-only in the web app.
 
+## Review notifications
+
+Open **Notifications** from the navigation to see a live log of team
+activity: shift claims and releases, session and schedule-template changes,
+and member/role changes for the active team.
+
+- New items appear automatically while this page stays open — no manual
+  reload needed.
+- Selecting an item marks it read. When it links to a specific session or
+  shift, it opens Schedule and scrolls to and briefly highlights that row.
+- **Mark all as read** clears the unread count. The dismiss control removes an
+  item from your own list only, not other members' copies.
+- **Load more** retrieves older history.
+
+Each member's own delivery preferences — quiet hours, reminder timing, and
+which categories notify them — are set on their personal **Settings** page,
+not here; team-wide defaults are set below.
+
 ## Configure coordination and notifications
 
 Open **Coordination & notification settings** from the admin navigation.
@@ -173,9 +191,12 @@ Open **Coordination & notification settings** from the admin navigation.
 - **Default quiet hours** set the team's default no-notification period.
   Individual members can override it in their personal **Settings** page.
 
-Select **Save** and wait for the confirmation message. These settings are
-stored now, but notification event creation and end-user delivery are still
-being implemented; see [Current limitations](#current-limitations).
+Select **Save** and wait for the confirmation message. These settings control
+reminder, escalation, and quiet-hours timing. In-app notification delivery
+itself is already live (see [Review notifications](#review-notifications)
+above); delivery to email, SMS, or browser push, and the reminders/escalations
+these settings will time once built, are not yet implemented — see
+[Current limitations](#current-limitations).
 
 ## Account and security
 
@@ -213,8 +234,8 @@ being implemented; see [Current limitations](#current-limitations).
 - Schedule templates cannot be deleted, and bulk editing of existing future
   sessions is not available.
 - Swap requests are not yet available in the web UI.
-- Notification settings are stored, but the event-producing routes and
-  end-user notification delivery are not complete.
+- In-app notification delivery is live. Reminders, no-show escalations, and
+  delivery to email, SMS, or browser push are not yet implemented.
 - Audit logs, reports, CSV export, and archive management do not yet have admin
   screens.
 

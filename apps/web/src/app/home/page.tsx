@@ -10,7 +10,7 @@ import type {
 import type { Locale } from '@soccer/i18n';
 import { Calendar, Copy, Home, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
   FormError,
@@ -29,6 +29,7 @@ import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
 import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { buildLoginRedirect } from '@/lib/safe-redirect';
 import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
 
 interface UpcomingShift {
@@ -56,6 +57,8 @@ function formatAverage(value: number): string {
 
 export default function HomePage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useLocale();
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
@@ -83,9 +86,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/login');
+      router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
-  }, [status, router]);
+  }, [status, router, pathname, searchParams]);
 
   async function handleLogOut() {
     setConfirmingLogOut(false);

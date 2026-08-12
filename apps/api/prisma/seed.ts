@@ -14,6 +14,45 @@ const prisma = new PrismaClient({ adapter });
 // developer regenerate test links while keeping the normal invite TTL unchanged.
 const TEST_INVITE_EXPIRY = new Date('9999-12-31T23:59:59.999Z');
 
+type DemoInviteUser = { phone: string | null; email: string | null };
+
+// Shared by both demo teams below. A pending invite for a user who already has
+// team membership (but no passkey yet) resolves through the existing
+// "invite_accepted_for_recovery" path (see apps/api/src/routes/invites.ts) —
+// the same recovery flow CLAUDE.md §9.1 documents for a lost/inaccessible
+// device — so this is safe to point at already-seeded users, not just brand
+// new ones.
+async function upsertDemoInvites(
+  teamId: string,
+  createdByUserId: string,
+  invites: Array<{ code: string; label: string; user: DemoInviteUser }>,
+) {
+  for (const invite of invites) {
+    await prisma.invite.upsert({
+      where: { code: invite.code },
+      update: {
+        teamId,
+        phone: invite.user.phone,
+        email: invite.user.email,
+        status: 'pending',
+        acceptedByUserId: null,
+        acceptedAt: null,
+        createdByUserId,
+        expiresAt: TEST_INVITE_EXPIRY,
+      },
+      create: {
+        teamId,
+        code: invite.code,
+        phone: invite.user.phone,
+        email: invite.user.email,
+        createdByUserId,
+        expiresAt: TEST_INVITE_EXPIRY,
+      },
+    });
+  }
+  return invites.map(({ code, label }) => ({ code, label }));
+}
+
 async function main() {
   // One-time cleanup for local databases seeded before this id was fixed to be a
   // schema-valid UUID (see below) — without this, re-running seed against such a
@@ -59,6 +98,24 @@ async function main() {
         email: 'sarah@example.com',
         language: 'en' as const,
       },
+      {
+        name: 'Noa Peretz',
+        phone: '+15550000004',
+        email: 'noa@example.com',
+        language: 'en' as const,
+      },
+      {
+        name: 'Ron Mizrahi',
+        phone: '+15550000005',
+        email: 'ron@example.com',
+        language: 'en' as const,
+      },
+      {
+        name: 'Liat Shapira',
+        phone: '+15550000006',
+        email: 'liat@example.com',
+        language: 'he' as const,
+      },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
@@ -81,6 +138,9 @@ async function main() {
       { userId: admin.id, role: 'admin' as const },
       { userId: parents[0]?.id, role: 'parent' as const },
       { userId: parents[1]?.id, role: 'parent' as const },
+      { userId: parents[2]?.id, role: 'parent' as const },
+      { userId: parents[3]?.id, role: 'parent' as const },
+      { userId: parents[4]?.id, role: 'parent' as const },
     ].map(({ userId, role }) => {
       if (!userId) return Promise.resolve();
       return prisma.teamMember.upsert({
@@ -176,8 +236,21 @@ async function main() {
     }
   }
 
+  const englishInvites = await upsertDemoInvites(team.id, admin.id, [
+    { code: 'english-admin-demo', label: 'admin', user: admin },
+    ...parents.map((parent, index) => ({
+      code: `english-parent-${index + 1}-demo`,
+      label: `parent ${index + 1}`,
+      user: parent,
+    })),
+  ]);
+
   console.log(
-    `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, ${players.length} players, 2 collection points, and ${sessionsCreated || 'no new'} sessions.`,
+    `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, ${players.length} players, 2 collection points, and ${sessionsCreated || 'no new'} sessions.\n` +
+      `Passkey setup invites:\n` +
+      englishInvites
+        .map(({ label, code }) => `  ${label}: http://localhost:3000/invite/${code}`)
+        .join('\n'),
   );
 
   const hebrewDemo = await seedHebrewDemoData();
@@ -229,6 +302,21 @@ async function seedHebrewDemoData() {
         phone: '+972503456789',
         email: 'sarah.he@example.test',
       },
+      {
+        name: 'מיכל פרץ',
+        phone: '+972504567890',
+        email: 'michal.he@example.test',
+      },
+      {
+        name: 'רון מזרחי',
+        phone: '+972505678901',
+        email: 'ron.he@example.test',
+      },
+      {
+        name: 'ליאת שפירא',
+        phone: '+972506789012',
+        email: 'liat.he@example.test',
+      },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
@@ -248,6 +336,9 @@ async function seedHebrewDemoData() {
       { userId: admin.id, role: 'admin' as const },
       { userId: parents[0]!.id, role: 'parent' as const },
       { userId: parents[1]!.id, role: 'parent' as const },
+      { userId: parents[2]!.id, role: 'parent' as const },
+      { userId: parents[3]!.id, role: 'parent' as const },
+      { userId: parents[4]!.id, role: 'parent' as const },
     ].map(({ userId, role }) =>
       prisma.teamMember.upsert({
         where: { teamId_userId: { teamId: team.id, userId } },
@@ -365,40 +456,16 @@ async function seedHebrewDemoData() {
     }
   }
 
-  const inviteDefinitions = [
+  const invites = await upsertDemoInvites(team.id, admin.id, [
     { code: 'hebrew-admin-demo', label: 'admin', user: admin },
-    { code: 'hebrew-parent-1-demo', label: 'parent 1', user: parents[0]! },
-    { code: 'hebrew-parent-2-demo', label: 'parent 2', user: parents[1]! },
-  ];
-  for (const invite of inviteDefinitions) {
-    await prisma.invite.upsert({
-      where: { code: invite.code },
-      update: {
-        teamId: team.id,
-        phone: invite.user.phone,
-        email: invite.user.email,
-        status: 'pending',
-        acceptedByUserId: null,
-        acceptedAt: null,
-        createdByUserId: admin.id,
-        expiresAt: TEST_INVITE_EXPIRY,
-      },
-      create: {
-        teamId: team.id,
-        code: invite.code,
-        phone: invite.user.phone,
-        email: invite.user.email,
-        createdByUserId: admin.id,
-        expiresAt: TEST_INVITE_EXPIRY,
-      },
-    });
-  }
+    ...parents.map((parent, index) => ({
+      code: `hebrew-parent-${index + 1}-demo`,
+      label: `parent ${index + 1}`,
+      user: parent,
+    })),
+  ]);
 
-  return {
-    team,
-    sessionsCreated,
-    invites: inviteDefinitions.map(({ code, label }) => ({ code, label })),
-  };
+  return { team, sessionsCreated, invites };
 }
 
 main()

@@ -62,6 +62,24 @@ If another parent claims a shift first, the API returns a conflict and the UI
 shows that the shift is no longer available. This is expected behavior, not a
 silent overwrite.
 
+## Notifications
+
+Open `/notifications` from the workspace navigation to review team activity:
+shift claims and releases, session and schedule-template changes, and
+member/role changes for the active team.
+
+- New items appear automatically while this page is open — there is no need
+  to reload to see the latest activity.
+- Selecting an item marks it read. When it links to a specific session or
+  shift, it opens `/schedule` and scrolls to and briefly highlights that row.
+- **Mark all as read** clears the unread count. Dismissing an item removes it
+  from your own list only.
+- **Load more** retrieves older history.
+
+Use `/settings/notifications` to set your own quiet hours, reminder timing,
+and which categories of activity notify you, or to fall back to the team's
+defaults.
+
 ## Language and display direction
 
 Use the language toggle available in the web shell to switch between English and
@@ -73,8 +91,10 @@ Hebrew text is currently AI-drafted and still requires native-speaker review.
 ## Current limitations
 
 - Swap requests are not available in the current web UI.
-- Notification delivery, reminders, escalations, and email/SMS digests are not
-  implemented; browser push subscription storage exists for future delivery.
+- In-app notifications are delivered live while a page is open. Delivery to a
+  device that isn't currently viewing the app — email, SMS, or browser push —
+  is not implemented yet. Pre-shift reminders and no-show escalations are not
+  implemented.
 - The admin UI supports collection points, schedule templates, individual
   sessions, and a read-only roster. Player editing, member/role management,
   reporting, and audit-log screens are not yet available.
