@@ -47,6 +47,13 @@ export function startNotificationStream(
   let eventSource: EventSource | null = null;
   let stopped = false;
   let releaseLock: (() => void) | null = null;
+  // Cancels a still-*pending* (not yet granted) lock request on cleanup — a
+  // bare `navigator.locks.request()` call has no way to withdraw itself from
+  // the queue otherwise, so a component that unmounts before winning the
+  // lock (e.g. React StrictMode's mount/cleanup/remount in dev, or a fast
+  // tab switch) would leave a permanently-queued request behind, capable of
+  // starving every future request for this lock name.
+  const lockAbortController = 'locks' in navigator ? new AbortController() : null;
 
   function apply(notification: Notification) {
     if (shouldApply(seenIds, notification)) handlers.onNotification(notification);
@@ -98,8 +105,15 @@ export function startNotificationStream(
     });
   }
 
-  if ('locks' in navigator) {
-    void navigator.locks.request(`sse-notifications:${teamId}`, becomeLeader);
+  if (lockAbortController) {
+    navigator.locks
+      .request(`sse-notifications:${teamId}`, { signal: lockAbortController.signal }, becomeLeader)
+      .catch((error: unknown) => {
+        // AbortError from our own cleanup below is expected and harmless —
+        // it just means this request never reached the front of the queue.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        throw error;
+      });
   } else {
     void becomeLeader();
   }
@@ -108,6 +122,7 @@ export function startNotificationStream(
     stopped = true;
     channel?.removeEventListener('message', handleChannelMessage);
     channel?.close();
+    lockAbortController?.abort();
     releaseLock?.();
   };
 }

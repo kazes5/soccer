@@ -184,10 +184,23 @@ export default async function notificationRoutes(app: FastifyInstance) {
 
     reply.hijack();
     const res = reply.raw;
+    // `@fastify/cors`'s onRequest hook already computed the right
+    // Access-Control-Allow-* headers onto the Fastify reply object before
+    // this handler ran — but `reply.hijack()` means we write straight to the
+    // raw response ourselves and never call `reply.send()`, which is what
+    // would normally flush those headers. Without forwarding them here, the
+    // browser silently rejects the whole credentialed response as a CORS
+    // violation (surfacing to `EventSource`/`fetch` as an opaque connection
+    // failure, not a visible CORS console error), and a failed `EventSource`
+    // auto-retries forever without ever telling the app it failed.
+    const corsOrigin = reply.getHeader('access-control-allow-origin');
+    const corsCredentials = reply.getHeader('access-control-allow-credentials');
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin } : {}),
+      ...(corsCredentials ? { 'Access-Control-Allow-Credentials': corsCredentials } : {}),
     });
     // Reconnect hint for the browser's automatic retry after a dropped
     // connection; independent of the server-side heartbeat interval below.

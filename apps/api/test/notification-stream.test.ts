@@ -146,6 +146,26 @@ describe('notification SSE stream', () => {
     return event;
   }
 
+  it('includes CORS headers on the hijacked response, not just non-hijacked ones', async () => {
+    // `fetch()` in Node does not enforce CORS the way a real browser does, so
+    // a missing Access-Control-Allow-* header here would pass every other
+    // test in this file while silently breaking every real browser: Chrome
+    // rejects a credentialed cross-origin response missing these headers and
+    // surfaces it to EventSource/fetch as an opaque connection failure, not
+    // a catchable error — this regressed once already because
+    // `reply.hijack()` bypasses the @fastify/cors plugin's normal onSend
+    // flush, which every *other* route relies on implicitly.
+    const { adminToken, teamId } = await setUpTeam();
+
+    const response = await fetch(`${baseUrl}/teams/${teamId}/notifications/stream`, {
+      headers: { authorization: `Bearer ${adminToken}`, origin: 'http://localhost:3000' },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:3000');
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true');
+    await response.body?.cancel();
+  });
+
   it('delivers a live notification via Redis pub/sub shortly after processOutboxEvent', async () => {
     const { adminToken, teamId } = await setUpTeam();
     const publisher = redisConnection();
