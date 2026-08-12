@@ -43,6 +43,25 @@ describe('POST/DELETE /push-subscriptions', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('GET /push-subscriptions/config requires authentication', async () => {
+    const response = await app.inject({ method: 'GET', url: '/push-subscriptions/config' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('GET /push-subscriptions/config reports push as unavailable when VAPID is not configured', async () => {
+    const { token } = await createAdmin();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/push-subscriptions/config',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // No VAPID_* env vars are set for the test run, matching production
+    // behavior when the operator hasn't configured push.
+    expect(response.json()).toEqual({ publicKey: null });
+  });
+
   it('registers and later removes a subscription for the current user', async () => {
     const { token, userId } = await createAdmin();
     const endpoint = `https://push.example.com/${crypto.randomUUID()}`;
