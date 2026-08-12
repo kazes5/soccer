@@ -1,4 +1,8 @@
-import type { SessionListResponse, ShiftStatsResponse } from '@soccer/contracts';
+import type {
+  SessionListResponse,
+  ShiftStatsResponse,
+  SwapRequestListResponse,
+} from '@soccer/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import { fireEvent, renderWithProviders, screen, waitFor, within } from '@/test/render';
@@ -26,6 +30,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
       getShiftStats: vi.fn(),
       claimShift: vi.fn(),
       releaseShift: vi.fn(),
+      listSwapRequests: vi.fn(),
+      acceptSwapRequest: vi.fn(),
+      declineSwapRequest: vi.fn(),
     },
   };
 });
@@ -54,6 +61,32 @@ const zeroStats: ShiftStatsResponse = {
   mine: { toPractice: 0, fromPractice: 0, total: 0 },
   teamAverage: { toPractice: 0, fromPractice: 0, total: 0 },
 };
+
+const emptySwapRequests: SwapRequestListResponse = { swapRequests: [] };
+
+function buildSwapRequest(
+  overrides: Partial<SwapRequestListResponse['swapRequests'][number]> = {},
+) {
+  return {
+    id: 'swap-1',
+    teamId: 'team-1',
+    shiftId: 'shift-mine',
+    sessionId: 'session-1',
+    sessionStartsAt: '2099-08-10T18:00:00.000Z',
+    pointId: 'point-2',
+    pointName: 'Downtown Park',
+    direction: 'from_practice' as const,
+    requestingUserId: 'user-2',
+    requestingUserName: 'Avi Levi',
+    currentHolderId: 'user-1',
+    currentHolderName: 'Dana Cohen',
+    status: 'pending' as const,
+    expiresAt: '2099-08-11T18:00:00.000Z',
+    createdAt: '2026-08-12T12:00:00.000Z',
+    updatedAt: '2026-08-12T12:00:00.000Z',
+    ...overrides,
+  };
+}
 
 // Far-future date so the "upcoming" filter (startsAt >= now) always includes it,
 // regardless of when the suite actually runs.
@@ -117,6 +150,9 @@ describe('HomePage', () => {
     vi.mocked(api.getShiftStats).mockReset().mockResolvedValue(zeroStats);
     vi.mocked(api.claimShift).mockReset();
     vi.mocked(api.releaseShift).mockReset();
+    vi.mocked(api.listSwapRequests).mockReset().mockResolvedValue(emptySwapRequests);
+    vi.mocked(api.acceptSwapRequest).mockReset();
+    vi.mocked(api.declineSwapRequest).mockReset();
   });
 
   it('redirects to /login when the session lookup fails', async () => {
@@ -274,14 +310,89 @@ describe('HomePage', () => {
     expect(api.listSessions).toHaveBeenCalledTimes(1);
   });
 
-  it('shows empty states when there are no upcoming shifts, and a static pending-swaps placeholder', async () => {
+  it('shows empty states when there are no upcoming shifts or pending swaps', async () => {
     vi.mocked(api.me).mockResolvedValue(currentUser);
 
     renderWithProviders(<HomePage />);
 
     expect(await screen.findByText("You don't have any upcoming shifts.")).toBeInTheDocument();
     expect(screen.getByText('All upcoming shifts are covered.')).toBeInTheDocument();
-    expect(screen.getByText('0 pending')).toBeInTheDocument();
+    expect(screen.getByText('No swap requests need your response.')).toBeInTheDocument();
+  });
+
+  it('shows swap requests that need this user\'s response, capped with a "+N more" link', async () => {
+    vi.mocked(api.me).mockResolvedValue(currentUser);
+    vi.mocked(api.listSwapRequests).mockResolvedValue({
+      swapRequests: [
+        buildSwapRequest({ id: 'swap-1', requestingUserName: 'Avi Levi' }),
+        // Not directed at this user (they're the requester, not the holder) —
+        // must not appear in "needs your response".
+        buildSwapRequest({
+          id: 'swap-2',
+          requestingUserId: 'user-1',
+          currentHolderId: 'user-3',
+        }),
+        // Already resolved — must not appear either.
+        buildSwapRequest({ id: 'swap-3', status: 'accepted' }),
+      ],
+    });
+
+    renderWithProviders(<HomePage />);
+
+    const swapsSection = (await screen.findByText('Pending swaps')).closest('section');
+    expect(swapsSection).not.toBeNull();
+    expect(within(swapsSection!).getByText('Requested by Avi Levi')).toBeInTheDocument();
+    expect(within(swapsSection!).getAllByRole('button', { name: /^accept$/i })).toHaveLength(1);
+  });
+
+  it('lets the holder accept a swap request directly from Home', async () => {
+    vi.mocked(api.me).mockResolvedValue(currentUser);
+    vi.mocked(api.listSwapRequests).mockResolvedValue({
+      swapRequests: [buildSwapRequest()],
+    });
+    vi.mocked(api.acceptSwapRequest).mockResolvedValue(buildSwapRequest({ status: 'accepted' }));
+
+    renderWithProviders(<HomePage />);
+    await screen.findByText('Requested by Avi Levi');
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }));
+
+    await waitFor(() => expect(api.acceptSwapRequest).toHaveBeenCalledWith('team-1', 'swap-1'));
+    expect(await screen.findByText('No swap requests need your response.')).toBeInTheDocument();
+  });
+
+  it("refreshes this user's stats after accepting a swap, since accepting gives the shift away", async () => {
+    vi.mocked(api.me).mockResolvedValue(currentUser);
+    vi.mocked(api.listSwapRequests).mockResolvedValue({
+      swapRequests: [buildSwapRequest()],
+    });
+    vi.mocked(api.acceptSwapRequest).mockResolvedValue(buildSwapRequest({ status: 'accepted' }));
+
+    renderWithProviders(<HomePage />);
+    await screen.findByText('Requested by Avi Levi');
+    // One call already happened on mount.
+    await waitFor(() => expect(api.getShiftStats).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }));
+
+    await waitFor(() => expect(api.acceptSwapRequest).toHaveBeenCalledWith('team-1', 'swap-1'));
+    await waitFor(() => expect(api.getShiftStats).toHaveBeenCalledTimes(2));
+  });
+
+  it('lets the holder decline a swap request directly from Home', async () => {
+    vi.mocked(api.me).mockResolvedValue(currentUser);
+    vi.mocked(api.listSwapRequests).mockResolvedValue({
+      swapRequests: [buildSwapRequest()],
+    });
+    vi.mocked(api.declineSwapRequest).mockResolvedValue(buildSwapRequest({ status: 'declined' }));
+
+    renderWithProviders(<HomePage />);
+    await screen.findByText('Requested by Avi Levi');
+
+    fireEvent.click(screen.getByRole('button', { name: /^decline$/i }));
+
+    await waitFor(() => expect(api.declineSwapRequest).toHaveBeenCalledWith('team-1', 'swap-1'));
+    expect(await screen.findByText('No swap requests need your response.')).toBeInTheDocument();
   });
 
   it("shows the caller's stats alongside the team average, by direction", async () => {

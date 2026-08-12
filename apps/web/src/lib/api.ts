@@ -29,6 +29,8 @@ import {
   type SessionListResponse,
   type ShiftStatsResponse,
   type ShiftSummary,
+  type SwapRequest,
+  type SwapRequestListResponse,
   type TeamNotificationSettings,
   type TeamNotificationSettingsRequest,
   type TeamRosterResponse,
@@ -58,6 +60,8 @@ import {
   sessionListResponseSchema,
   shiftStatsResponseSchema,
   shiftSummarySchema,
+  swapRequestListResponseSchema,
+  swapRequestSchema,
   teamNotificationSettingsSchema,
   teamRosterResponseSchema,
   unreadNotificationCountResponseSchema,
@@ -378,6 +382,35 @@ export const api = {
       method: 'POST',
       responseSchema: z.unknown(),
     }),
+
+  listSwapRequests: (teamId: string) =>
+    request<SwapRequestListResponse>(`/teams/${encodeURIComponent(teamId)}/swap-requests`, {
+      responseSchema: swapRequestListResponseSchema,
+    }),
+
+  createSwapRequest: (teamId: string, shiftId: string) =>
+    request<SwapRequest>(
+      `/teams/${encodeURIComponent(teamId)}/shifts/${encodeURIComponent(shiftId)}/swap-requests`,
+      { method: 'POST', responseSchema: swapRequestSchema },
+    ),
+
+  acceptSwapRequest: (teamId: string, swapRequestId: string) =>
+    request<SwapRequest>(
+      `/teams/${encodeURIComponent(teamId)}/swap-requests/${encodeURIComponent(swapRequestId)}/accept`,
+      { method: 'POST', responseSchema: swapRequestSchema },
+    ),
+
+  declineSwapRequest: (teamId: string, swapRequestId: string) =>
+    request<SwapRequest>(
+      `/teams/${encodeURIComponent(teamId)}/swap-requests/${encodeURIComponent(swapRequestId)}/decline`,
+      { method: 'POST', responseSchema: swapRequestSchema },
+    ),
+
+  cancelSwapRequest: (teamId: string, swapRequestId: string) =>
+    request<SwapRequest>(
+      `/teams/${encodeURIComponent(teamId)}/swap-requests/${encodeURIComponent(swapRequestId)}/cancel`,
+      { method: 'POST', responseSchema: swapRequestSchema },
+    ),
 
   getPushConfig: () =>
     request<PushConfigResponse>('/push-subscriptions/config', {

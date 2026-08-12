@@ -164,6 +164,49 @@ export function describeNotification(
         href: null,
       };
 
+    case 'swap_requested':
+      return {
+        text: t('notifications.event.swapRequested', {
+          requestingUserName: asString(payload, 'requestingUserName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        href: `/swaps?team=${encodeURIComponent(teamId)}`,
+      };
+
+    case 'swap_accepted':
+      return {
+        text: t('notifications.event.swapAccepted', {
+          requestingUserName: asString(payload, 'requestingUserName'),
+          currentHolderName: asString(payload, 'currentHolderName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        href: `/swaps?team=${encodeURIComponent(teamId)}`,
+      };
+
+    case 'swap_declined':
+      return {
+        text: t('notifications.event.swapDeclined', {
+          currentHolderName: asString(payload, 'currentHolderName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        href: `/swaps?team=${encodeURIComponent(teamId)}`,
+      };
+
+    case 'swap_expired':
+      return {
+        text: t('notifications.event.swapExpired', { pointName: asString(payload, 'pointName') }),
+        href: `/swaps?team=${encodeURIComponent(teamId)}`,
+      };
+
+    case 'swap_cancelled':
+      return {
+        text: t('notifications.event.swapCancelled', {
+          requestingUserName: asString(payload, 'requestingUserName'),
+          pointName: asString(payload, 'pointName'),
+        }),
+        href: `/swaps?team=${encodeURIComponent(teamId)}`,
+      };
+
     default: {
       // Defensive fallback: `eventType`'s TS type is the exhaustive union
       // above, but this renders real API data at runtime — a future event

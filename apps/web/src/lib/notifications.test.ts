@@ -99,11 +99,49 @@ describe('describeNotification', () => {
     // exhaustive, so this deliberately casts past it to exercise the
     // runtime fallback.
     const result = describeNotification(t, 'en', timeZone, teamId, {
-      eventType: 'swap_accepted' as never,
+      eventType: 'some_future_event_type' as never,
       payload: {},
     });
 
-    expect(result.text).toContain('swap_accepted');
+    expect(result.text).toContain('some_future_event_type');
     expect(result.href).toBeNull();
+  });
+
+  it('renders every swap lifecycle event with a deep link to the swaps page', () => {
+    const requested = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_requested',
+      payload: { requestingUserName: 'Ron Mizrahi', pointName: 'Oak St' },
+    });
+    expect(requested.text).toContain('Ron Mizrahi');
+    expect(requested.href).toBe('/swaps?team=team-1');
+
+    const accepted = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_accepted',
+      payload: {
+        requestingUserName: 'Ron Mizrahi',
+        currentHolderName: 'Noa Peretz',
+        pointName: 'Oak St',
+      },
+    });
+    expect(accepted.text).toContain('Noa Peretz');
+    expect(accepted.href).toBe('/swaps?team=team-1');
+
+    const declined = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_declined',
+      payload: { currentHolderName: 'Noa Peretz', pointName: 'Oak St' },
+    });
+    expect(declined.text).toContain('declined');
+
+    const expired = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_expired',
+      payload: { pointName: 'Oak St' },
+    });
+    expect(expired.text).toContain('expired');
+
+    const cancelled = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'swap_cancelled',
+      payload: { requestingUserName: 'Ron Mizrahi', pointName: 'Oak St' },
+    });
+    expect(cancelled.text).toContain('cancelled');
   });
 });

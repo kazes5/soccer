@@ -12,7 +12,12 @@ import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
 import { useToast } from '@/components/ui/toast';
-import { adminNavItems, notificationsNavItem, settingsNavItem } from '@/lib/admin-nav';
+import {
+  adminNavItems,
+  notificationsNavItem,
+  settingsNavItem,
+  swapsNavItem,
+} from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { describeNotification } from '@/lib/notifications';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
@@ -65,6 +70,7 @@ export default function NotificationsPage() {
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" /> },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
     ...(activeMembership ? [notificationsNavItem(activeMembership.teamId, t, true)] : []),
+    ...(activeMembership ? [swapsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
   ];
