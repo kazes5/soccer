@@ -62,6 +62,32 @@ If another parent claims a shift first, the API returns a conflict and the UI
 shows that the shift is no longer available. This is expected behavior, not a
 silent overwrite.
 
+## Shift swaps
+
+A parent can ask another parent to take over a shift the other parent already
+holds, instead of releasing it back to the whole team:
+
+1. On `/schedule`, find a shift covered by someone else and select
+   **Request swap**. The shift shows a "Swap pending" status until the
+   current holder responds — it can't be claimed, released, or requested
+   again by someone else while a request is outstanding.
+2. Open `/swaps` to manage requests, split into three sections:
+   - **Needs your response** — shifts you currently hold that someone else
+     has requested. Select **Accept** to hand the shift over, or **Decline**
+     to keep it.
+   - **Your requests** — shifts you've asked to take over, with their
+     current status. Select **Cancel request** to withdraw a still-pending
+     one.
+   - **Team activity** — every other swap request on the team, for
+     transparency (read-only).
+3. Home's **Pending swaps** section also lists requests that need your
+   response, with **Accept**/**Decline** available directly there.
+
+A request that goes unanswered expires automatically (the team admin sets how
+long — default 24 hours, always capped so it can't outlive the session
+itself). Every swap request, accept, decline, cancellation, and expiry is
+broadcast to the whole team, the same as a claim or release.
+
 ## Notifications
 
 Open `/notifications` from the workspace navigation to review team activity:
@@ -112,7 +138,8 @@ Hebrew text is currently AI-drafted and still requires native-speaker review.
 
 ## Current limitations
 
-- Swap requests are not available in the current web UI.
+- Only plain one-way swap requests are supported — offering one of your own
+  shifts in trade is not yet available.
 - In-app notifications are delivered live while a page is open. Opted-in
   browser push now delivers to a device that isn't currently viewing the app;
   email and SMS delivery are not implemented. Pre-shift reminders and no-show

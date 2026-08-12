@@ -191,16 +191,29 @@ Open **Coordination & notification settings** from the admin navigation.
 - **Default quiet hours** set the team's default no-notification period.
   Individual members can override it in their personal **Settings** page.
 
-Select **Save** and wait for the confirmation message. These settings control
-reminder, escalation, and quiet-hours timing. In-app notification delivery is
-already live (see [Review notifications](#review-notifications) above), and
-opted-in browser push now delivers as well, gated by the same quiet hours and
-per-category preferences; email/SMS delivery and the reminders/escalations
-these settings will time once built are not yet implemented — see
-[Current limitations](#current-limitations). Browser push additionally
-requires the server operator to have configured a VAPID keypair; if it isn't
-configured, members simply won't see the option to enable push on their
-device.
+Select **Save** and wait for the confirmation message. **Swap request expiry**
+is already live and functional (see [Shift swaps](#shift-swaps) below); the
+other three settings control quiet-hours timing today, plus reminder and
+escalation timing once those checkpoints build the features that consume
+them. In-app notification delivery is already live (see
+[Review notifications](#review-notifications) above), and opted-in browser
+push now delivers as well, gated by the same quiet hours and per-category
+preferences; email/SMS delivery and reminders/escalations themselves are not
+yet implemented — see [Current limitations](#current-limitations). Browser
+push additionally requires the server operator to have configured a VAPID
+keypair; if it isn't configured, members simply won't see the option to
+enable push on their device.
+
+## Shift swaps
+
+Admins participate in shift swaps the same way parents do — claim, request,
+accept, decline, and cancel all work identically regardless of role; there
+are no admin-only swap controls. The one admin lever is **Swap request
+expiry** above, which sets how long a team's swap requests stay open before
+expiring automatically (default 24 hours, always capped so a request can't
+outlive the session it's for). See the [User Guide](./user-guide.md#shift-swaps)
+for the full parent-facing swap workflow (`/schedule`'s **Request swap**
+action and the `/swaps` page).
 
 ## Account and security
 
@@ -237,7 +250,8 @@ device.
   not yet available in the web UI.
 - Schedule templates cannot be deleted, and bulk editing of existing future
   sessions is not available.
-- Swap requests are not yet available in the web UI.
+- Only plain one-way swap requests are supported — offering one of your own
+  shifts in trade is not yet available.
 - In-app notification delivery and opted-in browser push are both live.
   Reminders, no-show escalations, and delivery to email or SMS are not yet
   implemented.
