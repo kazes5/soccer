@@ -30,20 +30,13 @@ import { normalizeEmail, normalizePhone } from '../lib/identifiers';
 import { assertAcceptablePassword, hashPassword } from '../lib/passwords';
 import { recordOutboxEvent } from '../lib/outbox';
 import {
+  PASSKEY_REGISTRATION_WINDOW_MINUTES,
   createRegistrationChallenge,
   verifyRegistrationChallenge,
 } from '../lib/passkey-registration';
 import { enqueueOutboxEventBestEffort } from '../lib/queues';
 
 const codeParamsSchema = z.object({ code: z.string().min(1) });
-
-/**
- * How long after an invite is accepted its code can still be used to register
- * a passkey. Without a bound, capturing an already-used invite code would let
- * someone attach a new credential to that account indefinitely — the invite
- * is meant to authorize one onboarding sitting, not standing account access.
- */
-const PASSKEY_REGISTRATION_WINDOW_MINUTES = 15;
 
 export default async function inviteRoutes(app: FastifyInstance) {
   app.post('/teams/:teamId/invites', async (request, reply) => {

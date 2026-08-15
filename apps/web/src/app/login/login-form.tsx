@@ -36,7 +36,14 @@ export default function LoginForm() {
           : '/home';
       router.push(searchParams.get('next') ? safeNextPath(searchParams.get('next')) : fallback);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
+      if (err instanceof ApiError && err.status === 404) {
+        // Password auth is disabled server-side (PASSWORD_AUTH_ENABLED=false)
+        // — the raw "Not found." body would otherwise read as a bug, so
+        // point at the passkey button below instead, which still works.
+        setError(t('login.passwordAuthUnavailable'));
+      } else {
+        setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
+      }
     } finally {
       setIsSubmitting(false);
     }

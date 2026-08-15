@@ -46,6 +46,8 @@ export const en = {
     "Passkeys aren't supported in this browser. Try a different browser or device.",
   'login.cancelled': 'Passkey login was cancelled. Try again.',
   'login.forgotPassword': 'Forgot your password?',
+  'login.passwordAuthUnavailable':
+    'Password sign-in isn\'t turned on for this team yet. Use "Continue with passkey" below instead.',
   'recovery.forgotTitle': 'Reset your password',
   'recovery.forgotBody': 'Enter your verified phone number or email.',
   'recovery.send': 'Send reset instructions',
@@ -565,6 +567,8 @@ export const he: Record<MessageKey, string> = {
   'login.notSupported': 'מפתחות גישה אינם נתמכים בדפדפן זה. נסו דפדפן או מכשיר אחר.',
   'login.cancelled': 'ההתחברות באמצעות מפתח הגישה בוטלה. נסו שוב.',
   'login.forgotPassword': 'שכחתם את הסיסמה?',
+  'login.passwordAuthUnavailable':
+    'התחברות בסיסמה עדיין לא זמינה עבור קבוצה זו. השתמשו ב"המשך עם מפתח גישה" למטה במקום זאת.',
   'recovery.forgotTitle': 'איפוס הסיסמה',
   'recovery.forgotBody': 'הזינו מספר טלפון או אימייל מאומת.',
   'recovery.send': 'שליחת הוראות איפוס',

@@ -186,7 +186,7 @@ export default async function systemRoutes(app: FastifyInstance) {
         SELECT 1::int AS locked FROM pg_advisory_xact_lock(74139201)
       `;
       const actor = await tx.user.findUnique({ where: { id: currentUser.id } });
-      if (actor?.systemRole !== 'system_admin')
+      if (!actor?.isActive || actor.systemRole !== 'system_admin')
         throw new HttpError(403, 'System administrator access is required.');
       const target = await tx.user.findUnique({
         where: { id },

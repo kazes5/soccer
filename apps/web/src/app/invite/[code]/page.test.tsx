@@ -29,6 +29,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       acceptInvite: vi.fn(),
       getInvitePasskeyRegisterOptions: vi.fn(),
       verifyInvitePasskeyRegister: vi.fn(),
+      verifyInviteCode: vi.fn(),
+      completePasswordOnboarding: vi.fn(),
     },
   };
 });
@@ -66,6 +68,8 @@ describe('AcceptInvitePage', () => {
     vi.mocked(api.acceptInvite).mockReset();
     vi.mocked(api.getInvitePasskeyRegisterOptions).mockReset();
     vi.mocked(api.verifyInvitePasskeyRegister).mockReset();
+    vi.mocked(api.verifyInviteCode).mockReset();
+    vi.mocked(api.completePasswordOnboarding).mockReset();
     const { startRegistration } = await import('@simplewebauthn/browser');
     vi.mocked(startRegistration).mockReset();
   });
@@ -100,6 +104,7 @@ describe('AcceptInvitePage', () => {
     expect(await screen.findByText(/you're on the team/i)).toBeInTheDocument();
     expect(api.acceptInvite).toHaveBeenCalledWith('CR3SvwmKtwJp', {
       name: 'Avi Levi',
+      language: 'en',
       players: [{ name: 'Yossi Levi', age: 11 }],
     });
 
@@ -151,6 +156,7 @@ describe('AcceptInvitePage', () => {
     await screen.findByText(/you're on the team/i);
     expect(api.acceptInvite).toHaveBeenCalledWith('CR3SvwmKtwJp', {
       name: 'Avi Levi',
+      language: 'en',
       players: [{ name: 'Yossi Levi', age: undefined }],
     });
   });
@@ -190,5 +196,56 @@ describe('AcceptInvitePage', () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
     expect(api.acceptInvite).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the selected language when completing password onboarding', async () => {
+    vi.mocked(api.getInvitePreview).mockResolvedValue({
+      status: 'pending',
+      expiresAt: '2026-08-16T00:00:00.000Z',
+      team: { id: 'team-1', name: 'U-12 Wildcats' },
+      requiresCode: true,
+    });
+    vi.mocked(api.verifyInviteCode).mockResolvedValue({
+      verificationToken: 'a'.repeat(32),
+      existingAccount: false,
+    });
+    vi.mocked(api.completePasswordOnboarding).mockResolvedValue(authSessionResponse);
+
+    renderWithProviders(<AcceptInvitePage />);
+    await screen.findByText('Join U-12 Wildcats');
+
+    // Switch to Hebrew before submitting — the request must reflect this
+    // choice instead of silently defaulting to English.
+    fireEvent.click(screen.getByRole('button', { name: 'עב' }));
+
+    fireEvent.change(screen.getByLabelText('קוד הזמנה'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'אימות ההזמנה' }));
+
+    await waitFor(() =>
+      expect(api.verifyInviteCode).toHaveBeenCalledWith('CR3SvwmKtwJp', {
+        code: '123456',
+      }),
+    );
+
+    fireEvent.change(await screen.findByPlaceholderText('Avi Levi'), {
+      target: { value: 'שירה כהן' },
+    });
+    fireEvent.change(screen.getByLabelText('יצירת סיסמה (15 תווים לפחות)'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.change(screen.getByLabelText('אימות סיסמה'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'הצטרפות לקבוצה' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
+    expect(api.completePasswordOnboarding).toHaveBeenCalledWith('CR3SvwmKtwJp', {
+      verificationToken: 'a'.repeat(32),
+      name: 'שירה כהן',
+      language: 'he',
+      password: 'Cedar-River!Otter-52',
+      passwordConfirmation: 'Cedar-River!Otter-52',
+      players: [],
+    });
   });
 });
