@@ -416,18 +416,18 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 **Requirement: Invite-Only Access**
 - The app is closed-roster — no open self-signup. Someone can only log in if an Admin has added them to the team.
-- Authentication is passwordless via WebAuthn passkeys, not SMS/email one-time codes — see §9.1 for why and how this replaces the originally-specified OTP flow.
+- Parents authenticate with a password after invite-only onboarding. Passkeys remain the required assurance method for privileged team-admin and system-admin work.
 - Login flow:
   1. User enters phone number or email.
-  2. System checks if they exist in the team roster **and have a registered passkey**.
-  3. If yes: prompt the browser's passkey ceremony (Face ID, Touch ID, Windows Hello, or a security key) for that device.
-  4. If no: show "You haven't been added to this team yet — ask your team admin" message (the same message whether the contact is unrecognized or recognized-but-passkey-less, so the latter case isn't a distinguishable oracle).
-- Unrecognized users cannot create an account; they must be invited by an Admin first. Accepting an invite immediately prompts passkey registration on that device, completing onboarding in one sitting — there's no separate "log in afterward" step.
+  2. Parent enters the password they selected during invitation onboarding.
+  3. Admins use a passkey when entering privileged tools; password assurance remains sufficient for ordinary parent actions.
+  4. Unknown, inactive, password-less, and wrong-password accounts receive the same response.
+- Unrecognized users cannot create an account. A new invitation supplies a high-entropy link plus a separately shared numeric code; after both are verified, the parent selects their password.
 
 **Acceptance Criteria:**
 - Login form accepts phone or email
 - Unrecognized input rejected with clear message (not a generic error)
-- The browser's native passkey prompt appears only for recognized, passkey-registered contacts
+- The browser's native passkey prompt appears only on the explicitly selected passkey path
 - No public roster or user directory (privacy)
 
 ---
@@ -640,19 +640,21 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 ### 9.1 Authentication
 
-- WebAuthn passkeys are the only login method — no password, no SMS/email one-time code, no separate vendor to procure. Login is identifier-first: enter phone or email, and if that contact has a registered passkey, the browser's own passkey ceremony (Face ID, Touch ID, Windows Hello, or a security key) authenticates the device.
+- Password login is the default parent flow: a normalized phone or email identifier plus an Argon2id-protected password selected during split link/code onboarding.
+- WebAuthn passkeys remain available and are mandatory for privileged team-admin and system-admin operations. Assurance is stored on the current session and is never inferred merely from passkey ownership.
 - A brand-new parent registers their first passkey immediately after accepting their invite — scoped to that specific invite code (not a bare user ID), bounded to a short window after acceptance, so a captured invite link can't be used to attach a rogue credential to the account indefinitely.
 - The very first team admin (who bootstraps via team creation, with no invite involved) registers a passkey the same way, immediately after the team is created, using their already-issued session rather than an invite code.
-- Any already-authenticated user can register an additional passkey for a second device through the same authenticated pair of endpoints.
+- A password session cannot register a passkey or upgrade itself. Additional credentials require existing passkey assurance; the initial team bootstrap is the narrowly scoped exception.
 - Session tokens expire after 30 days of inactivity (unchanged from the original OTP-era design).
 - Force re-authentication for sensitive actions (admin user removal, schedule template changes).
-- Recovery model: a lost/inaccessible device has no self-service password reset (there is no password). An admin re-invites the affected person, exactly as for a brand-new parent; accepting the new invite registers a fresh passkey on their new/current device.
+- Password recovery uses hashed, expiring, single-use tokens delivered only by a configured verified email/SMS provider. Recovery endpoints stay behind `PASSWORD_AUTH_ENABLED` until that provider is configured.
 
 ### 9.2 Authorization
 
 - All API endpoints check user role against action (parent vs. admin) before executing.
 - Shifts, schedules, and notifications scoped per team — users cannot see or modify other teams' data.
 - Audit log access restricted to admins; parents see only their own actions.
+- `system_admin` is a separate global user capability, never a team role and never a bypass for normal `/teams/*` authorization. `/system/*` rechecks the active role on every request and role changes preserve both last-team-admin and last-system-admin invariants.
 
 ### 9.3 Data Privacy
 

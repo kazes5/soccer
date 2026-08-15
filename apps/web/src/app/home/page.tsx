@@ -9,7 +9,7 @@ import type {
   TeamMembership,
 } from '@soccer/contracts';
 import type { Locale } from '@soccer/i18n';
-import { Calendar, Copy, Home, LogOut } from 'lucide-react';
+import { Calendar, Copy, Home, LogOut, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -91,6 +91,12 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (session?.systemRole === 'system_admin' && session.teamMemberships.length === 0) {
+      router.replace('/system');
+    }
+  }, [router, session]);
+
+  useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace(buildLoginRedirect(pathname, searchParams.toString()));
     }
@@ -122,6 +128,9 @@ export default function HomePage() {
     ...(activeMembership ? [swapsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
+    ...(session.systemRole === 'system_admin' && session.authMethod === 'passkey'
+      ? [{ href: '/system', label: t('system.title'), icon: <ShieldCheck className="size-full" /> }]
+      : []),
   ];
 
   return (
@@ -646,6 +655,7 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
   const { showToast } = useToast();
   const [phone, setPhone] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [onboardingCode, setOnboardingCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -656,6 +666,7 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
     try {
       const invite = await api.createInvite(membership.teamId, { phone });
       setInviteCode(invite.code);
+      setOnboardingCode(invite.onboardingCode ?? null);
       setPhone('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
@@ -705,7 +716,7 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
           </div>
           {error && <FormError>{error}</FormError>}
           {inviteCode && (
-            <div className="flex items-center gap-2 text-sm text-status-mine-on">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-status-mine-on">
               <span>
                 {t('home.inviteLinkLabel')} <code>/invite/{inviteCode}</code>
               </span>
@@ -714,6 +725,11 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
                 icon={<Copy className="size-4" aria-hidden="true" />}
                 onClick={handleCopyInviteLink}
               />
+              {onboardingCode && (
+                <span>
+                  {t('home.inviteCodeLabel')} <code dir="ltr">{onboardingCode}</code>
+                </span>
+              )}
             </div>
           )}
         </form>

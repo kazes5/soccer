@@ -76,6 +76,7 @@ describe('AcceptInvitePage', () => {
       status: 'pending',
       expiresAt: '2026-08-16T00:00:00.000Z',
       team: { id: 'team-1', name: 'U-12 Wildcats' },
+      requiresCode: false,
     });
     vi.mocked(api.acceptInvite).mockResolvedValue(acceptResponse);
     vi.mocked(api.getInvitePasskeyRegisterOptions).mockResolvedValue({
@@ -124,6 +125,7 @@ describe('AcceptInvitePage', () => {
       status: 'pending',
       expiresAt: '2026-08-16T00:00:00.000Z',
       team: { id: 'team-1', name: 'U-12 Wildcats' },
+      requiresCode: false,
     });
     vi.mocked(api.acceptInvite).mockResolvedValue({
       ...acceptResponse,
@@ -159,6 +161,7 @@ describe('AcceptInvitePage', () => {
       status: 'pending',
       expiresAt: '2026-08-16T00:00:00.000Z',
       team: { id: 'team-1', name: 'U-12 Wildcats' },
+      requiresCode: false,
     });
     vi.mocked(api.acceptInvite).mockResolvedValue(acceptResponse);
     vi.mocked(api.getInvitePasskeyRegisterOptions).mockResolvedValue({

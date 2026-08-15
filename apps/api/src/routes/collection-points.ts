@@ -6,7 +6,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
@@ -51,6 +51,7 @@ export default async function collectionPointRoutes(app: FastifyInstance) {
     const body = collectionPointRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const point = await app.prisma.$transaction(async (tx) => {
       const created = await tx.collectionPoint.create({
@@ -89,6 +90,7 @@ export default async function collectionPointRoutes(app: FastifyInstance) {
     const body = collectionPointRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const existing = await app.prisma.collectionPoint.findUnique({ where: { id: params.pointId } });
     if (!existing || existing.teamId !== params.teamId) {
@@ -131,6 +133,7 @@ export default async function collectionPointRoutes(app: FastifyInstance) {
     const params = pointParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const existing = await app.prisma.collectionPoint.findUnique({ where: { id: params.pointId } });
     if (!existing || existing.teamId !== params.teamId) {

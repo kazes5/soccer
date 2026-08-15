@@ -6,7 +6,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
@@ -21,6 +21,7 @@ export default async function memberRoutes(app: FastifyInstance) {
     const params = paramsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const members = await app.prisma.teamMember.findMany({
       where: { teamId: params.teamId },
@@ -67,6 +68,7 @@ export default async function memberRoutes(app: FastifyInstance) {
     const body = updateMemberRoleRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const updated = await app.prisma.$transaction(async (tx) => {
       // Serialize every role/removal mutation for this team. Without this row
@@ -89,7 +91,7 @@ export default async function memberRoutes(app: FastifyInstance) {
 
       const target = await tx.teamMember.findUnique({
         where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
-        include: { user: { select: { name: true } } },
+        include: { user: { select: { name: true, systemRole: true } } },
       });
       if (!target) {
         throw new HttpError(404, 'This person is not on the team.');
@@ -144,6 +146,7 @@ export default async function memberRoutes(app: FastifyInstance) {
     const params = memberParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const result = await app.prisma.$transaction(async (tx) => {
       const eventIds: string[] = [];
@@ -163,7 +166,7 @@ export default async function memberRoutes(app: FastifyInstance) {
 
       const target = await tx.teamMember.findUnique({
         where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
-        include: { user: { select: { name: true } } },
+        include: { user: { select: { name: true, systemRole: true } } },
       });
       if (!target) {
         throw new HttpError(404, 'This person is not on the team.');
@@ -265,7 +268,7 @@ export default async function memberRoutes(app: FastifyInstance) {
       const remainingMemberships = await tx.teamMember.count({
         where: { userId: params.userId },
       });
-      if (remainingMemberships === 0) {
+      if (remainingMemberships === 0 && target.user.systemRole === null) {
         await tx.user.update({ where: { id: params.userId }, data: { isActive: false } });
         await tx.session.updateMany({
           where: { userId: params.userId, revokedAt: null },

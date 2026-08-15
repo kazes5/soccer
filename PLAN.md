@@ -6,7 +6,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 
 ## Current Status (read this first)
 
-**Active stage: Stage 5 — Admin Operations, Reporting, and MVP Completion. Admin member management and removal cleanup are complete as of 2026-08-12; the read-only audit-log viewer is next.**
+**Active stage: Stage 5 — Admin Operations, Reporting, and MVP Completion. Admin member management and removal cleanup are complete as of 2026-08-12; the read-only audit-log viewer is next. An approved 2026-08-13 execution plan then adds parent password onboarding/login and an isolated system-admin control plane without changing existing team-role semantics.**
 
 | Stage | Status | One-line note |
 |---|---|---|
@@ -15,7 +15,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 | **2 — Identity/Membership/i18n/Design** | **Done (2026-08-10)** | Backend + onboarding UI loop, i18n foundation, backend hardening, and design tokens/accessible primitives all built and verified. Native-speaker Hebrew review done 2026-08-10 (approved as-is, no changes). Staging/journey/RTL exit criteria satisfied via the local-stack redefinition. Automated a11y/responsive tooling explicitly re-homed to Stage 6, its documented owner. |
 | **3 — Schedule & Atomic Shift Core** | **Done (2026-08-11)** | All 7 checkpoints landed and tested: schema/recurrence/atomic claim-release/parent Schedule page, Home workspace, template-edit backend, `/admin/collection-points`, player-roster endpoint, the schedule-template wizard, and session management UI + `GET /teams/:teamId/roster`. Closed out with a full desktop/tablet/narrow-mobile EN+HE manual regression pass that caught and fixed one real bug (a `Tooltip` overflow causing horizontal scroll) — see the Stage 3 closing Progress note. "Bulk-edit all future sessions" remains confirmed-deferred to the backlog. |
 | 4 — Swap/Notification/Reminder/Escalation | Complete for MVP — Checkpoints 1-9 done (2026-08-11, 2026-08-12 ×7); Checkpoint 10 removed from MVP scope 2026-08-12 | Notification/event/recipient ADR recorded; `PracticeSession.startsAt` now stores real UTC instants converted through each team's IANA timezone, not pseudo-UTC wall time. Admin-configurable swap expiry/reminder offsets/escalation lead and team quiet hours, plus per-member overrides and per-category push opt-out, now exist as real settings (`/admin/notification-settings`, `/settings/notifications`). The transactional-outbox/BullMQ-worker foundation (durable `OutboxEvent`/`UserNotification`/`NotificationDelivery`/`ScheduledTask` models, a separate worker process, idempotent recipient fan-out, crash-safe startup reconciliation) is implemented and tested. All 5 team-changing route files now write outbox events on every mutation, fanning out to a real `/notifications` center with unread/dismiss state. As of Checkpoint 5, `/notifications` updates live via a team-scoped SSE stream (Redis pub/sub fast path + periodic fallback poll, Web Locks leader election across tabs) instead of only pull-refreshing, and notification deep links now scroll/highlight the right row on `/schedule` instead of just landing on the right team. As of Checkpoint 6, opted-in browser push actually delivers: VAPID + an injectable `WebPushProvider`, quiet-hours/collapse/throttle-aware delivery per ADR 0001, a service worker (suppressing the OS notification when a tab is already focused), and a Settings > Notifications subscribe/unsubscribe UI. As of Checkpoints 7-8, one-way shift swaps are fully live end to end: a `SwapRequest` lifecycle (pending/accepted/declined/expired/cancelled) with version-CAS acceptance, a database-enforced one-pending-request-per-shift constraint, scheduled-task-driven expiry capped at session start, and a new `/swaps` page (plus a real-time "Request swap" action on `/schedule` and a live pending-count widget on Home). As of Checkpoint 9, durable pre-shift reminders are fully live: one `ScheduledTask` per (shift, offset) pair, resynced on every assignee/session-time change, quiet-hours-deferred or suppressed at execution, and rendered with full session/point/player detail. Checkpoint 10 ("Emergency and closure" — `cannotMakeIt`, emergency-open shifts, auto-escalation) was removed from MVP scope at the product owner's explicit request; deferred to post-MVP (CLAUDE.md Roadmap v1.1). See the Checkpoint 1-9 and Checkpoint 10 scope-decision Progress notes below. |
-| **5 — Admin Ops & Reporting** | **In progress (2026-08-12)** | Admin member management is live at `/admin/members`: phone/email invites, current-member search/role filters, confirmation-gated promotion/demotion/removal, final-admin disabled controls, and serialized backend mutations that preserve the last-admin invariant under concurrency. Removal cleanup now reopens scheduled future shifts while preserving past attribution. Audit-log viewer is next. |
+| **5 — Admin Ops & Reporting** | **In progress (plan expanded 2026-08-13)** | Admin member management is live at `/admin/members`: phone/email invites, current-member search/role filters, confirmation-gated promotion/demotion/removal, final-admin disabled controls, and serialized backend mutations that preserve the last-admin invariant under concurrency. Removal cleanup now reopens scheduled future shifts while preserving past attribution. Audit-log viewer is next, followed by the staged parent-password and system-admin plan recorded under Stage 5. |
 | 6 — Verification/Security/Performance | Not started (this is an ongoing gate, not a one-time stage) | |
 | 7 — Post-MVP Web Expansion | Not started | |
 | 8 — Native Mobile | Not started | |
@@ -52,7 +52,7 @@ Process:
 
 1. Both Stage 2 PRs (backend hardening #8 and design tokens #9) are merged to `main`; the frontend is fully on the cookie-based session flow. Branch protection on `main` is on (verified 2026-08-09 via the GitHub API — scoped correctly to `main` only, after an initial misconfiguration that accidentally protected every branch was caught and fixed).
 2. Stage 2's native-speaker Hebrew review is done (2026-08-10, approved as-is — no changes needed) and "staging" is now defined as the local `docker compose` stack (2026-08-10, explicit user decision, no external hosting vendor) — both formerly-blocking exit criteria are now satisfied by the accumulated manual verification already done throughout Stage 2/3. The one remaining Stage 2 gap is automated a11y/responsive tooling (see above).
-3. Stages 3 and 4 are complete for MVP. Stage 5 is active: admin member management and removal cleanup are complete; the read-only audit-log viewer is the next checkpoint.
+3. Stages 3 and 4 are complete for MVP. Stage 5 is active: admin member management and removal cleanup are complete; the read-only audit-log viewer is the next checkpoint. After that, execute Stage 5 Checkpoints 3–10 for parent password authentication and the system-admin control plane in dependency order.
 
 ### Plan to Close Stage 3 (decided 2026-08-11)
 
@@ -140,7 +140,7 @@ What kind of test to write depends on what you're touching. This is the standing
 - `packages/contracts`: API DTOs, domain enums, validation schemas, localization identifiers, and generated client types shared by web and future mobile.
 - PostgreSQL as the system of record; Prisma migrations plus reviewed conditional updates or transaction-safe SQL for high-contention shift transitions.
 - Redis and BullMQ only for retries, scheduled reminders, swap expiry, escalation processing, and transactional-outbox delivery. Do not split this 100-user product into microservices.
-- WebAuthn passkeys (`@simplewebauthn/server` + `@simplewebauthn/browser`) behind an injectable `WebauthnVerifier` interface — no SMS/email OTP vendor (see CLAUDE.md §8.2 decision 6's 2026-08-10 revision note for why this replaced the original Twilio-Verify-based OTP plan).
+- Hybrid credentials: parent-level access supports a user-chosen password stored with Argon2id, while WebAuthn passkeys (`@simplewebauthn/server` + `@simplewebauthn/browser`) remain available and are required for team-admin/system-admin access. Record the authentication method/assurance on each session because one user can be a parent in one team and an admin in another; authorization remains team-scoped and server-side. SMS/email OTP is not a login method, though an injectable email/SMS provider is still required for password recovery.
 - Browser push plus real-time in-app notifications for the web MVP; an adapter abstracts APNs and FCM device delivery for the native phase.
 - Object storage for CSV exports and seasonal archives; select managed Postgres, Redis, web, and API hosting during environment setup rather than encoding vendors into business logic.
 
@@ -148,6 +148,8 @@ What kind of test to write depends on what you're touching. This is the standing
 
 - [ ] Use a modular monolith, not microservices. Domain modules are Auth, Teams, Roster, Scheduling, Shifts, Swaps, Notifications, Escalations, Audit, Reporting, and AI.
 - [x] Store roles on `team_members`, not globally on a user, because one parent can be an admin in one team and a parent in another. *(Implemented: `TeamMember.role`, see Stage 2.)*
+- [ ] Store the global `system_admin` capability separately on `User`; never add it to `TeamRole` and never make it an implicit bypass inside `requireTeamRole`. System-wide access must use dedicated `/system/*` routes guarded by `requireSystemAdmin`.
+- [ ] Treat password and passkey authentication as different session-assurance levels. Password-authenticated sessions may perform parent actions; team-admin and system-admin reads/mutations that expose privileged data or controls require a passkey-authenticated or freshly passkey-stepped-up session.
 - [x] Store an IANA `timezone` on each team, defaulting to `Asia/Jerusalem`; schedule sessions and escalation thresholds in team time. *(Implemented: `Team.timezone`, see Stage 2.)*
 - [ ] Keep `SessionPointAssignment` as player-to-collection-point configuration and `Shift` as the separately claimable unit. Generate one shift for each valid `(session, point, direction)` pair, including two separate shifts for a `BOTH` point.
 - [x] Model every write as a command in a database transaction: authorize, validate state transition, mutate, append audit entry, insert an outbox event, then deliver notifications asynchronously with retry and idempotency keys. *(Implemented for team/invite/OTP writes; the outbox/async-delivery half doesn't apply yet since there are no notifications to deliver.)*
@@ -158,7 +160,7 @@ What kind of test to write depends on what you're touching. This is the standing
 
 ## Scope Boundaries
 
-- **Web MVP includes:** invite-only access, passkey sign-in, parent/admin permissions, teams and multi-team data isolation, roster and collection-point management, recurring schedule templates, individually editable sessions, independent to-practice/from-practice shifts, atomic claim and release, transparent schedule visibility, simple swaps, audit logging, in-app/browser notifications, reminders, urgent coverage escalation, Hebrew/English core flows, and responsive web access.
+- **Web MVP includes:** invite-only access, parent password sign-in by normalized phone or email, passkey-protected team-admin/system-admin access, teams and multi-team data isolation, roster and collection-point management, recurring schedule templates, individually editable sessions, independent to-practice/from-practice shifts, atomic claim and release, transparent schedule visibility, simple swaps, audit logging, in-app/browser notifications, reminders, urgent coverage escalation, Hebrew/English core flows, and responsive web access.
 - **Web MVP excludes:** native iOS/Android binaries, APNs/FCM device push, durable offline writes, multi-shift trade offers, AI chat actions, advanced fairness reporting, full archival UI, and sophisticated email digests. The data model and notification interfaces must leave room for them.
 - **Post-MVP web includes:** fairness dashboards and CSV export, richer audit filtering/archive views, email digests, native push adapters, AI chat, and pilot-driven improvements.
 - **Native phase includes:** Expo/React Native clients, device token registration, APNs/FCM delivery, encrypted local cache, queued offline mutations with server-wins reconciliation, iOS/Android accessibility tests, and store distribution.
@@ -559,6 +561,8 @@ Depends on Stages 2 through 4. Can overlap with pilot readiness after core workf
 - [x] Build admin user management: invite, remove, promote, demote, active-member filters, confirmation dialogs, and disabled controls for the final active admin. *(Completed 2026-08-12: `/admin/members`, typed client methods, EN/HE copy, component coverage, and final-admin conflict recovery.)*
 - [x] On removal, revoke access, cancel relevant open swaps, reopen held future shifts, preserve historical attribution, suppress future notifications, and write all events atomically where feasible. *(Completed 2026-08-12: the existing transactional cleanup is now operator-accessible; held-shift cleanup was tightened to scheduled future sessions only, and team-level row locking serializes concurrent role/removal changes.)*
 - [ ] Build a read-only audit-log viewer with role guard, team scope, filters for actor/date/action/target/source, full-text-safe search, pagination, and CSV export using UTF-8 BOM where necessary for Hebrew spreadsheet compatibility.
+- [ ] Replace the new-parent passkey-only onboarding requirement with an invitation-link + separate one-time code flow in which a new parent creates a password, then signs in with that password and a normalized phone number or email. Preserve passkeys and require passkey assurance for privileged admin operations.
+- [ ] Add an isolated global `system_admin` role, dedicated `/system/*` APIs, an operator-safe bootstrap path, global audit records, and a bilingual system console for viewing all teams/users and managing team/system administrators without weakening existing team authorization.
 - [ ] Add a basic personal statistics view from immutable shift history. Defer team-wide variance ranking and rich fairness analytics to post-MVP unless the pilot identifies it as essential.
 - [ ] Add visible privacy/account controls, team-specific notification preferences, session timeout behavior, and support/help routes.
 - [ ] Run a design refinement pass: reduce repeated chrome, tighten hierarchy, verify loading/skeleton states, browser feedback where supported, and preserve calm operation under an urgent event.
@@ -571,18 +575,117 @@ Depends on Stages 2 through 4. Can overlap with pilot readiness after core workf
 - [ ] A pilot team can operate for at least two recurring practice cycles without manual database intervention.
 - [ ] Audit, authorization, notification, and data-recovery paths have an owner and documented operating procedure.
 
+## Stage 5 Detailed Execution Plan: Parent Password Authentication and System Administration (decided 2026-08-13)
+
+### Implementation status (2026-08-13)
+
+- [x] Checkpoint 2 team audit viewer, filters, detail view, CSV, EN/HE, and authorization tests.
+- [x] Checkpoints 3–5 credential/session schema, Argon2id password login, versioned split link/code invitations, atomic new-parent onboarding, existing-account attachment, and legacy invite compatibility.
+- [x] Checkpoint 6 password change/reset primitives, session revocation, security audit, recovery UI, and privileged session assurance. Production delivery remains disabled until a verified provider is configured.
+- [x] Checkpoints 7–8 isolated `system_admin`, safe bootstrap, per-request/transaction rechecks, last-admin locks, paginated secret-stripping reads, global/team audit, and team/global role management.
+- [x] Checkpoint 9 bilingual overview, team-member controls, user/system-role controls, global audit page, navigation/redirect behavior, confirmation dialogs, and component coverage.
+- [ ] Checkpoint 10 production rollout and real-provider/manual-browser matrix. Both feature flags remain `false` by default; this is an operational release gate, not unfinished enabled behavior.
+- [x] 2026-08-15 code review found and fixed two Checkpoint 6/5 gaps ahead of Checkpoint 10's abuse-testing pass: (1) a password-only user promoted to team-admin had no self-service way to satisfy the Checkpoint 6 passkey step-up — `requirePrivilegedAssurance` categorically rejected `authMethod==='password'` sessions from ever registering a first passkey, permanently locking them out of admin tools; `/auth/passkey/register/options` and `/register/verify` now allow a password (or bootstrap) session to register exactly one first passkey when it holds none, after which normal passkey-assurance rules apply — surfaced in the app via a new "Add a passkey" section on `/settings/notifications`. (2) Re-inviting a parent previously removed from the team (`isActive:false`) routed them into an unreachable "attach existing account" flow, since login itself requires `isActive:true`; `verify-code` and `complete-password-onboarding` now reactivate the matching deactivated account instead (new password credential, fresh team membership, `invite_accepted_for_recovery` audit entry), while an active duplicate still 409s unchanged. Regression tests: `apps/api/test/password-passkey-upgrade.test.ts`, `apps/api/test/invite-reactivation.test.ts`.
+
+### Summary and safety boundaries
+
+This work is additive and follows Stage 5 Checkpoint 1's completed member-management work. Checkpoint 2 remains the already-planned team audit-log viewer. Checkpoints 3–10 below then introduce parent password authentication and the system-admin control plane in dependency order.
+
+The following invariants apply to every checkpoint:
+
+- Keep `TeamRole = parent | admin` unchanged and keep roles on `TeamMember`.
+- Add `system_admin` as a separate nullable capability on `User`; it is never inherited from a team and never bypasses `requireTeamRole`.
+- Keep existing passkeys valid. Password login grants parent-level session assurance; privileged team-admin and system-admin access requires passkey assurance or a fresh passkey step-up.
+- Treat the same person consistently across teams: a user who is a parent in one team and an admin in another can sign in with a password for parent work, but must step up with a passkey before entering privileged surfaces.
+- Never expose session-token hashes, password hashes, passkey public-key material, WebAuthn challenges, invitation/code hashes, push-subscription secrets, or recovery-token hashes through system APIs.
+- Preserve the existing last-team-admin invariant and add a transactionally serialized last-system-admin invariant.
+- Every behavior-changing checkpoint adds contracts, integration/component tests, EN/HE copy, audit events, documentation, manual verification for observable UI, and the full quality gate.
+
+### Checkpoint 2 — Team audit-log viewer
+
+- Build the already-scoped read-only `/admin/audit-logs` experience before expanding the authorization model: team-admin guard, cursor pagination, actor/date/action/target/source filters, safe search, detail view, and UTF-8-BOM CSV export.
+- Keep the existing team-scoped `AuditLog` model unchanged. This viewer becomes the baseline used to verify that later password-onboarding and system-admin team mutations still produce the same team history.
+- Acceptance: parents and admins of other teams receive `403`; filters and pagination cannot cross team boundaries; Hebrew text round-trips through CSV; no mutation is exposed.
+
+### Checkpoint 3 — Credential, identifier, and session-assurance foundation
+
+- Add a one-to-one `PasswordCredential` model (`userId`, Argon2id hash, `passwordChangedAt`) instead of placing a password on `TeamMember` or storing plaintext/reversible credentials.
+- Add normalized login identifiers: lowercase/trimmed normalized email and E.164 phone. Backfill existing users only after a collision report proves the new unique indexes are safe; stop the migration and resolve collisions explicitly rather than silently merging accounts.
+- Add session authentication metadata (`password`, `passkey`, and a narrowly-scoped onboarding/bootstrap state). Existing pre-migration sessions remain compatible until their normal expiry, but no new session is issued without an explicit method.
+- Add reusable password policy/hash/verify modules. Use Argon2id with parameters benchmarked for the deployed API and no weaker than current [OWASP guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html); accept passphrases, spaces, Unicode, paste, and password managers; require at least 15 characters for password-only authentication, support at least 64, reject common/compromised choices, and do not impose uppercase/number/symbol composition rules, following [NIST SP 800-63B](https://pages.nist.gov/800-63-4/sp800-63b.html).
+- Add `requirePrivilegedAssurance` without changing `requireAuth` or `requireTeamRole`. Existing passkey sessions satisfy it; password sessions do not.
+- Acceptance: additive migration preserves every user, membership, passkey, and active session; password hashes never appear in DTOs/logs; tests prove ordinary parent routes accept password assurance while privileged routes reject it.
+
+### Checkpoint 4 — Split invitation link and one-time code
+
+- Replace the single URL-carried invite secret for new invitations with two values: a high-entropy opaque link token and a separate one-time numeric code. Store only hashes, show the code once to the creating admin, bind both to one invitation, retain explicit expiry/revocation, and never log either secret.
+- Add attempt tracking and throttling by invitation plus IP, with a small failure limit and increasing delays. Consume the link/code pair atomically so concurrent submissions have exactly one winner.
+- Keep old pending invitations valid through a versioned legacy validation path until they expire or are revoked; do not rewrite or expose their existing plaintext value. New invitations use only the hashed two-secret format.
+- Make the UI explicit that sending the link and code over the same channel is an onboarding confirmation, not two-factor authentication. Permit the admin to copy them independently.
+- Acceptance: invalid, expired, revoked, rate-limited, replayed, and concurrent submissions are covered; responses do not reveal which half was incorrect; existing invitation/member behavior remains unchanged.
+
+### Checkpoint 5 — New-parent password onboarding and login
+
+- Add a limited invite-verification state that authorizes only completion of that invitation; it must not become a general login session.
+- For a genuinely new user, submit name, player details, password, and password confirmation once. In one transaction: revalidate/consume the invitation, create the user and `PasswordCredential`, create membership/players, write audit/outbox records, and issue the existing secure cookie session with `password` assurance.
+- If the invitation contact already belongs to an account, never replace its password from an admin-created invitation. Require the parent to authenticate to the existing account and then attach the invited team membership. Account recovery remains a separate Checkpoint 6 flow.
+- Add `POST /auth/password/login` with one identifier field accepting normalized phone or email plus password. Use a dummy Argon2 verification for unknown accounts, constant-time library verification, one generic failure response for unknown/wrong/inactive/no-password cases, and layered per-account plus per-IP throttling against brute force, credential stuffing, and password spraying.
+- Reuse the current httpOnly `soccer_session` cookie, readable CSRF-pair cookie, session revocation, `/auth/me`, and logout behavior. Rotate the session token after successful authentication.
+- Replace the parent-facing invite and login passkey UI with accessible password/password-confirmation fields, reveal controls, password-manager-compatible autocomplete attributes, and localized actionable validation. Keep passkey setup UI available for users who need or want stronger assurance.
+- Acceptance: new parent invite → link/code → password creation → authenticated Home works end to end; subsequent phone and email logins work; abandoned onboarding creates no half-credentialed membership; enumeration/timing and throttling tests pass.
+
+### Checkpoint 6 — Password lifecycle, recovery, and admin step-up
+
+- Add authenticated password change with current-password verification, hash replacement, audit entry, and revocation of other sessions.
+- Add forgot/reset-password flows using cryptographically random, hashed, short-lived, user-bound, single-use recovery tokens delivered through an injectable verified-email/SMS provider. Return the same public response whether the account exists. Do not release phone-only password login until a real SMS recovery provider or an approved support identity-proofing process exists.
+- After reset, revoke all existing sessions and require normal login; never email/SMS a password or automatically authenticate from the reset alone. Follow the [OWASP Forgot Password guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
+- Add passkey step-up for privileged team-admin/system-admin reads and mutations. A parent promoted to admin keeps password login for parent work but must register/verify a passkey before using admin controls. Do not implement role-dependent login denial because roles differ by team.
+- Acceptance: reset tokens are single-use/expiring/non-enumerating, changing/resetting a password invalidates the intended sessions, and password-only sessions cannot read contact-bearing admin lists or execute admin/system mutations.
+
+### Checkpoint 7 — System-admin data model, authorization, and bootstrap
+
+- Add `SystemRole { system_admin }` and nullable `User.systemRole`; all existing users migrate to `null` and gain no capability.
+- Add a separate `SystemAuditLog` for global actions because the existing `AuditLog.teamId` is mandatory and should remain unchanged. Team-specific actions performed by a system admin continue writing the normal team audit entry as well.
+- Add `requireSystemAdmin` as a fresh per-request check of the active user's global role plus privileged passkey assurance. Do not alter `requireTeamRole` and do not silently make a system admin a member of every team.
+- Add `SYSTEM_ADMIN_ENABLED=false` as the rollout default and an idempotent operator-only bootstrap command that promotes an exact existing, active, passkey-enabled user by UUID or normalized identifier. Never seed fixed credentials or print secrets.
+- Serialize global role changes with a transaction-scoped global lock, recheck the acting role after acquiring it, and prevent removal/deactivation of the final system admin. Bootstrap is the only intentional zero-to-one exception and writes a global audit record.
+- Acceptance: migration is additive; parent/team-admin access is denied; a system admin without team membership can use only `/system/*`; role revocation applies on the next request; concurrent revocations cannot leave zero system admins.
+
+### Checkpoint 8 — System queries and shared administrator mutations
+
+- Add dedicated guarded, cursor-paginated APIs: `GET /system/overview`, `GET /system/teams`, `GET /system/teams/:teamId`, `GET /system/teams/:teamId/members`, `GET /system/users`, and `GET /system/audit-logs`.
+- Add confirmation-gated mutation APIs for changing a current team member's role, removing a membership, and granting/revoking `system_admin`. Do not add impersonation, arbitrary database editing, secret inspection, or invitation-based password reset.
+- Extract the current team-member role/removal transaction logic from `members.ts` into shared domain commands used by both team-admin and system-admin routes. Preserve the team-row lock, post-lock authorization appropriate to the caller, last-team-admin check, swap cancellation, future-shift reopening, historical attribution, session cleanup, audit entry, and outbox event.
+- System reads expose only business fields necessary for operations, with explicit response schemas that strip unknown/secret fields. Search is bounded and pagination is mandatory; there is no load-the-whole-database endpoint.
+- Acceptance: system mutations produce the same team outcome/audit/notification behavior as the existing team-admin route; existing team routes still deny cross-team access to the same system admin; secret-field stripping and multi-team isolation receive regression tests.
+
+### Checkpoint 9 — Bilingual system console
+
+- Add a separate `/system` console with overview, teams, team-detail/member controls, users/system-role controls, and global audit pages. Keep it separate from `adminNavItems`; expose one system-console entry only when `/auth/me` reports the global role and the current session has privileged assurance.
+- A system admin with no team membership lands on `/system`, while the existing Home/team switcher continues to list only real memberships. Direct navigation by every other user fails safely on the server and redirects without leaking system data.
+- Use confirmation dialogs for every role/removal mutation, disable dismissal/double-submit while pending, recover from stale `403`/`409` responses by reloading canonical state, and include EN/HE/RTL, keyboard, loading, empty, error, pagination, and narrow-mobile states.
+- Acceptance: component tests cover all authorization and mutation states; a real-browser pass covers system admin with/without a team, normal team admin, parent, English, Hebrew/RTL, desktop, and narrow mobile.
+
+### Checkpoint 10 — Compatibility, abuse testing, and controlled rollout
+
+- Run a four-identity regression matrix: parent; team admin; system admin with team membership; system admin without team membership. Cover password/passkey sessions separately and verify every existing parent/admin journey is unchanged outside the intentional authentication UI update.
+- Add targeted abuse/concurrency coverage for invite-code guessing, link/code replay, concurrent acceptance, password enumeration/timing, account/IP rate limits, normalized-identifier collisions, recovery replay, password-session privilege escalation, cross-team IDOR, last-team-admin races, and last-system-admin races.
+- Deploy additively: migrate with no passwords/system admins assigned; deploy APIs/UI with password and system-admin flags disabled; configure recovery delivery; bootstrap the selected existing passkey user; enable and verify in staging; then enable production with audit/authorization-failure monitoring and a documented flag-based rollback.
+- Update architecture, testing, installation, admin/parent guides, flow charts, environment templates, recovery/support runbook, and `CLAUDE.md` authentication/authorization requirements before marking the checkpoint complete.
+- Exit gate: `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`, migration deploy/rollback rehearsal, real Postgres/Redis integration tests, and documented manual verification all pass.
+
 ## Stage 6: Verification, Security, Performance, and Web Release
 
 Runs continuously; release gate depends on completion after Stage 5. This is where the *expensive* test types live (see Testing Strategy above) — it does not mean unit/integration tests wait until now.
 
 - [ ] Unit-test domain policies: authorization, role changes, recurrence generation, point assignments, claim/release state transitions, swap lifecycle, reminder timing, escalation, fairness counts, and locale formatting.
-- [ ] Run API integration tests against disposable PostgreSQL and Redis instances, including migrations, transactions, outbox retries, invite onboarding, multi-team isolation, and removed-user cleanup.
+- [ ] Run API integration tests against disposable PostgreSQL and Redis instances, including migrations, transactions, outbox retries, split link/code invitation onboarding, password login/recovery, multi-team isolation, system-admin isolation, and removed-user cleanup.
 - [ ] Build Playwright end-to-end tests for the admin and parent flows at desktop and narrow mobile-browser viewports; include English/RTL Hebrew, keyboard navigation, and deep links.
 - [ ] Add dedicated concurrency tests that fire at least ten claim attempts within 100ms and verify one assignment, exact audit records, and correct loser messages.
 - [ ] Add accessibility gates: axe scans, visible focus, semantic names, keyboard-only flows, VoiceOver/NVDA smoke checks, contrast, target sizing, and RTL reading order.
   - This is also where Stage 2's "design system passes keyboard/screen-reader/contrast/responsive checks" exit criterion formally lives now — re-homed here 2026-08-10 by explicit user decision rather than front-loading Playwright/axe tooling into Stage 2. Stage 2 itself is marked done on the strength of manual spot-checks already performed; this item is the automated, repeatable version of that same check.
 - [ ] Load-test schedule reads, claim traffic, outbox throughput, and notification fan-out at more than the expected 100-user team scale. Set agreed response budgets before pilot.
-- [ ] Perform security checks: dependency scanning, secret scanning, OWASP authorization tests, CSRF/session tests, passkey/WebAuthn abuse tests (stolen invite codes, replayed/forged ceremonies, RP ID/origin spoofing), IDOR/multi-team tests, rate-limit tests, and audit-immutability checks.
+- [ ] Perform security checks: dependency scanning, secret scanning, OWASP authorization tests, CSRF/session-assurance tests, Argon2 parameter benchmarking, password enumeration/credential-stuffing/recovery abuse tests, passkey/WebAuthn abuse tests (stolen invite codes, replayed/forged ceremonies, RP ID/origin spoofing), system-admin privilege-escalation tests, IDOR/multi-team tests, rate-limit tests, and team/global audit-immutability checks.
 - [ ] Test browser behavior under slow/offline network: cached schedules are clearly read-only, no misleading local claim confirmation, and reconnect refreshes canonical state.
 - [ ] Test backup restore and migration rollback in staging; rehearse a failed notification worker and late swap-expiry recovery.
 - [ ] Release through staging to a small pilot with feature flags, monitored error budgets, feedback capture, and rollback plan; widen only after agreed metrics are met.

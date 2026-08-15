@@ -157,6 +157,7 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [inviteContact, setInviteContact] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [onboardingCode, setOnboardingCode] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -213,6 +214,7 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
     // Never leave a prior person's invite link beside a new request. If the
     // new request fails, the admin must not accidentally share the stale link.
     setInviteCode(null);
+    setOnboardingCode(null);
     setIsInviting(true);
     try {
       const invite = await api.createInvite(
@@ -220,6 +222,7 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
         contact.includes('@') ? { email: contact } : { phone: contact },
       );
       setInviteCode(invite.code);
+      setOnboardingCode(invite.onboardingCode ?? null);
       setInviteContact('');
     } catch (error) {
       setInviteError(error instanceof ApiError ? error.message : t('common.somethingWentWrong'));
@@ -346,7 +349,7 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
           </Field>
           {inviteError && <FormError>{inviteError}</FormError>}
           {inviteCode && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-status-mine-on">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-status-mine-on">
               <span>
                 {t('adminMembers.inviteLinkLabel')}{' '}
                 <code className="break-all" dir="ltr">
@@ -358,6 +361,11 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
                 icon={<Copy className="size-4" aria-hidden="true" />}
                 onClick={handleCopyInviteLink}
               />
+              {onboardingCode && (
+                <span>
+                  {t('adminMembers.inviteCodeLabel')} <code dir="ltr">{onboardingCode}</code>
+                </span>
+              )}
             </div>
           )}
         </form>

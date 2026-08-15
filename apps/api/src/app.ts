@@ -1,17 +1,22 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { env } from './env';
 import { Prisma } from '../generated/prisma/client';
 import { assertCsrfSafe } from './lib/cookies';
 import { HttpError } from './lib/errors';
 import { SimpleWebauthnVerifier, type WebauthnVerifier } from './lib/webauthn';
+import {
+  DisabledPasswordRecoveryProvider,
+  type PasswordRecoveryProvider,
+} from './lib/password-recovery';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import queuesPlugin from './plugins/queues';
 import ssePlugin from './plugins/sse';
 import authRoutes from './routes/auth';
+import auditLogRoutes from './routes/audit-logs';
 import collectionPointRoutes from './routes/collection-points';
 import coordinationSettingsRoutes from './routes/coordination-settings';
 import healthRoutes from './routes/health';
@@ -27,11 +32,15 @@ import sessionRoutes from './routes/sessions';
 import shiftRoutes from './routes/shifts';
 import swapRequestRoutes from './routes/swap-requests';
 import teamRoutes from './routes/teams';
+import systemRoutes from './routes/system';
 
 declare module 'fastify' {
   interface FastifyInstance {
     webauthnVerifier: WebauthnVerifier;
     sseHeartbeatIntervalMs: number;
+    passwordRecoveryProvider: PasswordRecoveryProvider;
+    passwordAuthEnabled: boolean;
+    systemAdminEnabled: boolean;
   }
 }
 
@@ -44,11 +53,17 @@ export interface BuildAppOptions {
   /** Overrides the notification stream's heartbeat/fallback-poll interval — used in tests so
    *  they don't have to wait out the real 25s interval to observe fallback-poll delivery. */
   sseHeartbeatIntervalMs?: number;
+  passwordRecoveryProvider?: PasswordRecoveryProvider;
+  passwordAuthEnabled?: boolean;
+  systemAdminEnabled?: boolean;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: env.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : true,
+    // Invitation and recovery routes carry opaque secrets. Avoid emitting raw
+    // request URLs from the application logger; domain logs remain available.
+    logController: new LogController({ disableRequestLogging: true }),
     trustProxy: env.TRUST_PROXY,
   });
 
@@ -56,6 +71,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate(
     'sseHeartbeatIntervalMs',
     options.sseHeartbeatIntervalMs ?? DEFAULT_SSE_HEARTBEAT_INTERVAL_MS,
+  );
+  app.decorate('systemAdminEnabled', options.systemAdminEnabled ?? env.SYSTEM_ADMIN_ENABLED);
+  app.decorate('passwordAuthEnabled', options.passwordAuthEnabled ?? env.PASSWORD_AUTH_ENABLED);
+  app.decorate(
+    'passwordRecoveryProvider',
+    options.passwordRecoveryProvider ?? new DisabledPasswordRecoveryProvider(),
   );
 
   app.register(cors, {
@@ -79,6 +100,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(teamRoutes);
   app.register(inviteRoutes);
   app.register(authRoutes);
+  app.register(auditLogRoutes);
   app.register(memberRoutes);
   app.register(pushSubscriptionRoutes);
   app.register(playerRoutes);
@@ -91,6 +113,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(notificationSettingsRoutes);
   app.register(memberPreferencesRoutes);
   app.register(notificationRoutes);
+  app.register(systemRoutes);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HttpError) {

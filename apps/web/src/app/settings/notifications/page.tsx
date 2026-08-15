@@ -1,5 +1,7 @@
 'use client';
 
+import { WebAuthnError, browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import {
   REMINDER_OFFSET_MINUTES_MAX_COUNT,
   notificationCategorySchema,
@@ -92,6 +94,13 @@ export default function NotificationPreferencesPage() {
     <AppShell brand={t('common.appName')} navItems={navItems}>
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
         <h1 className="text-xl font-semibold tracking-tight">{t('settingsNotifications.title')}</h1>
+
+        <PasskeySection
+          authMethod={session.authMethod}
+          onUpgraded={() =>
+            setSession((current) => (current ? { ...current, authMethod: 'passkey' } : current))
+          }
+        />
 
         {session.teamMemberships.length > 1 && (
           <TeamSwitcher
@@ -382,6 +391,76 @@ function PreferencesForm({
 
       <PushNotificationSection />
     </form>
+  );
+}
+
+/**
+ * Lets a password-only session self-service its first passkey — without
+ * this, a parent promoted to team-admin has no way to satisfy
+ * requirePrivilegedAssurance and is locked out of admin tools. Hidden once
+ * the session already carries passkey assurance (nothing to add here; use
+ * "Continue with passkey" at login to add another device instead).
+ */
+function PasskeySection({
+  authMethod,
+  onUpgraded,
+}: {
+  authMethod: 'bootstrap' | 'password' | 'passkey' | undefined;
+  onUpgraded: () => void;
+}) {
+  const { t } = useLocale();
+  const { showToast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (authMethod !== 'password') return null;
+
+  async function handleAddPasskey() {
+    setError(null);
+    if (!browserSupportsWebAuthn()) {
+      setError(t('settingsSecurity.passkeyNotSupported'));
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { challengeId, options } = await api.getPasskeyRegisterOptions();
+      const response = await startRegistration({
+        optionsJSON: options as PublicKeyCredentialCreationOptionsJSON,
+      });
+      await api.verifyPasskeyRegister({ challengeId, response });
+      showToast(t('settingsSecurity.passkeyAdded'), 'success');
+      onUpgraded();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err instanceof WebAuthnError) {
+        setError(t('settingsSecurity.passkeyCancelled'));
+      } else {
+        setError(t('common.somethingWentWrong'));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <fieldset className="flex flex-col gap-3 border-b border-surface-border pb-6">
+      <legend className="text-sm font-semibold text-ink">
+        {t('settingsSecurity.sectionTitle')}
+      </legend>
+      <p className="text-sm text-ink-muted">{t('settingsSecurity.passkeyDescription')}</p>
+      <button
+        type="button"
+        disabled={isSubmitting}
+        onClick={handleAddPasskey}
+        className={`${buttonClassName} self-start`}
+      >
+        {isSubmitting
+          ? t('settingsSecurity.addingPasskey')
+          : t('settingsSecurity.addPasskeyButton')}
+      </button>
+      {error && <FormError>{error}</FormError>}
+    </fieldset>
   );
 }
 

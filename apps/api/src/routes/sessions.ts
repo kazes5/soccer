@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
@@ -120,6 +120,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const body = updateSessionRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const existing = await loadSession(app.prisma, params.sessionId);
     if (!existing || existing.teamId !== params.teamId) {
@@ -216,6 +217,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const params = sessionParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const existing = await loadSession(app.prisma, params.sessionId);
     if (!existing || existing.teamId !== params.teamId) {
@@ -283,6 +285,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const body = updateSessionPointPlayersRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const assignment = await app.prisma.sessionPointAssignment.findUnique({
       where: {

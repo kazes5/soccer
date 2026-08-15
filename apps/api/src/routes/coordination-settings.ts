@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
 import { enqueueScheduledTaskBestEffort } from '../lib/queues';
 import { findShiftIdsUsingTeamDefaultOffsets, syncRemindersForShifts } from '../lib/reminders';
 
@@ -51,6 +51,7 @@ export default async function coordinationSettingsRoutes(app: FastifyInstance) {
     const body = coordinationSettingsRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    requirePrivilegedAssurance(currentUser);
 
     const settings = await app.prisma.$transaction(async (tx) => {
       // Read immediately before the write, inside this transaction — not

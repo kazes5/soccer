@@ -7,6 +7,20 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).default('postgresql://soccer:soccer@localhost:5432/soccer_dev'),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  PASSWORD_AUTH_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  SYSTEM_ADMIN_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  PASSWORD_LOGIN_MAX_FAILURES_PER_ACCOUNT_PER_HOUR: z.coerce.number().int().positive().default(10),
+  PASSWORD_LOGIN_MAX_FAILURES_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(50),
+  INVITE_CODE_MAX_FAILURES_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(50),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+  DEFAULT_PHONE_REGION: z.string().length(2).default('IL'),
+  PRIVILEGED_ASSURANCE_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(15),
   INVITE_TTL_DAYS: z.coerce.number().int().positive().default(7),
   WEB_ORIGIN: z.string().min(1).default('http://localhost:3000'),
   // Set to 'true' only when the API sits behind a reverse proxy that sets X-Forwarded-For,
