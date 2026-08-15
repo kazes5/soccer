@@ -7,6 +7,7 @@ import {
 } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
@@ -17,12 +18,31 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLocale();
-  const [phone, setPhone] = useState(searchParams.get('phone') ?? '');
+  const [identifier, setIdentifier] = useState(searchParams.get('phone') ?? '');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
+    setError(null);
+
+    setIsSubmitting(true);
+    try {
+      const session = await api.passwordLogin({ identifier, password });
+      const fallback =
+        session.systemRole === 'system_admin' && session.teamMemberships.length === 0
+          ? '/system'
+          : '/home';
+      router.push(searchParams.get('next') ? safeNextPath(searchParams.get('next')) : fallback);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handlePasskeyLogin() {
     setError(null);
 
     if (!browserSupportsWebAuthn()) {
@@ -32,12 +52,19 @@ export default function LoginForm() {
 
     setIsSubmitting(true);
     try {
-      const { challengeId, options } = await api.getPasskeyLoginOptions({ phone });
+      const loginIdentifier = identifier.includes('@')
+        ? { email: identifier }
+        : { phone: identifier };
+      const { challengeId, options } = await api.getPasskeyLoginOptions(loginIdentifier);
       const response = await startAuthentication({
         optionsJSON: options as PublicKeyCredentialRequestOptionsJSON,
       });
-      await api.verifyPasskeyLogin({ challengeId, response });
-      router.push(safeNextPath(searchParams.get('next')));
+      const session = await api.verifyPasskeyLogin({ challengeId, response });
+      const fallback =
+        session.systemRole === 'system_admin' && session.teamMemberships.length === 0
+          ? '/system'
+          : '/home';
+      router.push(searchParams.get('next') ? safeNextPath(searchParams.get('next')) : fallback);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -53,21 +80,43 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="flex flex-col gap-4">
-      <Field label={t('login.phoneLabel')}>
+      <Field label={t('login.identifierLabel')}>
         <input
           required
-          type="tel"
+          type="text"
           autoFocus
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           className={inputClassName}
           placeholder="+15551234567"
+          autoComplete="username"
+        />
+      </Field>
+      <Field label={t('login.passwordLabel')}>
+        <input
+          required
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={inputClassName}
+          autoComplete="current-password"
         />
       </Field>
       {error && <FormError>{error}</FormError>}
       <button type="submit" disabled={isSubmitting} className={buttonClassName}>
-        {isSubmitting ? t('login.authenticating') : t('login.continueWithPasskey')}
+        {isSubmitting ? t('login.authenticating') : t('common.logIn')}
       </button>
+      <button
+        type="button"
+        disabled={isSubmitting || !identifier.trim()}
+        className={buttonClassName}
+        onClick={handlePasskeyLogin}
+      >
+        {t('login.continueWithPasskey')}
+      </button>
+      <Link href="/forgot-password" className="text-center text-sm text-ink-muted underline">
+        {t('login.forgotPassword')}
+      </Link>
     </form>
   );
 }

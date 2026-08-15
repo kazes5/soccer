@@ -82,18 +82,21 @@ export async function verifyRegistrationChallenge(
     expectedRPID: env.WEBAUTHN_RP_ID,
   });
 
-  if (!result.verified || !result.registrationInfo) {
+  if (!result.verified || !result.registrationInfo?.userVerified) {
     throw new HttpError(401, 'Passkey registration failed.');
   }
 
   const { credential, credentialDeviceType, credentialBackedUp } = result.registrationInfo;
 
-  await prisma.$transaction([
-    prisma.webauthnChallenge.update({
-      where: { id: challenge.id },
+  await prisma.$transaction(async (tx) => {
+    const consumed = await tx.webauthnChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null },
       data: { consumedAt: new Date() },
-    }),
-    prisma.passkey.create({
+    });
+    if (consumed.count !== 1) {
+      throw new HttpError(401, 'Invalid or expired registration attempt. Please try again.');
+    }
+    await tx.passkey.create({
       data: {
         userId: challenge.userId,
         credentialId: credential.id,
@@ -103,6 +106,6 @@ export async function verifyRegistrationChallenge(
         deviceType: credentialDeviceType,
         backedUp: credentialBackedUp,
       },
-    }),
-  ]);
+    });
+  });
 }

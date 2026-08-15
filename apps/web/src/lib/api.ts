@@ -1,6 +1,9 @@
 import {
   type AcceptInviteRequest,
   type AcceptInviteResponse,
+  type AuditLogFilter,
+  type AuditLogListQuery,
+  type AuditLogListResponse,
   type AuthSessionResponse,
   type CollectionPoint,
   type CollectionPointListResponse,
@@ -25,6 +28,19 @@ import {
   type PasskeyChallengeResponse,
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
+  type PasswordLoginRequest,
+  type ForgotPasswordRequest,
+  type ResetPasswordRequest,
+  type VerifyInviteCodeRequest,
+  type VerifyInviteCodeResponse,
+  type CompletePasswordOnboardingRequest,
+  type AttachExistingAccountInviteRequest,
+  type SystemOverview,
+  type SystemTeamListResponse,
+  type SystemTeamMemberListResponse,
+  type SystemUserListResponse,
+  type SystemAuditListResponse,
+  type UpdateSystemRoleRequest,
   type PlayerListResponse,
   type PracticeSession,
   type PushConfigResponse,
@@ -44,6 +60,7 @@ import {
   type UpdateSessionPointPlayersRequest,
   type UpdateSessionRequest,
   acceptInviteResponseSchema,
+  auditLogListResponseSchema,
   authSessionResponseSchema,
   collectionPointListResponseSchema,
   collectionPointSchema,
@@ -56,6 +73,12 @@ import {
   memberNotificationPreferencesSchema,
   notificationListResponseSchema,
   passkeyChallengeResponseSchema,
+  verifyInviteCodeResponseSchema,
+  systemOverviewSchema,
+  systemTeamListResponseSchema,
+  systemTeamMemberListResponseSchema,
+  systemUserListResponseSchema,
+  systemAuditListResponseSchema,
   playerListResponseSchema,
   practiceSessionSchema,
   pushConfigResponseSchema,
@@ -94,6 +117,16 @@ function readCsrfCookie(): string | undefined {
   if (typeof document === 'undefined') return undefined;
   const match = document.cookie.match(/(?:^|;\s*)soccer_csrf=([^;]+)/);
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
+function auditLogQuery(options?: Partial<AuditLogListQuery>): string {
+  const query = new URLSearchParams();
+  if (!options) return '';
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined && value !== '') query.set(key, String(value));
+  }
+  const queryString = query.toString();
+  return queryString ? `?${queryString}` : '';
 }
 
 interface RequestOptions<TResponse> {
@@ -157,6 +190,20 @@ export const api = {
       body,
       responseSchema: authSessionResponseSchema,
     }),
+  passwordLogin: (body: PasswordLoginRequest) =>
+    request<AuthSessionResponse>('/auth/password/login', {
+      method: 'POST',
+      body,
+      responseSchema: authSessionResponseSchema,
+    }),
+  forgotPassword: (body: ForgotPasswordRequest) =>
+    request<{ message: string }>('/auth/password/forgot', {
+      method: 'POST',
+      body,
+      responseSchema: z.object({ message: z.string() }),
+    }),
+  resetPassword: (body: ResetPasswordRequest) =>
+    request<unknown>('/auth/password/reset', { method: 'POST', body, responseSchema: z.unknown() }),
 
   // Register an additional passkey for the *currently authenticated* user —
   // used right after `createTeam` (which issues a session with no invite
@@ -203,15 +250,91 @@ export const api = {
       body,
       responseSchema: acceptInviteResponseSchema,
     }),
-
-  createInvite: (teamId: string, body: CreateInviteRequest) =>
-    request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/invites`, {
+  verifyInviteCode: (token: string, body: VerifyInviteCodeRequest) =>
+    request<VerifyInviteCodeResponse>(`/invites/${encodeURIComponent(token)}/verify-code`, {
       method: 'POST',
       body,
-      responseSchema: inviteSummarySchema,
+      responseSchema: verifyInviteCodeResponseSchema,
+    }),
+  completePasswordOnboarding: (token: string, body: CompletePasswordOnboardingRequest) =>
+    request<AuthSessionResponse>(
+      `/invites/${encodeURIComponent(token)}/complete-password-onboarding`,
+      {
+        method: 'POST',
+        body,
+        responseSchema: authSessionResponseSchema,
+      },
+    ),
+  attachExistingAccountInvite: (token: string, body: AttachExistingAccountInviteRequest) =>
+    request<unknown>(`/invites/${encodeURIComponent(token)}/attach-account`, {
+      method: 'POST',
+      body,
+      responseSchema: z.unknown(),
     }),
 
+  createInvite: async (teamId: string, body: CreateInviteRequest) => {
+    try {
+      return await request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/password-invites`, {
+        method: 'POST',
+        body,
+        responseSchema: inviteSummarySchema,
+      });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      return request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/invites`, {
+        method: 'POST',
+        body,
+        responseSchema: inviteSummarySchema,
+      });
+    }
+  },
+
   logout: () => request<unknown>('/auth/logout', { method: 'POST', responseSchema: z.unknown() }),
+
+  getSystemOverview: () =>
+    request<SystemOverview>('/system/overview', { responseSchema: systemOverviewSchema }),
+  listSystemTeams: (cursor?: string) =>
+    request<SystemTeamListResponse>(
+      `/system/teams${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      {
+        responseSchema: systemTeamListResponseSchema,
+      },
+    ),
+  listSystemTeamMembers: (teamId: string) =>
+    request<SystemTeamMemberListResponse>(`/system/teams/${encodeURIComponent(teamId)}/members`, {
+      responseSchema: systemTeamMemberListResponseSchema,
+    }),
+  listSystemUsers: (cursor?: string) =>
+    request<SystemUserListResponse>(
+      `/system/users${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      {
+        responseSchema: systemUserListResponseSchema,
+      },
+    ),
+  listSystemAuditLogs: (cursor?: string) =>
+    request<SystemAuditListResponse>(
+      `/system/audit-logs${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      {
+        responseSchema: systemAuditListResponseSchema,
+      },
+    ),
+  updateSystemRole: (userId: string, body: UpdateSystemRoleRequest) =>
+    request<{ id: string; systemRole: 'system_admin' | null }>(
+      `/system/users/${encodeURIComponent(userId)}/system-role`,
+      {
+        method: 'PATCH',
+        body,
+        responseSchema: z.object({
+          id: z.string().uuid(),
+          systemRole: z.enum(['system_admin']).nullable(),
+        }),
+      },
+    ),
+  updateSystemTeamMemberRole: (teamId: string, userId: string, body: UpdateMemberRoleRequest) =>
+    request<UpdateMemberRoleResponse>(
+      `/system/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
+      { method: 'PATCH', body, responseSchema: updateMemberRoleResponseSchema },
+    ),
 
   listSessions: (teamId: string) =>
     request<SessionListResponse>(`/teams/${encodeURIComponent(teamId)}/sessions`, {
@@ -332,6 +455,31 @@ export const api = {
       method: 'DELETE',
       responseSchema: z.unknown(),
     }),
+
+  listAuditLogs: (teamId: string, options?: Partial<AuditLogListQuery>) =>
+    request<AuditLogListResponse>(
+      `/teams/${encodeURIComponent(teamId)}/audit-logs${auditLogQuery(options)}`,
+      { responseSchema: auditLogListResponseSchema },
+    ),
+
+  exportAuditLogs: async (teamId: string, filters?: AuditLogFilter) => {
+    const response = await fetch(
+      `${env.NEXT_PUBLIC_API_URL}/teams/${encodeURIComponent(teamId)}/audit-logs/export${auditLogQuery(filters)}`,
+      { credentials: 'include' },
+    );
+    if (!response.ok) {
+      const data: unknown = await response.json().catch(() => ({}));
+      const message =
+        typeof data === 'object' &&
+        data !== null &&
+        'message' in data &&
+        typeof data.message === 'string'
+          ? data.message
+          : 'Something went wrong. Please try again.';
+      throw new ApiError(response.status, message);
+    }
+    return response.blob();
+  },
 
   getCoordinationSettings: (teamId: string) =>
     request<CoordinationSettings>(`/teams/${encodeURIComponent(teamId)}/coordination-settings`, {

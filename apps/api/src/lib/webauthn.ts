@@ -71,7 +71,7 @@ export class SimpleWebauthnVerifier implements WebauthnVerifier {
       userDisplayName: opts.userDisplayName,
       attestationType: 'none',
       excludeCredentials: opts.excludeCredentials,
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
     });
   }
 
@@ -91,7 +91,7 @@ export class SimpleWebauthnVerifier implements WebauthnVerifier {
     return generateAuthenticationOptions({
       rpID: opts.rpID,
       allowCredentials: opts.allowCredentials,
-      userVerification: 'preferred',
+      userVerification: 'required',
     });
   }
 

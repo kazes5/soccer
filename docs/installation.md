@@ -57,6 +57,12 @@ Keep real credentials in ignored `.env` files. Commit only the example files.
 `TRUST_PROXY` should remain `false` locally and should only be enabled behind a
 real reverse proxy that sets `X-Forwarded-For`.
 
+Password onboarding and the global console are staged features and default to
+off. Set `PASSWORD_AUTH_ENABLED=true` only after configuring a verified
+recovery provider; set `SYSTEM_ADMIN_ENABLED=true` after bootstrapping the first
+active passkey user with `pnpm system-admin:grant <identifier>`. See
+[Password and System Administration](./authentication-and-system-admin.md).
+
 ## Run the applications
 
 ```bash

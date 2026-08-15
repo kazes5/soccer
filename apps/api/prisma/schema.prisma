@@ -12,6 +12,16 @@ enum TeamRole {
   admin
 }
 
+enum SystemRole {
+  system_admin
+}
+
+enum AuthMethod {
+  bootstrap
+  password
+  passkey
+}
+
 enum Language {
   en
   he
@@ -113,24 +123,31 @@ enum SwapRequestStatus {
 }
 
 model User {
-  id                 String   @id @default(uuid())
+  id                 String      @id @default(uuid())
   name               String
-  phone              String?  @unique
-  email              String?  @unique
-  languagePreference Language @default(en) @map("language_preference")
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  phone              String?     @unique
+  email              String?     @unique
+  normalizedPhone    String?     @unique @map("normalized_phone")
+  normalizedEmail    String?     @unique @map("normalized_email")
+  systemRole         SystemRole? @map("system_role")
+  languagePreference Language    @default(en) @map("language_preference")
+  isActive           Boolean     @default(true) @map("is_active")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
 
   teamMemberships            TeamMember[]
   playerLinks                PlayerParent[]
   sentInvites                Invite[]                     @relation("InvitesCreated")
   acceptedInvites            Invite[]                     @relation("InvitesAccepted")
   passkeys                   Passkey[]
+  passwordCredential         PasswordCredential?
+  passwordResetTokens        PasswordResetToken[]
+  passwordLoginAttempts      PasswordLoginAttempt[]
   webauthnChallenges         WebauthnChallenge[]
   sessions                   Session[]
   notificationPrefs          NotificationPreference[]
   auditLogEntries            AuditLog[]                   @relation("AuditActor")
+  systemAuditLogEntries      SystemAuditLog[]             @relation("SystemAuditActor")
   pushSubscriptions          PushSubscription[]
   scheduleTemplates          ScheduleTemplate[]           @relation("ScheduleTemplatesCreated")
   assignedShifts             Shift[]                      @relation("ShiftsAssigned")
@@ -213,17 +230,23 @@ model PlayerParent {
 }
 
 model Invite {
-  id               String       @id @default(uuid())
-  teamId           String       @map("team_id")
-  code             String       @unique
-  phone            String?
-  email            String?
-  status           InviteStatus @default(pending)
-  createdByUserId  String       @map("created_by_user_id")
-  acceptedByUserId String?      @map("accepted_by_user_id")
-  expiresAt        DateTime     @map("expires_at")
-  acceptedAt       DateTime?    @map("accepted_at")
-  createdAt        DateTime     @default(now()) @map("created_at")
+  id                    String       @id @default(uuid())
+  teamId                String       @map("team_id")
+  code                  String       @unique
+  codeVersion           Int          @default(1) @map("code_version")
+  onboardingCodeHash    String?      @map("onboarding_code_hash")
+  failedCodeAttempts    Int          @default(0) @map("failed_code_attempts")
+  lastFailedCodeAt      DateTime?    @map("last_failed_code_at")
+  verificationTokenHash String?      @map("verification_token_hash")
+  verificationExpiresAt DateTime?    @map("verification_expires_at")
+  phone                 String?
+  email                 String?
+  status                InviteStatus @default(pending)
+  createdByUserId       String       @map("created_by_user_id")
+  acceptedByUserId      String?      @map("accepted_by_user_id")
+  expiresAt             DateTime     @map("expires_at")
+  acceptedAt            DateTime?    @map("accepted_at")
+  createdAt             DateTime     @default(now()) @map("created_at")
 
   team           Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy      User  @relation("InvitesCreated", fields: [createdByUserId], references: [id])
@@ -251,6 +274,45 @@ model Passkey {
   @@map("passkeys")
 }
 
+model PasswordCredential {
+  userId            String   @id @map("user_id")
+  passwordHash      String   @map("password_hash")
+  passwordChangedAt DateTime @default(now()) @map("password_changed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_credentials")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model PasswordLoginAttempt {
+  id             String   @id @default(uuid())
+  userId         String?  @map("user_id")
+  identifierHash String   @map("identifier_hash")
+  requestIp      String   @map("request_ip")
+  succeeded      Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([identifierHash, createdAt])
+  @@index([requestIp, createdAt])
+  @@map("password_login_attempts")
+}
+
 model WebauthnChallenge {
   id         String                @id @default(uuid())
   userId     String                @map("user_id")
@@ -269,13 +331,15 @@ model WebauthnChallenge {
 }
 
 model Session {
-  id         String    @id @default(uuid())
-  userId     String    @map("user_id")
-  tokenHash  String    @unique @map("token_hash")
-  expiresAt  DateTime  @map("expires_at")
-  revokedAt  DateTime? @map("revoked_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  lastUsedAt DateTime  @default(now()) @map("last_used_at")
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  tokenHash       String     @unique @map("token_hash")
+  expiresAt       DateTime   @map("expires_at")
+  revokedAt       DateTime?  @map("revoked_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  lastUsedAt      DateTime   @default(now()) @map("last_used_at")
+  authMethod      AuthMethod @default(bootstrap) @map("auth_method")
+  authenticatedAt DateTime   @default(now()) @map("authenticated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -503,6 +567,27 @@ model AuditLog {
   @@index([actorId])
   @@index([actionType])
   @@map("audit_logs")
+}
+
+model SystemAuditLog {
+  id           String      @id @default(uuid())
+  actorId      String?     @map("actor_id")
+  actionType   String      @map("action_type")
+  targetEntity String      @map("target_entity")
+  targetId     String?     @map("target_id")
+  teamId       String?     @map("team_id")
+  beforeState  Json?       @map("before_state")
+  afterState   Json?       @map("after_state")
+  source       AuditSource @default(app)
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  actor User? @relation("SystemAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([teamId])
+  @@index([actionType])
+  @@map("system_audit_logs")
 }
 
 model CollectionPoint {

@@ -13,6 +13,15 @@ describe('createInviteRequestSchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('rejects an invite with both phone and email', () => {
+    const result = createInviteRequestSchema.safeParse({
+      phone: '+15550000003',
+      email: 'parent@example.com',
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('acceptInviteRequestSchema', () => {

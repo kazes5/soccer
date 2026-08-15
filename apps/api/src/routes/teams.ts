@@ -6,6 +6,7 @@ import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { recordAuditLog } from '../lib/audit';
 import { setSessionCookies } from '../lib/cookies';
 import { generateSessionToken, hashSecret } from '../lib/crypto';
+import { normalizeEmail, normalizePhone } from '../lib/identifiers';
 
 export default async function teamRoutes(app: FastifyInstance) {
   app.post('/teams', async (request, reply) => {
@@ -26,6 +27,8 @@ export default async function teamRoutes(app: FastifyInstance) {
             name: body.adminName,
             phone: body.adminPhone,
             email: body.adminEmail,
+            normalizedPhone: body.adminPhone ? normalizePhone(body.adminPhone) : undefined,
+            normalizedEmail: body.adminEmail ? normalizeEmail(body.adminEmail) : undefined,
             languagePreference: body.adminLanguage,
             teamMemberships: {
               create: { teamId: createdTeam.id, role: 'admin' },
@@ -49,6 +52,7 @@ export default async function teamRoutes(app: FastifyInstance) {
             userId: createdAdmin.id,
             tokenHash: hashSecret(token),
             expiresAt,
+            authMethod: 'bootstrap',
           },
         });
 

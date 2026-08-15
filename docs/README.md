@@ -18,6 +18,9 @@ status and sequencing.
 - [Admin User Guide](./admin-user-guide.md) - team setup, invitations,
   collection points, schedules, session management, and coordination settings
   for team admins.
+- [Password and System Administration](./authentication-and-system-admin.md) -
+  split-code onboarding, password/passkey assurance, feature flags, and the
+  global administrator console.
 - [Flow Charts](./flow-charts.md) - current admin and user route flows shown as
   Mermaid diagrams.
 - [Architecture Decision Records](./adr/README.md) - short records of

@@ -18,6 +18,7 @@
     "db:migrate": "pnpm --filter @soccer/api run db:migrate",
     "db:migrate:deploy": "pnpm --filter @soccer/api run db:migrate:deploy",
     "db:seed": "pnpm --filter @soccer/api run db:seed",
+    "system-admin:grant": "pnpm --filter @soccer/api run system-admin:grant --",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },

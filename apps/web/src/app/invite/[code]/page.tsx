@@ -42,6 +42,17 @@ export default function AcceptInvitePage() {
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewErrorDetail, setPreviewErrorDetail] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [onboardingCode, setOnboardingCode] = useState('');
+  const [verificationToken, setVerificationToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : window.sessionStorage.getItem(`invite-grant:${code}`),
+  );
+  const [existingAccount, setExistingAccount] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.sessionStorage.getItem(`invite-grant:${code}`) !== null,
+  );
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [players, setPlayers] = useState<PlayerDraft[]>([{ name: '', age: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,6 +114,41 @@ export default function AcceptInvitePage() {
     setError(null);
     setIsSubmitting(true);
     try {
+      if (preview?.requiresCode) {
+        if (!verificationToken) {
+          const verified = await api.verifyInviteCode(code, { code: onboardingCode });
+          setVerificationToken(verified.verificationToken);
+          setExistingAccount(verified.existingAccount);
+          setIsSubmitting(false);
+          return;
+        }
+        if (existingAccount) {
+          try {
+            await api.attachExistingAccountInvite(code, { verificationToken });
+            window.sessionStorage.removeItem(`invite-grant:${code}`);
+            router.push('/home');
+          } catch (attachError) {
+            if (attachError instanceof ApiError && attachError.status === 401) {
+              window.sessionStorage.setItem(`invite-grant:${code}`, verificationToken);
+              router.push(`/login?next=${encodeURIComponent(`/invite/${code}`)}`);
+              return;
+            }
+            throw attachError;
+          }
+          return;
+        }
+        await api.completePasswordOnboarding(code, {
+          verificationToken,
+          name,
+          password,
+          passwordConfirmation,
+          players: players
+            .filter((player) => player.name.trim().length > 0)
+            .map((player) => ({ name: player.name.trim(), age: parsePlayerAge(player.age) })),
+        });
+        router.push('/home');
+        return;
+      }
       await api.acceptInvite(code, {
         name,
         players: players
@@ -179,54 +225,112 @@ export default function AcceptInvitePage() {
         <p className="mt-1 text-sm text-ink-muted">{t('invite.joinSubtitle')}</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label={t('invite.yourNameLabel')}>
-          <input
-            required
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={inputClassName}
-            placeholder="Avi Levi"
-          />
-        </Field>
+        {preview.requiresCode && !verificationToken && (
+          <Field label={t('invite.codeLabel')}>
+            <input
+              required
+              autoFocus
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              autoComplete="one-time-code"
+              value={onboardingCode}
+              onChange={(event) => setOnboardingCode(event.target.value.replace(/\D/g, ''))}
+              className={inputClassName}
+            />
+          </Field>
+        )}
+        {(!preview.requiresCode || verificationToken) && !existingAccount && (
+          <>
+            <Field label={t('invite.yourNameLabel')}>
+              <input
+                required
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClassName}
+                placeholder="Avi Levi"
+              />
+            </Field>
 
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">{t('invite.playersLabel')}</span>
-          {players.map((player, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                value={player.name}
-                onChange={(e) => updatePlayer(index, { name: e.target.value })}
-                className={`${inputClassName} flex-1`}
-                placeholder={t('invite.playerNamePlaceholder')}
-              />
-              <input
-                value={player.age}
-                onChange={(e) => updatePlayer(index, { age: e.target.value })}
-                className={`${inputClassName} w-20`}
-                placeholder={t('invite.agePlaceholder')}
-                inputMode="numeric"
-              />
-              <IconButton
-                label={t('invite.removePlayerAriaLabel')}
-                icon={<X className="size-4" aria-hidden="true" />}
-                variant="danger"
-                onClick={() => removePlayer(index)}
-              />
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">{t('invite.playersLabel')}</span>
+              {players.map((player, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    value={player.name}
+                    onChange={(e) => updatePlayer(index, { name: e.target.value })}
+                    className={`${inputClassName} flex-1`}
+                    placeholder={t('invite.playerNamePlaceholder')}
+                  />
+                  <input
+                    value={player.age}
+                    onChange={(e) => updatePlayer(index, { age: e.target.value })}
+                    className={`${inputClassName} w-20`}
+                    placeholder={t('invite.agePlaceholder')}
+                    inputMode="numeric"
+                  />
+                  <IconButton
+                    label={t('invite.removePlayerAriaLabel')}
+                    icon={<X className="size-4" aria-hidden="true" />}
+                    variant="danger"
+                    onClick={() => removePlayer(index)}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addPlayer}
+                className={`${secondaryButtonClassName} text-sm`}
+              >
+                {t('invite.addPlayer')}
+              </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={addPlayer}
-            className={`${secondaryButtonClassName} text-sm`}
-          >
-            {t('invite.addPlayer')}
-          </button>
-        </div>
+
+            {preview.requiresCode && (
+              <>
+                <Field label={t('invite.passwordLabel')}>
+                  <input
+                    required
+                    type="password"
+                    minLength={15}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+                <Field label={t('invite.passwordConfirmationLabel')}>
+                  <input
+                    required
+                    type="password"
+                    minLength={15}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={passwordConfirmation}
+                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+              </>
+            )}
+          </>
+        )}
+
+        {existingAccount && (
+          <p className="text-sm text-ink-muted">{t('invite.existingAccountBody')}</p>
+        )}
 
         {error && <FormError>{error}</FormError>}
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
-          {isSubmitting ? t('invite.submitting') : t('invite.submit')}
+          {isSubmitting
+            ? t('invite.submitting')
+            : preview.requiresCode && !verificationToken
+              ? t('invite.verifyCode')
+              : existingAccount
+                ? t('invite.attachExistingAccount')
+                : t('invite.submit')}
         </button>
       </form>
     </main>
