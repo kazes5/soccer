@@ -8,6 +8,16 @@ import { HttpError } from './errors';
 import type { WebauthnVerifier } from './webauthn';
 
 /**
+ * How long after an invite is accepted its code can still be used to register
+ * a passkey. Without a bound, capturing an already-used invite code would let
+ * someone attach a new credential to that account indefinitely — the invite
+ * is meant to authorize one onboarding sitting, not standing account access.
+ * (A team-bootstrap session's equivalent one-time grant is instead bounded by
+ * `requirePrivilegedAssurance`'s freshness window — see `auth.ts`.)
+ */
+export const PASSKEY_REGISTRATION_WINDOW_MINUTES = 15;
+
+/**
  * Shared by the two "register a passkey" entry points — `auth.ts` (for an
  * already-authenticated user) and `invites.ts` (invite-code-scoped, for a
  * brand-new parent with no session yet). The steps are identical; only how

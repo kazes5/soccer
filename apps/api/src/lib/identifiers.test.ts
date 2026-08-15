@@ -9,5 +9,6 @@ describe('login identifier normalization', () => {
   it('maps Israeli local and international phone formats to the same E.164 identity', () => {
     expect(normalizePhone('050-123-4567')).toBe('+972501234567');
     expect(normalizePhone('+972 50 123 4567')).toBe('+972501234567');
+    expect(normalizePhone('00972501234567')).toBe('+972501234567');
   });
 });

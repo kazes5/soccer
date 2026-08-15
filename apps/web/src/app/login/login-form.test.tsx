@@ -25,7 +25,12 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return {
     ...actual,
-    api: { ...actual.api, getPasskeyLoginOptions: vi.fn(), verifyPasskeyLogin: vi.fn() },
+    api: {
+      ...actual.api,
+      getPasskeyLoginOptions: vi.fn(),
+      verifyPasskeyLogin: vi.fn(),
+      passwordLogin: vi.fn(),
+    },
   };
 });
 
@@ -35,6 +40,7 @@ describe('LoginForm', () => {
     push.mockClear();
     vi.mocked(api.getPasskeyLoginOptions).mockReset();
     vi.mocked(api.verifyPasskeyLogin).mockReset();
+    vi.mocked(api.passwordLogin).mockReset();
     const { startAuthentication } = await import('@simplewebauthn/browser');
     vi.mocked(startAuthentication).mockReset();
   });
@@ -163,6 +169,23 @@ describe('LoginForm', () => {
         "You haven't been added to a team yet. Ask your team admin for an invite.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows a friendly, passkey-pointing message when password sign-in is disabled server-side', async () => {
+    const { ApiError } = await import('@/lib/api');
+    vi.mocked(api.passwordLogin).mockRejectedValue(new ApiError(404, 'Not found.'));
+
+    renderWithProviders(<LoginForm />);
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
+      target: { value: '+15550002222' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'irrelevant' } });
+    fireEvent.click(screen.getByRole('button', { name: /^log in$/i }));
+
+    expect(
+      await screen.findByText(/password sign-in isn't turned on for this team yet/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Not found.')).not.toBeInTheDocument();
   });
 
   it('shows a friendly message when the passkey ceremony is cancelled', async () => {

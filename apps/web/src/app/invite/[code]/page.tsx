@@ -36,7 +36,7 @@ export default function AcceptInvitePage() {
   const params = useParams<{ code: string }>();
   const code = params.code;
   const router = useRouter();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -140,6 +140,7 @@ export default function AcceptInvitePage() {
         await api.completePasswordOnboarding(code, {
           verificationToken,
           name,
+          language: locale,
           password,
           passwordConfirmation,
           players: players
@@ -151,6 +152,7 @@ export default function AcceptInvitePage() {
       }
       await api.acceptInvite(code, {
         name,
+        language: locale,
         players: players
           .filter((player) => player.name.trim().length > 0)
           .map((player) => ({

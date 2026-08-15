@@ -268,6 +268,12 @@ export default async function memberRoutes(app: FastifyInstance) {
       const remainingMemberships = await tx.teamMember.count({
         where: { userId: params.userId },
       });
+      // A system admin's login/account access is governed by their global
+      // role, not team membership (CLAUDE.md §9.3: system_admin is "never a
+      // team role"; PLAN.md's system console explicitly supports "a system
+      // admin with no team membership"). Deactivating them here just because
+      // their last team membership ended would strand a legitimate,
+      // team-independent system admin out of `/system/*` too.
       if (remainingMemberships === 0 && target.user.systemRole === null) {
         await tx.user.update({ where: { id: params.userId }, data: { isActive: false } });
         await tx.session.updateMany({

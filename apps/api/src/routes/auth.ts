@@ -236,8 +236,13 @@ export default async function authRoutes(app: FastifyInstance) {
   // A password/bootstrap session may only register when it has zero passkeys
   // (its one self-service first-credential path); once it has one, further
   // registrations require passkey-authenticated assurance, same as any other
-  // passkey user. The invite-scoped pair in `invites.ts` is only for a
-  // brand-new parent's very first passkey, before any session exists to gate on.
+  // passkey user. A bootstrap session must also still be within
+  // requirePrivilegedAssurance's freshness window (the same bound every
+  // other privileged action already enforces for it) — otherwise a leaked
+  // or replayed bootstrap token would stay usable to attach the account's
+  // first, privilege-granting credential for its full session lifetime. The
+  // invite-scoped pair in `invites.ts` is only for a brand-new parent's very
+  // first passkey, before any session exists to gate on.
   app.post('/auth/passkey/register/options', async (request, reply) => {
     const currentUser = requireAuth(request);
     const user = await app.prisma.user.findUniqueOrThrow({
@@ -250,7 +255,9 @@ export default async function authRoutes(app: FastifyInstance) {
     ) {
       throw new HttpError(403, 'Verify an existing passkey before adding another passkey.');
     }
-    if (currentUser.authMethod === 'passkey') requirePrivilegedAssurance(currentUser);
+    if (currentUser.authMethod === 'passkey' || currentUser.authMethod === 'bootstrap') {
+      requirePrivilegedAssurance(currentUser);
+    }
 
     const { challengeId, options } = await createRegistrationChallenge(
       app.prisma,
@@ -273,7 +280,9 @@ export default async function authRoutes(app: FastifyInstance) {
         throw new HttpError(403, 'Verify an existing passkey before adding another passkey.');
       }
     }
-    if (currentUser.authMethod === 'passkey') requirePrivilegedAssurance(currentUser);
+    if (currentUser.authMethod === 'passkey' || currentUser.authMethod === 'bootstrap') {
+      requirePrivilegedAssurance(currentUser);
+    }
     const body = passkeyVerifyRequestSchema.parse(request.body);
 
     await verifyRegistrationChallenge(app.prisma, app.webauthnVerifier, {

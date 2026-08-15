@@ -325,4 +325,46 @@ describe('system administrator routes', () => {
       outbox: await app.prisma.outboxEvent.count({ where: { teamId: team.id } }),
     }).toEqual(beforeNoOp);
   });
+
+  it('keeps a system admin active and logged in after leaving their last team', async () => {
+    const { user: teamAdmin, token: teamAdminToken } = await createUser({ name: 'Team Admin' });
+    const { user: sysAdmin, token: sysAdminToken } = await createUser({
+      name: 'Global Operator',
+      systemAdmin: true,
+      hasPasskey: true,
+    });
+    const team = await createTeam();
+    await app.prisma.teamMember.createMany({
+      data: [
+        { teamId: team.id, userId: teamAdmin.id, role: 'admin' },
+        { teamId: team.id, userId: sysAdmin.id, role: 'parent' },
+      ],
+    });
+
+    const removal = await app.inject({
+      method: 'DELETE',
+      url: `/teams/${team.id}/members/${sysAdmin.id}`,
+      headers: { authorization: `Bearer ${teamAdminToken}` },
+    });
+    expect(removal.statusCode).toBe(204);
+
+    // Unlike an ordinary member losing their last membership, a system
+    // admin's account stays active and their session stays valid — their
+    // access is governed by the global role, not team membership.
+    expect(await app.prisma.user.findUniqueOrThrow({ where: { id: sysAdmin.id } })).toMatchObject({
+      isActive: true,
+    });
+    expect(
+      await app.prisma.session.count({
+        where: { userId: sysAdmin.id, revokedAt: null },
+      }),
+    ).toBeGreaterThan(0);
+
+    const stillWorks = await app.inject({
+      method: 'GET',
+      url: '/system/overview',
+      headers: { authorization: `Bearer ${sysAdminToken}` },
+    });
+    expect(stillWorks.statusCode).toBe(200);
+  });
 });
