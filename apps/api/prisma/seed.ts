@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import { env } from '../src/env';
+import { normalizeEmail, normalizePhone } from '../src/lib/identifiers';
 import { combineDateAndTime, generateOccurrences } from '../src/lib/recurrence';
 import { createSessionWithShifts } from '../src/routes/schedule-templates';
 import { wallClockToInstant } from '../src/lib/timezone';
@@ -75,11 +76,16 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { phone: '+15550000001' },
-    update: {},
+    update: {
+      normalizedPhone: normalizePhone('+15550000001'),
+      normalizedEmail: normalizeEmail('dana@example.com'),
+    },
     create: {
       name: 'Dana Cohen',
       phone: '+15550000001',
+      normalizedPhone: normalizePhone('+15550000001'),
       email: 'dana@example.com',
+      normalizedEmail: normalizeEmail('dana@example.com'),
       languagePreference: 'he',
     },
   });
@@ -116,14 +122,31 @@ async function main() {
         email: 'liat@example.com',
         language: 'he' as const,
       },
+      // Gets an auto-numbered invite code (english-parent-6-demo, from the
+      // `parents.map` below) like everyone else, but no E2E spec ever
+      // accepts it — so she reliably has no passkey for the whole suite's
+      // lifetime. Exists for apps/e2e/tests/system-console.spec.ts, which
+      // needs a team member it can rely on to demonstrate the system
+      // console's "target must already hold a passkey" grant safeguard.
+      {
+        name: 'Maya Golan',
+        phone: '+15550000007',
+        email: 'maya@example.com',
+        language: 'en' as const,
+      },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
-        update: {},
+        update: {
+          normalizedPhone: normalizePhone(parent.phone),
+          normalizedEmail: normalizeEmail(parent.email),
+        },
         create: {
           name: parent.name,
           phone: parent.phone,
+          normalizedPhone: normalizePhone(parent.phone),
           email: parent.email,
+          normalizedEmail: normalizeEmail(parent.email),
           languagePreference: parent.language,
         },
       }),
@@ -141,6 +164,7 @@ async function main() {
       { userId: parents[2]?.id, role: 'parent' as const },
       { userId: parents[3]?.id, role: 'parent' as const },
       { userId: parents[4]?.id, role: 'parent' as const },
+      { userId: parents[5]?.id, role: 'parent' as const },
     ].map(({ userId, role }) => {
       if (!userId) return Promise.resolve();
       return prisma.teamMember.upsert({
@@ -279,13 +303,17 @@ async function seedHebrewDemoData() {
     update: {
       name: 'יעל כהן',
       email: 'yael@example.test',
+      normalizedPhone: normalizePhone('+972501234567'),
+      normalizedEmail: normalizeEmail('yael@example.test'),
       languagePreference: 'he',
       isActive: true,
     },
     create: {
       name: 'יעל כהן',
       phone: '+972501234567',
+      normalizedPhone: normalizePhone('+972501234567'),
       email: 'yael@example.test',
+      normalizedEmail: normalizeEmail('yael@example.test'),
       languagePreference: 'he',
     },
   });
@@ -323,10 +351,17 @@ async function seedHebrewDemoData() {
         update: {
           name: parent.name,
           email: parent.email,
+          normalizedPhone: normalizePhone(parent.phone),
+          normalizedEmail: normalizeEmail(parent.email),
           languagePreference: 'he',
           isActive: true,
         },
-        create: { ...parent, languagePreference: 'he' },
+        create: {
+          ...parent,
+          normalizedPhone: normalizePhone(parent.phone),
+          normalizedEmail: normalizeEmail(parent.email),
+          languagePreference: 'he',
+        },
       }),
     ),
   );

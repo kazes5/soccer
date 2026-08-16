@@ -129,6 +129,28 @@ Web tests cover:
   waits for the page's own `h1` before running, since every authenticated
   page renders `null` for one tick while its `api.me()` call is in flight,
   and axe would otherwise flag the landmark/heading that's about to exist.
+- Shift swaps end to end: two real, independently authenticated browser
+  contexts stand in for two parents — one holds a shift, the other requests
+  it, the holder accepts through `/swaps`' real confirm flow, and the shift
+  reassigns. Runs on the Hebrew team; the holder claims the *second-to-last*
+  open shift, not the first, since a swap request's expiry is capped at its
+  session's start time (`apps/api/src/routes/swap-requests.ts`) and a
+  today-dated shift can create an already-expired request.
+- Broadcast notifications and their deep links: a second parent watching
+  `/notifications` (never touching Schedule itself) sees another parent's
+  shift claim arrive live over the SSE stream, and clicking it navigates to
+  the exact session/shift on Schedule. Requires the separate notification
+  worker process (`apps/api/src/worker/index.ts`) — see "Verification
+  commands" below; without it, this is the one spec that hangs until
+  timeout, since nothing ever produces the `UserNotification` row or SSE
+  push.
+- The system console (`/system`): bootstraps a seeded parent into the
+  global `system_admin` capability the same way a real operator would — by
+  shelling out to the `pnpm system-admin:grant` script
+  (`apps/e2e/fixtures/system-admin.ts`), which itself requires the target to
+  already hold a passkey — then verifies cross-team visibility, the
+  console's own "target must already hold a passkey" grant safeguard, and
+  the global audit log recording the bootstrap.
 
 Each Playwright spec that touches shift claiming targets a specific
 seeded parent/team/shift so that specs sharing a team (see
@@ -137,9 +159,13 @@ other when `fullyParallel` runs them concurrently, and avoids claiming the
 chronologically _first_ open shift unless it's the only spec on that team —
 that shift can be dated today, and once real time crosses its start time
 mid-suite, Home correctly stops counting it as "upcoming" even though the
-claim itself still succeeded.
+claim itself still succeeded. Specs that assert on notification *counts*
+avoid exact numbers for the same reason from a different angle: other
+specs' concurrent activity on a shared team also broadcasts to any
+notifications-page observer, so only presence/absence of a specific
+notification is reliably assertable, not a total.
 
-This is intentionally a narrow first slice, not full coverage — see "Planned
+This is intentionally a narrow slice, not full coverage — see "Planned
 coverage and known gaps" below for what it does not yet include.
 
 ## Verification commands
@@ -194,8 +220,9 @@ pnpm test:e2e
 
 This resets a dedicated `soccer_e2e` database (see `apps/e2e/.env.example` to
 customize ports/URLs), starts real API and web dev servers on dedicated ports
-(3100/4100, so it never collides with a developer's own `pnpm dev`), and runs
-the suite against them.
+(3100/4100, so it never collides with a developer's own `pnpm dev`) plus the
+notification worker process (`SYSTEM_ADMIN_ENABLED=true` too, for
+system-console.spec.ts), and runs the suite against them.
 
 ## Planned coverage and known gaps
 
@@ -205,9 +232,11 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 - No configured line/branch coverage thresholds or coverage report artifact.
 - The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
   English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
-  keyboard-only login, and an axe accessibility scan of five pages/states.
-  Still missing: swaps, notifications, the system console, deep links, and
-  offline/slow-network behavior.
+  keyboard-only login, an axe accessibility scan of five pages/states, the
+  swap-request lifecycle, broadcast notifications with a deep link, and the
+  system console. Still missing: offline/slow-network behavior and deeper
+  system-console coverage (team-role changes from `/system/teams/[teamId]`,
+  revoking a system admin).
 - axe covers structural/semantic a11y (labels, roles, contrast, landmarks) on
   the pages listed above, not the whole app. No VoiceOver/NVDA/TalkBack smoke
   suite, and no automated check that RTL _reading order_ (as opposed to
