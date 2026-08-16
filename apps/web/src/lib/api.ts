@@ -29,6 +29,7 @@ import {
   type PasskeyLoginOptionsRequest,
   type PasskeyVerifyRequest,
   type PasswordLoginRequest,
+  type PasswordChangeRequest,
   type ForgotPasswordRequest,
   type ResetPasswordRequest,
   type VerifyInviteCodeRequest,
@@ -204,6 +205,12 @@ export const api = {
     }),
   resetPassword: (body: ResetPasswordRequest) =>
     request<unknown>('/auth/password/reset', { method: 'POST', body, responseSchema: z.unknown() }),
+  passwordChange: (body: PasswordChangeRequest) =>
+    request<unknown>('/auth/password/change', {
+      method: 'POST',
+      body,
+      responseSchema: z.unknown(),
+    }),
 
   // Register an additional passkey for the *currently authenticated* user —
   // used right after `createTeam` (which issues a session with no invite

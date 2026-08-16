@@ -13,13 +13,13 @@ import type { ShellNavItem } from '@/components/ui/shell';
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
-/** Every authenticated user gets this destination (personal notification
- * preferences) regardless of role — shared the same way `adminNavItems`
- * below shares the admin-only destinations, so every page's nav stays in
- * sync without hand-copying the entry. */
+/** Every authenticated user gets this destination (the Settings hub, which
+ * fans out to Notifications and Account) regardless of role — shared the
+ * same way `adminNavItems` below shares the admin-only destinations, so
+ * every page's nav stays in sync without hand-copying the entry. */
 export function settingsNavItem(t: Translate, active = false): ShellNavItem {
   return {
-    href: '/settings/notifications',
+    href: '/settings',
     label: t('nav.settings'),
     icon: <Settings className="size-full" />,
     active,
