@@ -709,6 +709,7 @@ function TeamCard({ membership }: { membership: TeamMembership }) {
               onChange={(e) => setPhone(e.target.value)}
               className={`${inputClassName} flex-1`}
               placeholder="+15551234567"
+              dir="ltr"
             />
             <button type="submit" disabled={isSubmitting} className={`${buttonClassName} text-sm`}>
               {isSubmitting ? t('home.inviteSubmitting') : t('home.inviteSubmit')}

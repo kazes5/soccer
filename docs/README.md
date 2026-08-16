@@ -21,6 +21,9 @@ status and sequencing.
 - [Password and System Administration](./authentication-and-system-admin.md) -
   split-code onboarding, password/passkey assurance, feature flags, and the
   global administrator console.
+- [Operations Runbook](./operations-runbook.md) - failed scheduled jobs,
+  claim disputes, removed users, notification failures, incident response,
+  backup/restore, and pilot support.
 - [Flow Charts](./flow-charts.md) - current admin and user route flows shown as
   Mermaid diagrams.
 - [Architecture Decision Records](./adr/README.md) - short records of

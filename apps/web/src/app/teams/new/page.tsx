@@ -131,6 +131,7 @@ export default function CreateTeamPage() {
             onChange={(e) => setAdminPhone(e.target.value)}
             className={inputClassName}
             placeholder="+15551234567"
+            dir="ltr"
           />
         </Field>
         {error && <FormError>{error}</FormError>}

@@ -907,7 +907,7 @@ export const he: Record<MessageKey, string> = {
 
   'settingsSecurity.sectionTitle': 'אבטחת חשבון',
   'settingsSecurity.passkeyDescription':
-    'הוסיפו מפתח גישה לכניסה מהירה יותר — תזדקקו לאחד גם אם תמונו אי פעם למנהלי קבוצה.',
+    'הוסיפו מפתח גישה לכניסה מהירה יותר — תזדקקו לו גם אם תהפכו אי פעם למנהל/ת הקבוצה.',
   'settingsSecurity.addPasskeyButton': 'הוספת מפתח גישה',
   'settingsSecurity.addingPasskey': 'מגדיר…',
   'settingsSecurity.passkeyAdded': 'מפתח הגישה נוסף',

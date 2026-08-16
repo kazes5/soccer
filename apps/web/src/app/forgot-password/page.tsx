@@ -39,6 +39,7 @@ export default function ForgotPasswordPage() {
             <input
               required
               autoComplete="username"
+              dir="ltr"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
               className={inputClassName}
