@@ -354,6 +354,24 @@ export const en = {
   'settingsNotifications.save': 'Save',
   'settingsNotifications.saving': 'Saving…',
 
+  'settingsHub.title': 'Settings',
+  'settingsHub.notificationsCardTitle': 'Notifications',
+  'settingsHub.notificationsCardDescription':
+    'Quiet hours, reminder timing, and what you get notified about.',
+  'settingsHub.accountCardTitle': 'Account',
+  'settingsHub.accountCardDescription': 'Change your password and manage your passkey.',
+
+  'settingsAccount.title': 'Account',
+  'settingsAccount.passwordSectionTitle': 'Change password',
+  'settingsAccount.currentPasswordLabel': 'Current password',
+  'settingsAccount.newPasswordLabel': 'New password (15 characters or more)',
+  'settingsAccount.newPasswordConfirmationLabel': 'Confirm new password',
+  'settingsAccount.changePasswordButton': 'Change password',
+  'settingsAccount.changingPassword': 'Changing…',
+  'settingsAccount.passwordChanged': 'Password changed. Your other sessions were signed out.',
+  'settingsAccount.passwordAuthUnavailable':
+    "Password sign-in isn't turned on for this team yet, so there's no password to change.",
+
   'settingsSecurity.sectionTitle': 'Account security',
   'settingsSecurity.passkeyDescription':
     "Add a passkey for faster sign-in — you'll also need one if you're ever promoted to team admin.",
@@ -869,6 +887,23 @@ export const he: Record<MessageKey, string> = {
   'settingsNotifications.pushError': 'לא ניתן היה לעדכן את התראות הדחיפה במכשיר זה.',
   'settingsNotifications.save': 'שמירה',
   'settingsNotifications.saving': 'שומר…',
+
+  'settingsHub.title': 'הגדרות',
+  'settingsHub.notificationsCardTitle': 'התראות',
+  'settingsHub.notificationsCardDescription': 'שעות שקט, תזמון תזכורות, ועל מה תרצו לקבל התראות.',
+  'settingsHub.accountCardTitle': 'חשבון',
+  'settingsHub.accountCardDescription': 'שינוי הסיסמה וניהול מפתח הגישה שלכם.',
+
+  'settingsAccount.title': 'חשבון',
+  'settingsAccount.passwordSectionTitle': 'שינוי סיסמה',
+  'settingsAccount.currentPasswordLabel': 'סיסמה נוכחית',
+  'settingsAccount.newPasswordLabel': 'סיסמה חדשה (15 תווים לפחות)',
+  'settingsAccount.newPasswordConfirmationLabel': 'אימות הסיסמה החדשה',
+  'settingsAccount.changePasswordButton': 'שינוי סיסמה',
+  'settingsAccount.changingPassword': 'משנה…',
+  'settingsAccount.passwordChanged': 'הסיסמה שונתה. החיבורים האחרים שלכם נותקו.',
+  'settingsAccount.passwordAuthUnavailable':
+    'התחברות בסיסמה עדיין לא זמינה עבור קבוצה זו, ולכן אין סיסמה לשינוי.',
 
   'settingsSecurity.sectionTitle': 'אבטחת חשבון',
   'settingsSecurity.passkeyDescription':
