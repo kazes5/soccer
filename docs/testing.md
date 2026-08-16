@@ -134,7 +134,7 @@ Each Playwright spec that touches shift claiming targets a specific
 seeded parent/team/shift so that specs sharing a team (see
 `apps/e2e/fixtures/scenarios.ts`'s `claimShiftPosition`) don't race each
 other when `fullyParallel` runs them concurrently, and avoids claiming the
-chronologically *first* open shift unless it's the only spec on that team —
+chronologically _first_ open shift unless it's the only spec on that team —
 that shift can be dated today, and once real time crosses its start time
 mid-suite, Home correctly stops counting it as "upcoming" even though the
 claim itself still succeeded.
@@ -210,7 +210,7 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   offline/slow-network behavior.
 - axe covers structural/semantic a11y (labels, roles, contrast, landmarks) on
   the pages listed above, not the whole app. No VoiceOver/NVDA/TalkBack smoke
-  suite, and no automated check that RTL *reading order* (as opposed to
+  suite, and no automated check that RTL _reading order_ (as opposed to
   layout direction, which axe does catch via `html[dir]`) is correct.
 - No load test beyond the targeted ten-request shift claim race.
 - WebAuthn RP ID/origin spoofing isn't independently tested — that validation
