@@ -171,6 +171,19 @@ If API integration tests fail unexpectedly, confirm PostgreSQL is running and
 that `apps/api/.env` points at the intended database. The current test setup uses
 the configured database and is not an isolated disposable database per run.
 
+`pnpm test` does not include the Playwright E2E suite — it's slower (a real
+browser, two live servers) and lives separately in `apps/e2e`. Run it with:
+
+```bash
+pnpm docker:up
+pnpm test:e2e
+```
+
+This resets a dedicated `soccer_e2e` database and starts its own API/web
+servers on dedicated ports (see `apps/e2e/.env.example`), so it never
+interferes with a `pnpm dev` you already have running. See
+[Testing](./testing.md) for what it currently covers.
+
 ## Troubleshooting
 
 - `ECONNREFUSED` on port 5432 or 6379: run `pnpm docker:up` and wait for the

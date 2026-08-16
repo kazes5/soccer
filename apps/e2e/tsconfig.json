@@ -1,0 +1,4 @@
+{
+  "extends": "@soccer/config/typescript/node.json",
+  "include": ["tests", "fixtures", "scripts", "playwright.config.ts"]
+}

@@ -24,6 +24,11 @@ apps/api/generated/
 # Vercel
 .vercel/
 
+# Playwright
+apps/e2e/playwright-report/
+apps/e2e/test-results/
+apps/e2e/blob-report/
+
 # Turborepo (unused today, ignored defensively)
 .turbo/
 
