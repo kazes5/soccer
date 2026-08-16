@@ -1,0 +1,70 @@
+name: E2E
+
+# Manual only, not on every push/PR — Playwright is slower and more
+# infrastructure-heavy (two live servers, a disposable database, a real
+# browser) than the fast unit/integration suite `ci.yml` already runs on
+# every PR. Run this before a release or when touching a flow it covers.
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: soccer
+          POSTGRES_PASSWORD: soccer
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U soccer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_MAINTENANCE_DATABASE_URL: postgresql://soccer:soccer@localhost:5432/postgres
+      E2E_DATABASE_URL: postgresql://soccer:soccer@localhost:5432/soccer_e2e
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.20.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @soccer/e2e exec playwright install --with-deps chromium
+
+      - name: Reset and seed the E2E database
+        run: pnpm --filter @soccer/e2e run db:setup
+
+      - name: Run Playwright E2E suite
+        run: pnpm --filter @soccer/e2e run e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 14

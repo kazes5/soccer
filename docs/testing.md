@@ -4,20 +4,22 @@
 
 Tests are selected by boundary. Fast unit tests protect pure contracts and
 helpers; API integration tests exercise the real Fastify application and
-PostgreSQL; component tests exercise web behavior through React Testing Library.
-The repository does not currently claim full end-to-end, accessibility, load,
+PostgreSQL; component tests exercise web behavior through React Testing Library;
+a small Playwright suite exercises the real browser against real, live API and
+web servers. The repository does not currently claim full accessibility, load,
 or production-provider coverage.
 
 ## Test layers
 
-| Layer                | Location                               | Harness                                      | What it protects                                                                           |
-| -------------------- | -------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Shared contracts     | `packages/contracts/src/*.test.ts`     | Vitest and Zod                               | Valid and invalid request/response shapes and domain enums                                 |
-| i18n                 | `packages/i18n/src/index.test.ts`      | Vitest                                       | Locale switching, RTL direction, message lookup, and formatting helpers                    |
-| UI tokens            | `packages/ui-tokens/src/index.test.ts` | Vitest                                       | Token exports and semantic status/focus mappings                                           |
-| API integration      | `apps/api/test/*.test.ts`              | Vitest, Fastify `.inject()`, real PostgreSQL | Routes, authorization, transactions, cookies, audit effects, and conflicts                 |
-| API pure logic       | `apps/api/src/lib/*.test.ts`           | Vitest                                       | RRULE parsing and recurrence generation                                                    |
-| Web components/pages | `apps/web/src/**/*.test.tsx`           | Vitest, React Testing Library, jsdom         | Rendered states, user actions, API success/error handling, and localization shell behavior |
+| Layer                | Location                               | Harness                                                                | What it protects                                                                             |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Shared contracts     | `packages/contracts/src/*.test.ts`     | Vitest and Zod                                                         | Valid and invalid request/response shapes and domain enums                                   |
+| i18n                 | `packages/i18n/src/index.test.ts`      | Vitest                                                                 | Locale switching, RTL direction, message lookup, and formatting helpers                      |
+| UI tokens            | `packages/ui-tokens/src/index.test.ts` | Vitest                                                                 | Token exports and semantic status/focus mappings                                             |
+| API integration      | `apps/api/test/*.test.ts`              | Vitest, Fastify `.inject()`, real PostgreSQL                           | Routes, authorization, transactions, cookies, audit effects, and conflicts                   |
+| API pure logic       | `apps/api/src/lib/*.test.ts`           | Vitest                                                                 | RRULE parsing and recurrence generation                                                      |
+| Web components/pages | `apps/web/src/**/*.test.tsx`           | Vitest, React Testing Library, jsdom                                   | Rendered states, user actions, API success/error handling, and localization shell behavior   |
+| Browser E2E          | `apps/e2e/tests/*.spec.ts`             | Playwright, real Chromium, live API/web servers, a disposable database | Full-stack journeys through a real browser — no mocking, real HTTP, real WebAuthn ceremonies |
 
 The API's WebAuthn verifier is injected through `buildApp({ webauthnVerifier })`,
 so tests never need a real browser/authenticator to complete a passkey ceremony.
@@ -85,6 +87,19 @@ Web tests cover:
 - Dialogs, confirmation dialogs, icon buttons, status badges, tooltips, toasts,
   and keyboard-accessible team switching.
 
+## Covered E2E scenarios
+
+- The core parent journey, once in English and once in Hebrew/RTL: accept a
+  team invite (registering the required passkey via a Chrome DevTools Protocol
+  virtual authenticator — no real device needed), land on Home, claim an open
+  shift from the Schedule page, and see it reflected back on Home. Runs
+  against `apps/api/prisma/seed.ts`'s seeded demo teams on a disposable
+  database reset before every run (`apps/e2e/scripts/reset-database.ts`), not
+  the shared dev database.
+
+This is intentionally a narrow first slice, not full coverage — see "Planned
+coverage and known gaps" below for what it does not yet include.
+
 ## Verification commands
 
 Run the standard repository gate from the root:
@@ -117,14 +132,31 @@ pnpm --filter @soccer/i18n test
 CI runs formatting, Prisma validation/client generation, lint, typecheck,
 migrations, tests, and builds against PostgreSQL and Redis service containers.
 
+The Playwright suite is not part of that run — it's slower (real browser,
+two live servers) and lives in a separate, manually-triggered workflow
+(`.github/workflows/e2e.yml`, `workflow_dispatch` only). Run it locally with:
+
+```bash
+pnpm docker:up
+pnpm test:e2e
+```
+
+This resets a dedicated `soccer_e2e` database (see `apps/e2e/.env.example` to
+customize ports/URLs), starts real API and web dev servers on dedicated ports
+(3100/4100, so it never collides with a developer's own `pnpm dev`), and runs
+the suite against them.
+
 ## Planned coverage and known gaps
 
 These are intentionally deferred to Stage 6 or the relevant later stage in
 [PLAN.md](../PLAN.md):
 
 - No configured line/branch coverage thresholds or coverage report artifact.
-- No Playwright browser suite covering complete English/Hebrew, RTL, desktop,
-  mobile, keyboard, and accessibility journeys.
+- The Playwright suite (`apps/e2e`) covers one journey (invite acceptance
+  through claiming a shift) in English and Hebrew/RTL at one desktop
+  viewport. Still missing: admin flows, swaps, notifications, the system
+  console, mobile-browser viewports, keyboard-only navigation, deep links,
+  and offline/slow-network behavior.
 - No automated axe scan or VoiceOver/NVDA/TalkBack smoke suite.
 - No load test beyond the targeted ten-request shift claim race.
 - No production notification delivery test for browser push, SMS, email, or
