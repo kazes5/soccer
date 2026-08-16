@@ -54,6 +54,15 @@ records; the current setup is not a disposable database per test run.
 - Shift claim and release authorization, scheduled-session checks, version-gated
   state transitions, audit records, and a real ten-way concurrent claim race
   where one request wins and the other nine receive conflict responses.
+- Password hashing/validation policy (length bounds, common-password and
+  identifier-substring rejection, NFC normalization) and the dummy-hash/
+  real-hash Argon2 parameter parity the account-enumeration defense depends on.
+- Password recovery: enumeration-resistant `forgot` responses (including for a
+  passkey-only account), full reset round-trip with other-session revocation,
+  single-use/expiry/superseded-by-a-newer-request token rules, password-
+  strength validation on reset, and per-account/per-IP rate limiting.
+- Team and global audit-log immutability (no route can modify or delete an
+  entry, for anyone) and the global (`/system/audit-logs`) listing endpoint.
 
 ## Covered contract and web scenarios
 
@@ -96,6 +105,27 @@ Web tests cover:
   against `apps/api/prisma/seed.ts`'s seeded demo teams on a disposable
   database reset before every run (`apps/e2e/scripts/reset-database.ts`), not
   the shared dev database.
+- The same core journey again at a mobile-browser viewport (`mobile-chromium`
+  Playwright project, `Pixel 5` device profile), proving the responsive
+  layout — bottom nav instead of sidebar — actually carries a real user
+  through the flow, not just renders. Claims a different shift than the
+  desktop English journey (they share a team) to avoid a claim race between
+  parallel workers.
+- Admin team management: sign in as the seeded admin via the same invite/
+  passkey path parents use, invite a new parent by email, and promote an
+  existing seeded parent to admin through the real confirmation-dialog flow
+  (not a direct API call), verifying the dialog copy, the resulting toast,
+  and the updated role badge.
+- Keyboard-only operation of the login page: Tab through the identifier,
+  password, "Log in", and "Continue with passkey" controls in order and
+  activate the passkey button with Enter — no seeded account needed, since an
+  unrecognized identifier still proves the round trip via the server's
+  standard not-registered response.
+
+Each Playwright spec that touches shift claiming targets a specific
+seeded parent/team/shift so that specs sharing a team (see
+`apps/e2e/fixtures/scenarios.ts`'s `claimShiftPosition`) don't race each
+other when `fullyParallel` runs them concurrently.
 
 This is intentionally a narrow first slice, not full coverage — see "Planned
 coverage and known gaps" below for what it does not yet include.
@@ -110,6 +140,15 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+Two more checks aren't part of that gate (they're slower and their findings
+need human judgment, not a pass/fail worth blocking every commit on) but
+should run before a release and periodically otherwise:
+
+```bash
+pnpm run audit          # dependency vulnerability scan (pnpm audit)
+pnpm run secrets:scan   # secretlint across every tracked file
 ```
 
 For local API integration tests, start the service dependencies first:
@@ -152,13 +191,16 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 [PLAN.md](../PLAN.md):
 
 - No configured line/branch coverage thresholds or coverage report artifact.
-- The Playwright suite (`apps/e2e`) covers one journey (invite acceptance
-  through claiming a shift) in English and Hebrew/RTL at one desktop
-  viewport. Still missing: admin flows, swaps, notifications, the system
-  console, mobile-browser viewports, keyboard-only navigation, deep links,
-  and offline/slow-network behavior.
+- The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
+  English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
+  and keyboard-only login. Still missing: swaps, notifications, the system
+  console, deep links, and offline/slow-network behavior.
 - No automated axe scan or VoiceOver/NVDA/TalkBack smoke suite.
 - No load test beyond the targeted ten-request shift claim race.
+- WebAuthn RP ID/origin spoofing isn't independently tested — that validation
+  happens inside `@simplewebauthn/server`, which the test suite's
+  `FakeWebauthnVerifier` bypasses by design. Confidence rests on the upstream
+  library, not a test in this repo.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
 - No audit-reporting, AI, or native mobile tests because those features are not

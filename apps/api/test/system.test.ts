@@ -367,4 +367,64 @@ describe('system administrator routes', () => {
     });
     expect(stillWorks.statusCode).toBe(200);
   });
+
+  it('lists global audit entries for a system admin, denies everyone else, and has no route that can alter one', async () => {
+    const { user: actor, token } = await createUser({
+      name: 'Global Operator',
+      systemAdmin: true,
+      hasPasskey: true,
+    });
+    const { token: parentToken } = await createUser();
+    const entry = await app.prisma.systemAuditLog.create({
+      data: {
+        actorId: actor.id,
+        actionType: 'system_admin_granted',
+        targetEntity: 'user',
+        targetId: actor.id,
+        afterState: { systemRole: 'system_admin' },
+      },
+    });
+
+    const asSystemAdmin = await app.inject({
+      method: 'GET',
+      url: '/system/audit-logs',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(asSystemAdmin.statusCode).toBe(200);
+    expect(asSystemAdmin.json().entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: entry.id,
+          actorName: actor.name,
+          actionType: 'system_admin_granted',
+        }),
+      ]),
+    );
+
+    const asOrdinaryParent = await app.inject({
+      method: 'GET',
+      url: '/system/audit-logs',
+      headers: { authorization: `Bearer ${parentToken}` },
+    });
+    expect(asOrdinaryParent.statusCode).toBe(403);
+
+    // CLAUDE.md §5.1: the log is read-only by construction — no route exists
+    // to alter a global audit entry either, at any privilege level.
+    const patchAttempt = await app.inject({
+      method: 'PATCH',
+      url: `/system/audit-logs/${entry.id}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { actionType: 'tampered' },
+    });
+    const deleteAttempt = await app.inject({
+      method: 'DELETE',
+      url: `/system/audit-logs/${entry.id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(patchAttempt.statusCode).toBe(404);
+    expect(deleteAttempt.statusCode).toBe(404);
+    expect(await app.prisma.systemAuditLog.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(
+      entry,
+    );
+  });
 });

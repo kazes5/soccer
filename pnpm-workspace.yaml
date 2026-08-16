@@ -2,6 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Forces a patched nanoid regardless of what transitive dev-tooling deps
+# (postcss, via next/vite/tailwind) would otherwise resolve — GHSA-2v37-7h3g-55p8,
+# fixed upstream in 3.3.18. Not reachable from any of our own code (postcss's
+# internal usage never passes size:0), but free to patch, so patch it.
+overrides:
+  nanoid: '>=3.3.18'
+
 allowBuilds:
   '@prisma/engines': true
   argon2: true

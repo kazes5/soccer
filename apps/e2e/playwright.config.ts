@@ -19,7 +19,22 @@ export default defineConfig({
     baseURL: webBaseURL,
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // "mobile-chromium" is scoped to *.mobile.spec.ts by file name (not just
+  // added as a second full run of every test) so a responsive-viewport spec
+  // and its desktop counterpart never both claim the same seeded invite row
+  // when Playwright runs projects concurrently (fullyParallel: true above).
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: /\.mobile\.spec\.ts$/,
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 5'] },
+      testMatch: /\.mobile\.spec\.ts$/,
+    },
+  ],
   // Dedicated ports so this never collides with a developer's own `pnpm dev`
   // (default 3000/4000), and a dedicated database reset by `db:setup` before
   // the suite runs (see scripts/reset-database.ts) — not the shared dev DB.

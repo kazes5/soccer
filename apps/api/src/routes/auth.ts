@@ -159,10 +159,56 @@ export default async function authRoutes(app: FastifyInstance) {
     requirePasswordAuth(app);
     const body = forgotPasswordRequestSchema.parse(request.body);
     const normalized = normalizeLoginIdentifier(body.identifier);
-    const user = await app.prisma.user.findFirst({
-      where: { isActive: true, ...normalized },
-      include: { passwordCredential: true },
+    // Every response here looks identical regardless of whether the account
+    // exists (enumeration resistance — see below), so unlike login there's no
+    // "failure" to count. This instead bounds request *volume*: without it,
+    // this endpoint could be used to spam a victim's email/SMS or exhaust the
+    // recovery provider's send quota. A distinct `password-reset:` prefix on
+    // both bucket keys keeps this counter from mixing with login's own
+    // per-account/per-IP failure counters, which share the same table.
+    const identifierHash = hashSecret(
+      `password-reset:${normalized.normalizedEmail ?? normalized.normalizedPhone ?? body.identifier}`,
+    );
+    const requestIpBucket = `password-reset:${request.ip}`;
+    const { user, limited } = await app.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ locked: number }>>`
+        SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${`password-reset-ip:${request.ip}`}, 0))
+      `;
+      await tx.$queryRaw<Array<{ locked: number }>>`
+        SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${`password-reset-account:${identifierHash}`}, 0))
+      `;
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const [accountRequests, ipRequests] = await Promise.all([
+        tx.passwordLoginAttempt.count({
+          where: { identifierHash, createdAt: { gte: oneHourAgo } },
+        }),
+        tx.passwordLoginAttempt.count({
+          where: { requestIp: requestIpBucket, createdAt: { gte: oneHourAgo } },
+        }),
+      ]);
+      if (
+        accountRequests >= env.PASSWORD_RESET_MAX_REQUESTS_PER_ACCOUNT_PER_HOUR ||
+        ipRequests >= env.PASSWORD_RESET_MAX_REQUESTS_PER_IP_PER_HOUR
+      ) {
+        return { user: null, limited: true };
+      }
+      const matchedUser = await tx.user.findFirst({
+        where: { isActive: true, ...normalized },
+        include: { passwordCredential: true },
+      });
+      await tx.passwordLoginAttempt.create({
+        data: {
+          userId: matchedUser?.id,
+          identifierHash,
+          requestIp: requestIpBucket,
+          succeeded: true,
+        },
+      });
+      return { user: matchedUser, limited: false };
     });
+    if (limited) {
+      throw new HttpError(429, 'Too many recovery requests. Try again later.');
+    }
     if (user?.passwordCredential && app.passwordRecoveryProvider.isConfigured) {
       const token = generateSessionToken();
       await app.prisma.$transaction(async (tx) => {

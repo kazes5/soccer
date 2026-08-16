@@ -19,6 +19,13 @@ const envSchema = z.object({
   PASSWORD_LOGIN_MAX_FAILURES_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(50),
   INVITE_CODE_MAX_FAILURES_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(50),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+  // Unlike login, every /auth/password/forgot request looks identical to the caller
+  // regardless of whether the account exists (enumeration resistance) — so there's no
+  // "failure" to count. This bounds request *volume* instead, since an unthrottled
+  // endpoint could otherwise be used to spam a victim's email/SMS or exhaust the
+  // recovery provider's send quota.
+  PASSWORD_RESET_MAX_REQUESTS_PER_ACCOUNT_PER_HOUR: z.coerce.number().int().positive().default(5),
+  PASSWORD_RESET_MAX_REQUESTS_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(20),
   DEFAULT_PHONE_REGION: z.string().length(2).default('IL'),
   PRIVILEGED_ASSURANCE_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(15),
   INVITE_TTL_DAYS: z.coerce.number().int().positive().default(7),
