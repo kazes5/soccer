@@ -25,6 +25,38 @@ password onboarding for that contact reactivates the matching account in place
 (fresh credential, fresh membership, `invite_accepted_for_recovery` audit entry)
 rather than creating a colliding duplicate or blocking the parent out entirely.
 
+## Password recovery
+
+`POST /auth/password/forgot` (identifier only) and `POST /auth/password/reset`
+(token + new password) sit behind `PASSWORD_AUTH_ENABLED` like the rest of
+password auth, and additionally require a configured
+`PasswordRecoveryProvider` (`app.passwordRecoveryProvider.isConfigured`) — with
+none configured, `forgot` still returns its generic response but sends nothing
+and creates no token.
+
+`forgot` always returns the same generic response regardless of whether the
+identifier matches an account, matches an account with no password credential
+(legacy passkey-only), or matches nothing at all — the response body is never
+an enumeration oracle. Request _volume_ is bounded instead (there's no
+per-account "failure" to count when every response looks the same):
+`PASSWORD_RESET_MAX_REQUESTS_PER_ACCOUNT_PER_HOUR` (default 5) and
+`_PER_IP_PER_HOUR` (default 20), tracked in the same table password-login
+throttling uses, under a distinct bucket prefix so the two never share a
+counter.
+
+Reset tokens are single-use, expire after `PASSWORD_RESET_TTL_MINUTES`
+(default 30), and a fresh `forgot` request invalidates any earlier
+still-pending token for that account. A successful reset revokes every other
+active session for that user (CLAUDE.md §9.1) and writes a
+`password_reset` global audit entry.
+
+Password hashing uses Argon2id at m=32768 (32 MiB), t=2, p=1 — above OWASP's
+baseline recommendation, chosen after benchmarking showed the baseline itself
+already hashes in ~14ms on representative hardware, leaving comfortable
+headroom to raise memory cost (Argon2's main defense against custom
+ASIC/GPU cracking) without a perceptible login-latency cost. See
+`apps/api/src/lib/passwords.ts` for the measurements this was based on.
+
 ## Session assurance
 
 Each session records `password`, `passkey`, or the narrowly scoped initial

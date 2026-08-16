@@ -203,4 +203,28 @@ describe('team audit logs', () => {
     expect(response.body).toContain("'=WEBSERVICE");
     expect(response.body).not.toContain('member_promoted');
   });
+
+  it('has no route that can modify or delete an audit log entry, even for an admin', async () => {
+    const { adminId, adminToken, teamId } = await setUpTeam();
+    const { oldest: entry } = await seedLogs(teamId, adminId);
+
+    const patchAttempt = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/audit-logs/${entry.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { actionType: 'tampered' },
+    });
+    const deleteAttempt = await app.inject({
+      method: 'DELETE',
+      url: `/teams/${teamId}/audit-logs/${entry.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    // CLAUDE.md §5.1: the log is read-only by construction — no route exists
+    // to alter it, for anyone, at any privilege level. A 404 here (route not
+    // found) is the desired outcome, not a 403 (route exists but denied).
+    expect(patchAttempt.statusCode).toBe(404);
+    expect(deleteAttempt.statusCode).toBe(404);
+    expect(await app.prisma.auditLog.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(entry);
+  });
 });

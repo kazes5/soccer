@@ -54,6 +54,15 @@ records; the current setup is not a disposable database per test run.
 - Shift claim and release authorization, scheduled-session checks, version-gated
   state transitions, audit records, and a real ten-way concurrent claim race
   where one request wins and the other nine receive conflict responses.
+- Password hashing/validation policy (length bounds, common-password and
+  identifier-substring rejection, NFC normalization) and the dummy-hash/
+  real-hash Argon2 parameter parity the account-enumeration defense depends on.
+- Password recovery: enumeration-resistant `forgot` responses (including for a
+  passkey-only account), full reset round-trip with other-session revocation,
+  single-use/expiry/superseded-by-a-newer-request token rules, password-
+  strength validation on reset, and per-account/per-IP rate limiting.
+- Team and global audit-log immutability (no route can modify or delete an
+  entry, for anyone) and the global (`/system/audit-logs`) listing endpoint.
 
 ## Covered contract and web scenarios
 
@@ -112,6 +121,15 @@ pnpm test
 pnpm build
 ```
 
+Two more checks aren't part of that gate (they're slower and their findings
+need human judgment, not a pass/fail worth blocking every commit on) but
+should run before a release and periodically otherwise:
+
+```bash
+pnpm run audit          # dependency vulnerability scan (pnpm audit)
+pnpm run secrets:scan   # secretlint across every tracked file
+```
+
 For local API integration tests, start the service dependencies first:
 
 ```bash
@@ -159,6 +177,10 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   and offline/slow-network behavior.
 - No automated axe scan or VoiceOver/NVDA/TalkBack smoke suite.
 - No load test beyond the targeted ten-request shift claim race.
+- WebAuthn RP ID/origin spoofing isn't independently tested — that validation
+  happens inside `@simplewebauthn/server`, which the test suite's
+  `FakeWebauthnVerifier` bypasses by design. Confidence rests on the upstream
+  library, not a test in this repo.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
 - No audit-reporting, AI, or native mobile tests because those features are not
