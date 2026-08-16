@@ -105,6 +105,27 @@ Web tests cover:
   against `apps/api/prisma/seed.ts`'s seeded demo teams on a disposable
   database reset before every run (`apps/e2e/scripts/reset-database.ts`), not
   the shared dev database.
+- The same core journey again at a mobile-browser viewport (`mobile-chromium`
+  Playwright project, `Pixel 5` device profile), proving the responsive
+  layout — bottom nav instead of sidebar — actually carries a real user
+  through the flow, not just renders. Claims a different shift than the
+  desktop English journey (they share a team) to avoid a claim race between
+  parallel workers.
+- Admin team management: sign in as the seeded admin via the same invite/
+  passkey path parents use, invite a new parent by email, and promote an
+  existing seeded parent to admin through the real confirmation-dialog flow
+  (not a direct API call), verifying the dialog copy, the resulting toast,
+  and the updated role badge.
+- Keyboard-only operation of the login page: Tab through the identifier,
+  password, "Log in", and "Continue with passkey" controls in order and
+  activate the passkey button with Enter — no seeded account needed, since an
+  unrecognized identifier still proves the round trip via the server's
+  standard not-registered response.
+
+Each Playwright spec that touches shift claiming targets a specific
+seeded parent/team/shift so that specs sharing a team (see
+`apps/e2e/fixtures/scenarios.ts`'s `claimShiftPosition`) don't race each
+other when `fullyParallel` runs them concurrently.
 
 This is intentionally a narrow first slice, not full coverage — see "Planned
 coverage and known gaps" below for what it does not yet include.
@@ -170,11 +191,10 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 [PLAN.md](../PLAN.md):
 
 - No configured line/branch coverage thresholds or coverage report artifact.
-- The Playwright suite (`apps/e2e`) covers one journey (invite acceptance
-  through claiming a shift) in English and Hebrew/RTL at one desktop
-  viewport. Still missing: admin flows, swaps, notifications, the system
-  console, mobile-browser viewports, keyboard-only navigation, deep links,
-  and offline/slow-network behavior.
+- The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
+  English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
+  and keyboard-only login. Still missing: swaps, notifications, the system
+  console, deep links, and offline/slow-network behavior.
 - No automated axe scan or VoiceOver/NVDA/TalkBack smoke suite.
 - No load test beyond the targeted ten-request shift claim race.
 - WebAuthn RP ID/origin spoofing isn't independently tested — that validation
