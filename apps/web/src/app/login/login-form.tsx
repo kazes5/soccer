@@ -96,6 +96,7 @@ export default function LoginForm() {
           onChange={(e) => setIdentifier(e.target.value)}
           className={inputClassName}
           placeholder="+15551234567"
+          dir="ltr"
           autoComplete="username"
         />
       </Field>
