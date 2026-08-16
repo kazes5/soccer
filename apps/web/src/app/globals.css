@@ -19,8 +19,13 @@
   --color-status-mine-on: #146239;
   --color-status-mine-contrast: #ffffff;
 
-  /* open / urgent — coral */
-  --color-status-open: #e1493b;
+  /* open / urgent — coral. Darkened from #e1493b (2026-08-16): that value
+     paired with white text/icons (status-open-contrast, e.g. danger
+     buttons, error toasts) only reached a 4.02:1 contrast ratio, short of
+     WCAG AA's 4.5:1 for normal-size text — caught by the Stage 6
+     accessibility gate (apps/e2e/tests/accessibility.spec.ts). This shade
+     reaches ~4.86:1 against white. */
+  --color-status-open: #cc3f2f;
   --color-status-open-subtle: #fbe9e7;
   --color-status-open-on: #b53326;
   --color-status-open-contrast: #ffffff;

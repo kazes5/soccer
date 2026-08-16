@@ -12,14 +12,22 @@ export interface GoldenPathScenario extends InviteScenario {
   claimButtonName: string;
   mineStatusText: string;
   /**
-   * Which open shift on the Schedule page to claim. Two scenarios that
-   * share a team (the English desktop and mobile-viewport journeys both
-   * run against U-12 Wildcats) must claim different shifts, or Playwright's
-   * parallel workers race to claim the same one and the loser's assertion
-   * fails. Scenarios on their own team (e.g. the Hebrew journey) can leave
-   * this at the default.
+   * Which open shift on the Schedule page to claim.
+   *
+   * Avoid 'first': it's the chronologically nearest shift, which can be a
+   * session dated *today* — once real time crosses its start time mid-suite,
+   * the claim still succeeds but Home correctly stops counting it as
+   * "upcoming," failing the final assertion. 'last' (and 'secondToLast') are
+   * always safely in the future.
+   *
+   * Two scenarios that share a team (the English desktop and mobile-viewport
+   * journeys both run against U-12 Wildcats) must also claim *different*
+   * shifts, or Playwright's parallel workers race to claim the same one and
+   * the loser's assertion fails — hence three distinct positions rather than
+   * just first/last. Scenarios alone on their team (e.g. the Hebrew journey)
+   * can use 'last'.
    */
-  claimShiftPosition?: 'first' | 'last';
+  claimShiftPosition?: 'first' | 'last' | 'secondToLast';
 }
 
 /**
@@ -94,7 +102,11 @@ export async function acceptInviteAndClaimShift(
 
   const claimButtons = page.getByRole('button', { name: scenario.claimButtonName });
   const claimButton =
-    scenario.claimShiftPosition === 'last' ? claimButtons.last() : claimButtons.first();
+    scenario.claimShiftPosition === 'secondToLast'
+      ? claimButtons.nth((await claimButtons.count()) - 2)
+      : scenario.claimShiftPosition === 'last'
+        ? claimButtons.last()
+        : claimButtons.first();
   await claimButton.click();
   await expect(page.getByText(scenario.mineStatusText).first()).toBeVisible();
 
