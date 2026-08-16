@@ -18,6 +18,10 @@ const scenarios: GoldenPathScenario[] = [
     parentName: 'Avi Levi',
     claimButtonName: 'Claim',
     mineStatusText: 'You',
+    // Not 'first' (see claimShiftPosition's doc comment) and not 'last'
+    // either, since golden-path.mobile.spec.ts shares this team and already
+    // claims 'last'.
+    claimShiftPosition: 'secondToLast',
   },
   {
     locale: 'he',
@@ -26,6 +30,7 @@ const scenarios: GoldenPathScenario[] = [
     parentName: 'אבי לוי',
     claimButtonName: 'אני אנהג/ת',
     mineStatusText: 'שלכם',
+    claimShiftPosition: 'last',
   },
 ];
 

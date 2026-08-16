@@ -121,11 +121,23 @@ Web tests cover:
   activate the passkey button with Enter — no seeded account needed, since an
   unrecognized identifier still proves the round trip via the server's
   standard not-registered response.
+- Automated accessibility scans (`@axe-core/playwright`) of the login page,
+  an invite preview, the full parent journey (Home and Schedule, EN+HE), and
+  the admin members page (Hebrew) — zero violations required. Caught one real
+  bug: the shared "danger"/"open" status color failed WCAG AA contrast
+  (4.02:1 against white, need 4.5:1) — fixed in `globals.css`. Each scan
+  waits for the page's own `h1` before running, since every authenticated
+  page renders `null` for one tick while its `api.me()` call is in flight,
+  and axe would otherwise flag the landmark/heading that's about to exist.
 
 Each Playwright spec that touches shift claiming targets a specific
 seeded parent/team/shift so that specs sharing a team (see
 `apps/e2e/fixtures/scenarios.ts`'s `claimShiftPosition`) don't race each
-other when `fullyParallel` runs them concurrently.
+other when `fullyParallel` runs them concurrently, and avoids claiming the
+chronologically *first* open shift unless it's the only spec on that team —
+that shift can be dated today, and once real time crosses its start time
+mid-suite, Home correctly stops counting it as "upcoming" even though the
+claim itself still succeeded.
 
 This is intentionally a narrow first slice, not full coverage — see "Planned
 coverage and known gaps" below for what it does not yet include.
@@ -193,9 +205,13 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 - No configured line/branch coverage thresholds or coverage report artifact.
 - The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
   English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
-  and keyboard-only login. Still missing: swaps, notifications, the system
-  console, deep links, and offline/slow-network behavior.
-- No automated axe scan or VoiceOver/NVDA/TalkBack smoke suite.
+  keyboard-only login, and an axe accessibility scan of five pages/states.
+  Still missing: swaps, notifications, the system console, deep links, and
+  offline/slow-network behavior.
+- axe covers structural/semantic a11y (labels, roles, contrast, landmarks) on
+  the pages listed above, not the whole app. No VoiceOver/NVDA/TalkBack smoke
+  suite, and no automated check that RTL *reading order* (as opposed to
+  layout direction, which axe does catch via `html[dir]`) is correct.
 - No load test beyond the targeted ten-request shift claim race.
 - WebAuthn RP ID/origin spoofing isn't independently tested — that validation
   happens inside `@simplewebauthn/server`, which the test suite's

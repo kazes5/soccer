@@ -19,6 +19,11 @@ export default defineConfig({
     baseURL: webBaseURL,
     trace: 'on-first-retry',
   },
+  // Default 5s is tight once enough specs run concurrently against real dev
+  // servers (`next dev`, a single API process) rather than a production
+  // build — occasional slow responses under load are the server being
+  // real, not the app being broken.
+  expect: { timeout: 10_000 },
   // "mobile-chromium" is scoped to *.mobile.spec.ts by file name (not just
   // added as a second full run of every test) so a responsive-viewport spec
   // and its desktop counterpart never both claim the same seeded invite row
