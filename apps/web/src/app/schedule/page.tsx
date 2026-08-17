@@ -246,8 +246,26 @@ function ScheduleSessions({
 
   // Reconnecting refetches canonical state rather than trusting whatever was
   // last in memory — a shift claimed/released by someone else while this
-  // tab was offline must not keep showing as available/held.
-  const isOnline = useOnlineStatus(reload);
+  // tab was offline must not keep showing as available/held. Deliberately
+  // not `reload` (which sets `loadState` to 'loading' first, blanking the
+  // whole page to a spinner) — the offline banner already told the user
+  // data might be stale; a background refresh should update it quietly,
+  // not replace the cached view they were just looking at. A failed
+  // refresh here is silently ignored for the same reason: keep showing
+  // what's cached rather than flipping to a full error state over what's
+  // likely still a shaky connection.
+  const refreshSilently = useCallback(() => {
+    fetchAll()
+      .then(([sessionsRes, playersRes, rosterRes]) => {
+        setSessions(sessionsRes.sessions);
+        setPlayers(playersRes.players);
+        setRoster(rosterRes.members);
+      })
+      .catch(() => {
+        // See comment above.
+      });
+  }, [fetchAll]);
+  const isOnline = useOnlineStatus(refreshSilently);
 
   const playersById = useMemo(
     () => new Map((players ?? []).map((player) => [player.id, player.name])),
@@ -533,12 +551,14 @@ function SessionCard({
               <IconButton
                 label={t('schedule.editSessionAriaLabel', { date: formatted })}
                 icon={<Pencil className="size-4" aria-hidden="true" />}
+                disabled={!isOnline}
                 onClick={() => onEdit(practiceSession)}
               />
               <IconButton
                 label={t('schedule.cancelSessionAriaLabel', { date: formatted })}
                 icon={<Ban className="size-4" aria-hidden="true" />}
                 variant="danger"
+                disabled={!isOnline}
                 onClick={() => onCancelRequest(practiceSession)}
               />
             </>
@@ -595,6 +615,7 @@ function SessionCard({
                   <IconButton
                     label={t('schedule.managePlayersAriaLabel', { point: pointLabel })}
                     icon={<Users className="size-4" aria-hidden="true" />}
+                    disabled={!isOnline}
                     onClick={() =>
                       onManagePlayers({
                         session: practiceSession,

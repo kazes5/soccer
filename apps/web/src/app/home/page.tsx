@@ -303,11 +303,18 @@ function HomeWorkspace({
   // Reconnecting refetches every widget's canonical state rather than
   // trusting whatever was last in memory — a shift/swap another parent
   // changed while this tab was offline must not keep showing stale status.
+  // Deliberately not `reloadSessions` (which sets `sessionsState` to
+  // 'loading' first, blanking the whole workspace to a spinner) — the
+  // offline banner already told the user data might be stale; a background
+  // refresh should update it quietly. A failed refresh here is silently
+  // ignored for the same reason: keep showing what's cached rather than
+  // flipping widgets to an error state over what's likely still a shaky
+  // connection.
   const handleReconnect = useCallback(() => {
-    reloadSessions();
-    loadStats().catch(() => setStatsState('error'));
-    loadPendingSwaps().catch(() => setPendingSwapsState('error'));
-  }, [reloadSessions, loadStats, loadPendingSwaps]);
+    loadSessions().catch(() => {});
+    loadStats().catch(() => {});
+    loadPendingSwaps().catch(() => {});
+  }, [loadSessions, loadStats, loadPendingSwaps]);
   const isOnline = useOnlineStatus(handleReconnect);
 
   async function handleClaim(shiftId: string) {
