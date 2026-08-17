@@ -28,6 +28,13 @@ async function expectNoViolations(page: Page) {
     // nor third-party icon SVGs (lucide-react, decorative, aria-hidden) are
     // real content to audit.
     .exclude('script')
+    // `target-size` (WCAG 2.2 AA, 2.5.8) is off by default — axe only runs
+    // WCAG 2.1 rules unless asked. Its 24px floor is lower than CLAUDE.md
+    // §3.8's 44pt/48dp touch-target requirement, so passing this doesn't by
+    // itself prove that stricter bar; it's a genuine automated check for
+    // truly-too-small targets on top of the manual spot-checks already done
+    // (Stage 2's design-tokens checkpoint), not a full replacement for them.
+    .options({ rules: { 'target-size': { enabled: true } } })
     .analyze();
   expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
 }

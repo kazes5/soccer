@@ -266,9 +266,12 @@ real API and worker processes on dedicated ports, and runs three scenarios
 (`apps/load/src/scenarios/*.ts`) against them: schedule reads (`autocannon`),
 distinct-shift claim traffic (a custom concurrency harness), and notification
 fan-out (50 real SSE connections, measuring actual delivery latency).
-Provisional per-scenario budgets live in `apps/load/src/config.ts`. Runs
-against local dev hardware — this project has no staging environment — so
-treat results as a relative signal, not an absolute one.
+Provisional per-scenario budgets live in `apps/load/src/config.ts`. The
+API/worker run as plain local processes against the shared `docker compose`
+Postgres/Redis — this project's own standing definition of "staging" (Stage
+1, 2026-08-10 decision) — but it's still local dev hardware, not a
+separately provisioned or higher-capacity environment, so treat results as
+a relative signal, not an absolute one.
 
 ## Planned coverage and known gaps
 
@@ -283,14 +286,24 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   reconnect refetch, on both Home and Schedule). Still missing: deeper
   system-console coverage (team-role changes from `/system/teams/[teamId]`,
   revoking a system admin).
-- axe covers structural/semantic a11y (labels, roles, contrast, landmarks) on
-  the pages listed above, not the whole app. No VoiceOver/NVDA/TalkBack smoke
-  suite, and no automated check that RTL _reading order_ (as opposed to
-  layout direction, which axe does catch via `html[dir]`) is correct.
+- axe covers structural/semantic a11y (labels, roles, contrast, landmarks,
+  and — as of 2026-08-17 — WCAG 2.2's `target-size` rule, a 24px floor
+  lower than CLAUDE.md §3.8's 44pt/48dp touch-target requirement, so
+  passing it doesn't by itself prove that stricter bar) on the pages
+  listed above, not the whole app. `apps/e2e/tests/rtl-reading-order.mobile.spec.ts`
+  checks that the one horizontally-arranged multi-item sequence in the app
+  (the mobile bottom nav) actually renders in right-to-left visual order in
+  Hebrew, not just that `dir="rtl"` is set (axe already caught that half).
+  No VoiceOver/NVDA/TalkBack smoke suite — genuinely can't be automated in
+  this environment (no scriptable access to macOS VoiceOver, no Windows for
+  NVDA, no Android emulator with TalkBack available to the agent that built
+  this); needs a real device pass before pilot, not more code.
 - `pnpm test:load` (`apps/load`) covers schedule reads, distinct-shift claim
-  traffic, and notification fan-out at 120 seeded team members — but only
-  against local dev hardware (no staging environment exists for this
-  project), and its response budgets are provisional, not yet agreed with a
+  traffic, and notification fan-out at 120 seeded team members — against
+  the shared `docker compose` Postgres/Redis (this project's own standing
+  "staging" definition, Stage 1, 2026-08-10), but still local dev hardware
+  rather than a separately provisioned environment, and its response
+  budgets are provisional, not yet agreed with a
   product/ops owner.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
