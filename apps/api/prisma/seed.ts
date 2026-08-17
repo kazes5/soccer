@@ -354,7 +354,7 @@ async function seedHebrewDemoData() {
         phone: '+972506789012',
         email: 'liat.he@example.test',
       },
-      // Dedicated to apps/e2e/tests/rtl-reading-order.spec.ts — every other
+      // Dedicated to apps/e2e/tests/rtl-reading-order.mobile.spec.ts — every other
       // seeded Hebrew parent is already claimed by an existing spec.
       {
         name: 'דניאל אזולאי',

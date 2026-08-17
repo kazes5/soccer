@@ -183,9 +183,10 @@ approach, not project-specific tooling that needed inventing.
 
 ### Failed notification worker and late swap-expiry recovery
 
-Both **rehearsed for real 2026-08-17** against a disposable database with
-the real API and worker processes (not staging — no such environment
-exists for this project, same caveat as everywhere else in Stage 6):
+Both **rehearsed for real 2026-08-17** against a disposable database on
+the shared `docker compose` Postgres/Redis, with the real API and worker
+processes — this project's own standing definition of "staging" (Stage 1,
+2026-08-10 decision), not a separately hosted environment:
 
 - **Worker down when an event is created**: started the API with the
   worker _not_ running, claimed a shift (creating a real, unprocessed
