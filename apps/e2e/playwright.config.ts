@@ -53,6 +53,12 @@ export default defineConfig({
         PORT: String(apiPort),
         DATABASE_URL: databaseUrl,
         WEB_ORIGIN: webBaseURL,
+        // Off by default in production until a real pilot enables it
+        // (CLAUDE.md §8.2 decision 8) — on here so system-console.spec.ts
+        // can reach `/system/*` at all; the bootstrap procedure it exercises
+        // (apps/e2e/fixtures/system-admin.ts) is gated independently by
+        // requiring the target to already hold a passkey.
+        SYSTEM_ADMIN_ENABLED: 'true',
       },
     },
     {
@@ -62,6 +68,21 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: {
         NEXT_PUBLIC_API_URL: apiBaseURL,
+      },
+    },
+    // Notification delivery (in-app center, SSE fan-out) runs through the
+    // transactional outbox and this separate worker process, same as
+    // production — without it, shift/swap/admin actions never produce a
+    // `UserNotification` row or an SSE push, and every notifications.spec.ts
+    // assertion hangs until timeout. No HTTP surface to health-check, so
+    // readiness is the worker's own startup log line instead of a URL.
+    {
+      command: 'pnpm exec tsx src/worker/index.ts',
+      cwd: '../api',
+      reuseExistingServer: !process.env.CI,
+      wait: { stdout: /Listening for outbox events and scheduled tasks/ },
+      env: {
+        DATABASE_URL: databaseUrl,
       },
     },
   ],
