@@ -23,6 +23,7 @@ import { useLocale } from '@/components/locale-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { IconButton } from '@/components/ui/icon-button';
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -37,6 +38,7 @@ import {
 import { ApiError, api } from '@/lib/api';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
+import { useOnlineStatus } from '@/lib/use-online-status';
 
 interface UpcomingShift {
   session: PracticeSession;
@@ -298,6 +300,16 @@ function HomeWorkspace({
     loadSessions().catch(() => setSessionsState('error'));
   }, [loadSessions]);
 
+  // Reconnecting refetches every widget's canonical state rather than
+  // trusting whatever was last in memory — a shift/swap another parent
+  // changed while this tab was offline must not keep showing stale status.
+  const handleReconnect = useCallback(() => {
+    reloadSessions();
+    loadStats().catch(() => setStatsState('error'));
+    loadPendingSwaps().catch(() => setPendingSwapsState('error'));
+  }, [reloadSessions, loadStats, loadPendingSwaps]);
+  const isOnline = useOnlineStatus(handleReconnect);
+
   async function handleClaim(shiftId: string) {
     setPendingShiftId(shiftId);
     try {
@@ -410,6 +422,7 @@ function HomeWorkspace({
 
   return (
     <div className="flex flex-col gap-6">
+      {!isOnline && <OfflineBanner />}
       <div className="flex flex-wrap gap-2">
         <StatusBadge
           tone="mine"
@@ -436,6 +449,7 @@ function HomeWorkspace({
                 actionLabel={t('schedule.release')}
                 actionPendingLabel={t('schedule.releasing')}
                 isPending={pendingShiftId === entry.point.shift.id}
+                isOnline={isOnline}
                 onAction={() => handleRelease(entry.point.shift.id)}
               />
             ))}
@@ -462,6 +476,7 @@ function HomeWorkspace({
                   actionLabel={t('schedule.claim')}
                   actionPendingLabel={t('schedule.claiming')}
                   isPending={pendingShiftId === entry.point.shift.id}
+                  isOnline={isOnline}
                   onAction={() => handleClaim(entry.point.shift.id)}
                 />
               ))}
@@ -497,6 +512,7 @@ function HomeWorkspace({
                     locale={locale}
                     timeZone={timeZone}
                     isPending={pendingSwapActionId === swapRequest.id}
+                    isOnline={isOnline}
                     onAccept={() => handleAcceptSwap(swapRequest.id)}
                     onDecline={() => handleDeclineSwap(swapRequest.id)}
                   />
@@ -557,6 +573,7 @@ function SwapRequestRow({
   locale,
   timeZone,
   isPending,
+  isOnline,
   onAccept,
   onDecline,
 }: {
@@ -564,6 +581,7 @@ function SwapRequestRow({
   locale: Locale;
   timeZone: string;
   isPending: boolean;
+  isOnline: boolean;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -585,7 +603,7 @@ function SwapRequestRow({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || !isOnline}
           className={`${secondaryButtonClassName} text-sm`}
           onClick={onDecline}
         >
@@ -593,7 +611,7 @@ function SwapRequestRow({
         </button>
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || !isOnline}
           className={`${buttonClassName} text-sm`}
           onClick={onAccept}
         >
@@ -612,6 +630,7 @@ function ShiftRow({
   actionLabel,
   actionPendingLabel,
   isPending,
+  isOnline,
   onAction,
 }: {
   entry: UpcomingShift;
@@ -621,6 +640,7 @@ function ShiftRow({
   actionLabel: string;
   actionPendingLabel: string;
   isPending: boolean;
+  isOnline: boolean;
   onAction: () => void;
 }) {
   const { t } = useLocale();
@@ -640,7 +660,7 @@ function ShiftRow({
       </div>
       <button
         type="button"
-        disabled={isPending}
+        disabled={isPending || !isOnline}
         className={`${variant === 'primary' ? buttonClassName : secondaryButtonClassName} text-sm`}
         onClick={onAction}
       >

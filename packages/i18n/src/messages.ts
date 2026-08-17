@@ -8,6 +8,8 @@ export const en = {
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.retry': 'Try again',
+  'common.offlineBanner':
+    "You're offline — showing the last loaded data. Actions are disabled until you're back online.",
 
   'nav.home': 'Home',
   'nav.schedule': 'Schedule',
@@ -549,6 +551,8 @@ export const he: Record<MessageKey, string> = {
   'common.close': 'סגירה',
   'common.cancel': 'ביטול',
   'common.retry': 'ניסיון נוסף',
+  'common.offlineBanner':
+    'אין חיבור לאינטרנט — מוצגים הנתונים האחרונים שנטענו. הפעולות מושבתות עד לחזרת החיבור.',
 
   'nav.home': 'בית',
   'nav.schedule': 'לוח זמנים',

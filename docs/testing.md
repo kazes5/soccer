@@ -278,8 +278,9 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
 - The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
   English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
   keyboard-only login, an axe accessibility scan of five pages/states, the
-  swap-request lifecycle, broadcast notifications with a deep link, and the
-  system console. Still missing: offline/slow-network behavior and deeper
+  swap-request lifecycle, broadcast notifications with a deep link, the
+  system console, and offline behavior (cached data, disabled mutations,
+  reconnect refetch, on both Home and Schedule). Still missing: deeper
   system-console coverage (team-role changes from `/system/teams/[teamId]`,
   revoking a system admin).
 - axe covers structural/semantic a11y (labels, roles, contrast, landmarks) on

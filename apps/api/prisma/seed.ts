@@ -134,6 +134,14 @@ async function main() {
         email: 'maya@example.com',
         language: 'en' as const,
       },
+      // Dedicated to apps/e2e/tests/offline.spec.ts — every other seeded
+      // parent (English or Hebrew) is already claimed by an existing spec.
+      {
+        name: 'Tomer Adler',
+        phone: '+15550000008',
+        email: 'tomer@example.com',
+        language: 'en' as const,
+      },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
@@ -165,6 +173,7 @@ async function main() {
       { userId: parents[3]?.id, role: 'parent' as const },
       { userId: parents[4]?.id, role: 'parent' as const },
       { userId: parents[5]?.id, role: 'parent' as const },
+      { userId: parents[6]?.id, role: 'parent' as const },
     ].map(({ userId, role }) => {
       if (!userId) return Promise.resolve();
       return prisma.teamMember.upsert({
