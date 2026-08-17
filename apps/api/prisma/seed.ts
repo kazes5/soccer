@@ -354,6 +354,13 @@ async function seedHebrewDemoData() {
         phone: '+972506789012',
         email: 'liat.he@example.test',
       },
+      // Dedicated to apps/e2e/tests/rtl-reading-order.spec.ts — every other
+      // seeded Hebrew parent is already claimed by an existing spec.
+      {
+        name: 'דניאל אזולאי',
+        phone: '+972507890123',
+        email: 'daniel.he@example.test',
+      },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
@@ -383,6 +390,7 @@ async function seedHebrewDemoData() {
       { userId: parents[2]!.id, role: 'parent' as const },
       { userId: parents[3]!.id, role: 'parent' as const },
       { userId: parents[4]!.id, role: 'parent' as const },
+      { userId: parents[5]!.id, role: 'parent' as const },
     ].map(({ userId, role }) =>
       prisma.teamMember.upsert({
         where: { teamId_userId: { teamId: team.id, userId } },

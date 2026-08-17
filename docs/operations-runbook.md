@@ -133,15 +133,84 @@ tooling against that stack's volume, not a managed-provider feature.
 
 ```bash
 # Backup (run from the repo root, with docker compose up)
-docker compose exec postgres pg_dump -U postgres soccer_dev > backup-$(date +%Y%m%d-%H%M%S).sql
+docker compose exec postgres pg_dump -U soccer soccer_dev > backup-$(date +%Y%m%d-%H%M%S).sql
 
 # Restore into a running (empty) database
-docker compose exec -T postgres psql -U postgres soccer_dev < backup-20260816-120000.sql
+docker compose exec -T postgres psql -U soccer soccer_dev < backup-20260816-120000.sql
 ```
 
 Take a backup before every migration deploy and before any manual data
 fix. Restores are destructive to the target database — confirm you're
 pointed at the intended environment before running one.
+
+**Rehearsed 2026-08-17** against a disposable database (drop/recreate,
+migrate, seed, `pg_dump`, drop again, `psql`-restore, verify row counts and
+Hebrew/UTF-8 text survived intact): works end to end. Also **found and
+fixed a real bug** while rehearsing — this section previously read `-U
+postgres`, but `docker-compose.yml` configures `POSTGRES_USER=soccer`; the
+Postgres image never creates a `postgres` role when a custom user is set,
+so the documented command as originally written would have failed outright
+during a real incident. Corrected above.
+
+### Migration rollback
+
+Prisma Migrate has no automatic down-migrations (confirmed: no `down.sql`
+anywhere in `apps/api/prisma/migrations/`, and this is Prisma's own
+documented design, not a gap in this project). The real rollback path is
+one of:
+
+1. **Restore from the pre-deploy backup** (see above) — the primary path.
+   Always take one immediately before `prisma migrate deploy` in any
+   shared environment, precisely so this is available.
+2. **Write and apply a new forward migration** that reverses the change
+   (`prisma migrate dev --create-only`, hand-edit the generated SQL to
+   undo rather than redo, `prisma migrate deploy`) if a full restore would
+   lose otherwise-good writes made after the bad deploy.
+3. If a migration's SQL was reverted by hand outside Prisma's own tooling,
+   reconcile the tracking table with `prisma migrate resolve --rolled-back
+<migration_name>` (verified this flag exists and is exactly for this:
+   `prisma migrate resolve --help`) — otherwise `prisma migrate status`
+   keeps reporting it as applied even though the database no longer
+   reflects it.
+
+Rehearsed the reversible-change shape of (2) directly against a disposable
+database (add a column, verify it, drop it again, confirm no data loss) —
+the forward-then-reverse mechanics work as expected. Did not fabricate a
+full migration-file cycle against the real `migrations/` folder for this
+rehearsal, to avoid any risk of stray migration state leaking into the
+tracked repo; the procedure above is Prisma's standard, documented
+approach, not project-specific tooling that needed inventing.
+
+### Failed notification worker and late swap-expiry recovery
+
+Both **rehearsed for real 2026-08-17** against a disposable database with
+the real API and worker processes (not staging — no such environment
+exists for this project, same caveat as everywhere else in Stage 6):
+
+- **Worker down when an event is created**: started the API with the
+  worker _not_ running, claimed a shift (creating a real, unprocessed
+  `outbox_events` row), then started the worker. Its startup log read
+  `Reconciled 1 outbox event(s), 0 scheduled task(s)`, the row's
+  `processed_at` was set, and the expected `user_notifications` rows were
+  created — confirms `reconcile.ts`'s "safe to crash and restart at any
+  point" claim (ADR 0001) holds in practice, not just in code review.
+- **Late swap-expiry recovery, with a real methodology lesson**: the first
+  attempt (editing `scheduled_tasks.run_at` directly in Postgres to a past
+  time, then restarting the worker) did _not_ reproduce a late-recovery
+  scenario — BullMQ's already-enqueued delayed job for that task ID was
+  untouched by the database edit, and `enqueueScheduledTask`'s dedup-by-`jobId`
+  behavior means re-adding it with a new (shorter) delay is a no-op against
+  an existing non-terminal job. The database is not the only source of
+  scheduling state; Redis is too. The rehearsal that actually matters is
+  simulating **Redis losing track of the job while Postgres still knows
+  about it** (the real disaster this guards against — a Redis restart
+  without persistence, an eviction under memory pressure, an operator's
+  accidental `FLUSHDB` while debugging something unrelated): removed the
+  job directly via BullMQ's own `Job.remove()`, confirmed the worker was
+  down at that point, then restarted it. Reconcile picked the task back up
+  from Postgres, and the swap request correctly transitioned to `expired`
+  with the shift reverting to `claimed` by its original holder — the
+  intended recovery outcome.
 
 ## Session timeout
 
