@@ -242,10 +242,6 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   suite, and no automated check that RTL _reading order_ (as opposed to
   layout direction, which axe does catch via `html[dir]`) is correct.
 - No load test beyond the targeted ten-request shift claim race.
-- WebAuthn RP ID/origin spoofing isn't independently tested — that validation
-  happens inside `@simplewebauthn/server`, which the test suite's
-  `FakeWebauthnVerifier` bypasses by design. Confidence rests on the upstream
-  library, not a test in this repo.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
 - No audit-reporting, AI, or native mobile tests because those features are not
