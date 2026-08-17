@@ -132,7 +132,7 @@ Web tests cover:
 - Shift swaps end to end: two real, independently authenticated browser
   contexts stand in for two parents — one holds a shift, the other requests
   it, the holder accepts through `/swaps`' real confirm flow, and the shift
-  reassigns. Runs on the Hebrew team; the holder claims the *second-to-last*
+  reassigns. Runs on the Hebrew team; the holder claims the _second-to-last_
   open shift, not the first, since a swap request's expiry is capped at its
   session's start time (`apps/api/src/routes/swap-requests.ts`) and a
   today-dated shift can create an already-expired request.
@@ -159,7 +159,7 @@ other when `fullyParallel` runs them concurrently, and avoids claiming the
 chronologically _first_ open shift unless it's the only spec on that team —
 that shift can be dated today, and once real time crosses its start time
 mid-suite, Home correctly stops counting it as "upcoming" even though the
-claim itself still succeeded. Specs that assert on notification *counts*
+claim itself still succeeded. Specs that assert on notification _counts_
 avoid exact numbers for the same reason from a different angle: other
 specs' concurrent activity on a shared team also broadcasts to any
 notifications-page observer, so only presence/absence of a specific
