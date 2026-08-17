@@ -17,6 +17,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:load": "tsx prisma/seed-load.ts",
     "system-admin:grant": "tsx src/scripts/grant-system-admin.ts"
   },
   "dependencies": {
