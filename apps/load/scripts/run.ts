@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { Client } from 'pg';
-import { apiBaseUrl, apiPort, databaseUrl } from '../src/config';
+import { apiBaseUrl, apiPort, authHeader, databaseUrl, loadTestTokenPrefix } from '../src/config';
 import { runClaimTrafficScenario } from '../src/scenarios/claim-traffic';
 import { runNotificationFanOutScenario } from '../src/scenarios/notification-fanout';
 import type { ScenarioResult } from '../src/scenarios/schedule-reads';
@@ -24,6 +24,9 @@ const apiEnv = {
   NODE_ENV: 'test',
   PORT: String(apiPort),
 };
+// Only the seed step needs this — kept out of `apiEnv` (which the API/worker
+// processes also inherit) so it's obviously scoped to seeding.
+const seedEnv = { ...apiEnv, LOAD_TEST_TOKEN_PREFIX: loadTestTokenPrefix };
 
 function runSync(args: string[], env: NodeJS.ProcessEnv = process.env) {
   execFileSync('pnpm', args, { stdio: 'inherit', env });
@@ -118,7 +121,7 @@ function printReport(results: ScenarioResult[]) {
 async function main() {
   runSync(['exec', 'tsx', 'scripts/reset-database.ts']);
   runSync(['--filter', '@soccer/api', 'exec', 'prisma', 'migrate', 'deploy'], apiEnv);
-  const seedOutput = captureSync(['--filter', '@soccer/api', 'run', 'db:seed:load'], apiEnv);
+  const seedOutput = captureSync(['--filter', '@soccer/api', 'run', 'db:seed:load'], seedEnv);
   const summaryLine = seedOutput.trim().split('\n').at(-1) ?? '{}';
   const seedSummary = JSON.parse(summaryLine) as {
     teamId: string;
@@ -148,7 +151,7 @@ async function main() {
 
     const remainingOpenShiftsResponse = await fetch(
       `${apiBaseUrl}/teams/${seedSummary.teamId}/sessions`,
-      { headers: { Authorization: 'Bearer load-test-token-0' } },
+      { headers: authHeader(0) },
     );
     const remainingSessions = (await remainingOpenShiftsResponse.json()) as {
       sessions: Array<{ points: Array<{ shift: { id: string; status: string } }> }>;

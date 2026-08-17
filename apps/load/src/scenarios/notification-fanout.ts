@@ -1,4 +1,5 @@
 import { apiBaseUrl, authHeader, budgets } from '../config';
+import { percentile } from '../percentile';
 import type { ScenarioResult } from './schedule-reads';
 
 const LISTENER_COUNT = 50;
@@ -95,19 +96,13 @@ export async function runNotificationFanOutScenario(
     .map((t) => t - claimedAt)
     .sort((a, b) => a - b);
   const undelivered = deliveredTimestamps.length - latenciesMs.length;
-
-  function percentile(p: number): number {
-    if (latenciesMs.length === 0) return Number.POSITIVE_INFINITY;
-    const index = Math.min(latenciesMs.length - 1, Math.ceil((p / 100) * latenciesMs.length) - 1);
-    return latenciesMs[Math.max(0, index)]!;
-  }
-  const p95Ms = percentile(95);
+  const p95Ms = percentile(latenciesMs, 95, Number.POSITIVE_INFINITY);
 
   return {
     name: 'notification-fan-out',
     requestsCompleted: LISTENER_COUNT,
     errors: undelivered,
-    p50Ms: percentile(50),
+    p50Ms: percentile(latenciesMs, 50, Number.POSITIVE_INFINITY),
     p95Ms,
     maxMs: latenciesMs.at(-1) ?? Number.POSITIVE_INFINITY,
     budgetMs: budgets.notificationFanOutP95Ms,

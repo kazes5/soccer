@@ -12,14 +12,16 @@ export const parentCount = 119;
 export const memberCount = parentCount + 1;
 
 /**
- * Must exactly match `apps/api/prisma/seed-load.ts`'s `loadTestToken` — that
- * script inserts `sha256(loadTestToken(i))` as each seeded member's session
- * `tokenHash`, and this package independently recomputes the same raw token
- * to send as `Authorization: Bearer <token>`. Neither side can change the
- * scheme alone; it's the contract between seeding and load generation.
+ * The only hardcoded copy of the load-test bearer-token prefix — passed to
+ * `apps/api/prisma/seed-load.ts` as `LOAD_TEST_TOKEN_PREFIX` (see
+ * `scripts/run.ts`), which has no hardcoded default of its own and fails
+ * loudly if the env var is missing, so there's exactly one place this
+ * scheme can drift from.
  */
+export const loadTestTokenPrefix = 'load-test-token';
+
 export function loadTestToken(memberIndex: number): string {
-  return `load-test-token-${memberIndex}`;
+  return `${loadTestTokenPrefix}-${memberIndex}`;
 }
 
 export function authHeader(memberIndex: number): Record<string, string> {

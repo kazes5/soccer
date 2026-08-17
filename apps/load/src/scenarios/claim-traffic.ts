@@ -1,4 +1,5 @@
 import { apiBaseUrl, authHeader, budgets, memberCount } from '../config';
+import { percentile } from '../percentile';
 import type { ScenarioResult } from './schedule-reads';
 
 interface SessionPointShift {
@@ -21,12 +22,6 @@ async function listOpenShiftIds(teamId: string): Promise<string[]> {
     .flatMap((session) => session.points)
     .filter((point) => point.shift.status === 'open')
     .map((point) => point.shift.id);
-}
-
-function percentile(sortedMs: number[], p: number): number {
-  if (sortedMs.length === 0) return 0;
-  const index = Math.min(sortedMs.length - 1, Math.ceil((p / 100) * sortedMs.length) - 1);
-  return sortedMs[Math.max(0, index)]!;
 }
 
 /**
@@ -79,13 +74,13 @@ export async function runClaimTrafficScenario(
   }
 
   latenciesMs.sort((a, b) => a - b);
-  const p95Ms = percentile(latenciesMs, 95);
+  const p95Ms = percentile(latenciesMs, 95, 0);
 
   return {
     name: 'claim-traffic',
     requestsCompleted: latenciesMs.length,
     errors,
-    p50Ms: percentile(latenciesMs, 50),
+    p50Ms: percentile(latenciesMs, 50, 0),
     p95Ms,
     maxMs: latenciesMs.at(-1) ?? 0,
     budgetMs: budgets.claimP95Ms,

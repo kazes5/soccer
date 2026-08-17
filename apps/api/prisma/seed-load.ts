@@ -20,14 +20,26 @@ import { wallClockToInstant } from '../src/lib/timezone';
  * its own disposable database rather than duplicating seeding logic.
  */
 const PARENT_COUNT = 119;
-/** Every seeded member gets a valid bearer-token session row so load
- * scenarios can authenticate real requests without a passkey ceremony —
- * `sha256(loadTestToken(i))` must exactly match what `apps/load`'s scripts
- * compute independently to build `Authorization: Bearer` headers, so this
- * naming scheme is a contract between the two, not an implementation detail
- * either side can change alone. */
-export function loadTestToken(memberIndex: number): string {
-  return `load-test-token-${memberIndex}`;
+/**
+ * Every seeded member gets a valid bearer-token session row so load
+ * scenarios can authenticate real requests without a passkey ceremony.
+ * `LOAD_TEST_TOKEN_PREFIX` — set by `apps/load/scripts/run.ts` from its own
+ * `loadTestTokenPrefix` (the single hardcoded copy of this scheme) — has no
+ * default here, deliberately: this script must be told the prefix, not
+ * guess at a second copy of it that could silently drift from the one
+ * `apps/load`'s scenarios actually send as `Authorization: Bearer`.
+ */
+// Read directly from process.env rather than the shared `env` module — this
+// var is a load-test-only concern, not part of the app-wide config contract
+// every route/worker process loads.
+const tokenPrefix = process.env.LOAD_TEST_TOKEN_PREFIX;
+if (!tokenPrefix) {
+  throw new Error(
+    'LOAD_TEST_TOKEN_PREFIX is required — run this via `pnpm test:load` (apps/load), not directly.',
+  );
+}
+function loadTestToken(memberIndex: number): string {
+  return `${tokenPrefix}-${memberIndex}`;
 }
 
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
