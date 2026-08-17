@@ -27,6 +27,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { Dialog } from '@/components/ui/dialog';
 import { IconButton } from '@/components/ui/icon-button';
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -46,6 +47,7 @@ import {
   updateShiftInSessions,
 } from '@/lib/sessions';
 import { instantToWallClock } from '@/lib/timezone';
+import { useOnlineStatus } from '@/lib/use-online-status';
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   if (shift.status === 'open') return 'open';
@@ -242,6 +244,29 @@ function ScheduleSessions({
       });
   }, [fetchAll]);
 
+  // Reconnecting refetches canonical state rather than trusting whatever was
+  // last in memory — a shift claimed/released by someone else while this
+  // tab was offline must not keep showing as available/held. Deliberately
+  // not `reload` (which sets `loadState` to 'loading' first, blanking the
+  // whole page to a spinner) — the offline banner already told the user
+  // data might be stale; a background refresh should update it quietly,
+  // not replace the cached view they were just looking at. A failed
+  // refresh here is silently ignored for the same reason: keep showing
+  // what's cached rather than flipping to a full error state over what's
+  // likely still a shaky connection.
+  const refreshSilently = useCallback(() => {
+    fetchAll()
+      .then(([sessionsRes, playersRes, rosterRes]) => {
+        setSessions(sessionsRes.sessions);
+        setPlayers(playersRes.players);
+        setRoster(rosterRes.members);
+      })
+      .catch(() => {
+        // See comment above.
+      });
+  }, [fetchAll]);
+  const isOnline = useOnlineStatus(refreshSilently);
+
   const playersById = useMemo(
     () => new Map((players ?? []).map((player) => [player.id, player.name])),
     [players],
@@ -354,6 +379,7 @@ function ScheduleSessions({
 
   return (
     <div className="flex flex-col gap-6">
+      {!isOnline && <OfflineBanner />}
       {sessions.length === 0 ? (
         <EmptyState title={t('schedule.empty')} />
       ) : (
@@ -370,6 +396,7 @@ function ScheduleSessions({
               pendingShiftId={pendingShiftId}
               highlightShiftId={practiceSession.id === highlightSessionId ? highlightShiftId : null}
               isHighlighted={practiceSession.id === highlightSessionId}
+              isOnline={isOnline}
               onClaim={handleClaim}
               onRelease={handleRelease}
               onRequestSwap={handleRequestSwap}
@@ -438,6 +465,7 @@ function SessionCard({
   pendingShiftId,
   highlightShiftId,
   isHighlighted,
+  isOnline,
   onClaim,
   onRelease,
   onRequestSwap,
@@ -454,6 +482,7 @@ function SessionCard({
   pendingShiftId: string | null;
   highlightShiftId: string | null;
   isHighlighted: boolean;
+  isOnline: boolean;
   onClaim: (shiftId: string) => void;
   onRelease: (shiftId: string) => void;
   onRequestSwap: (shiftId: string) => void;
@@ -522,12 +551,14 @@ function SessionCard({
               <IconButton
                 label={t('schedule.editSessionAriaLabel', { date: formatted })}
                 icon={<Pencil className="size-4" aria-hidden="true" />}
+                disabled={!isOnline}
                 onClick={() => onEdit(practiceSession)}
               />
               <IconButton
                 label={t('schedule.cancelSessionAriaLabel', { date: formatted })}
                 icon={<Ban className="size-4" aria-hidden="true" />}
                 variant="danger"
+                disabled={!isOnline}
                 onClick={() => onCancelRequest(practiceSession)}
               />
             </>
@@ -584,6 +615,7 @@ function SessionCard({
                   <IconButton
                     label={t('schedule.managePlayersAriaLabel', { point: pointLabel })}
                     icon={<Users className="size-4" aria-hidden="true" />}
+                    disabled={!isOnline}
                     onClick={() =>
                       onManagePlayers({
                         session: practiceSession,
@@ -598,7 +630,7 @@ function SessionCard({
                 {canClaim && (
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || !isOnline}
                     className={`${buttonClassName} text-sm`}
                     onClick={() => onClaim(point.shift.id)}
                   >
@@ -608,7 +640,7 @@ function SessionCard({
                 {canRelease && (
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || !isOnline}
                     className={`${secondaryButtonClassName} text-sm`}
                     onClick={() => onRelease(point.shift.id)}
                   >
@@ -618,7 +650,7 @@ function SessionCard({
                 {canRequestSwap && (
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || !isOnline}
                     className={`${secondaryButtonClassName} text-sm`}
                     onClick={() => onRequestSwap(point.shift.id)}
                   >
