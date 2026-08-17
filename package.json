@@ -22,6 +22,7 @@
     "db:seed": "pnpm --filter @soccer/api run db:seed",
     "system-admin:grant": "pnpm --filter @soccer/api run system-admin:grant --",
     "test:e2e": "pnpm --filter @soccer/e2e run db:setup && pnpm --filter @soccer/e2e run e2e",
+    "test:integration": "pnpm --filter @soccer/api run test:integration",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },
