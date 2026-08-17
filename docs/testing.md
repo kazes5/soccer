@@ -22,9 +22,16 @@ or production-provider coverage.
 | Browser E2E          | `apps/e2e/tests/*.spec.ts`             | Playwright, real Chromium, live API/web servers, a disposable database | Full-stack journeys through a real browser — no mocking, real HTTP, real WebAuthn ceremonies |
 
 The API's WebAuthn verifier is injected through `buildApp({ webauthnVerifier })`,
-so tests never need a real browser/authenticator to complete a passkey ceremony.
-API tests use the configured PostgreSQL database and clean up their created
-records; the current setup is not a disposable database per test run.
+so tests never need a real browser/authenticator to complete a passkey ceremony
+— except `apps/api/src/lib/webauthn.test.ts`, which deliberately drives the real
+`SimpleWebauthnVerifier` (not the injected fake) to prove `@simplewebauthn/server`'s
+own origin/RP ID checks actually reject spoofed values.
+API tests use the configured PostgreSQL database (`soccer_dev` under plain
+`pnpm test`) and clean up their created records. `pnpm run test:integration`
+(`apps/api/scripts/reset-test-database.ts`) instead resets a dedicated
+`soccer_api_test` database — drop, recreate, migrate, same pattern as
+`apps/e2e`'s `db:setup` — before running the exact same suite, giving a
+disposable-per-run guarantee without needing a separate container.
 
 ## Covered API scenarios
 
@@ -224,12 +231,35 @@ customize ports/URLs), starts real API and web dev servers on dedicated ports
 notification worker process (`SYSTEM_ADMIN_ENABLED=true` too, for
 system-console.spec.ts), and runs the suite against them.
 
+`pnpm test` (and `pnpm --filter @soccer/api test` / `--filter @soccer/web
+test`) runs against whichever database `DATABASE_URL` already points at —
+the shared `soccer_dev` locally, real service containers in CI. For a
+disposable-per-run guarantee locally too (matching CI's isolation without a
+container), use:
+
+```bash
+pnpm docker:up
+pnpm test:integration
+```
+
+This resets a dedicated `soccer_api_test` database (see
+`apps/api/.env.test.example` to customize) before running the same API suite
+— same drop/recreate/migrate pattern as `test:e2e`'s `db:setup`, just without
+the seed step, since these tests create and clean up their own fixtures.
+
+`pnpm test` also runs with coverage enabled by default (`vitest.config.ts` in
+`apps/api`/`apps/web`, `@vitest/coverage-v8`), with thresholds scoped to each
+package's "critical domain module" set — `apps/api`'s `src/lib/**` and
+`src/routes/**`, and `apps/web`'s pure-logic modules (`notifications.ts`,
+`sessions.ts`, `safe-redirect.ts`, `timezone.ts`), not `api.ts` (deliberately
+mocked rather than unit-tested, per the table above) or the thinner
+browser-API adapters (`sse.ts`, `push.ts`, `use-notification-stream.ts`).
+
 ## Planned coverage and known gaps
 
 These are intentionally deferred to Stage 6 or the relevant later stage in
 [PLAN.md](../PLAN.md):
 
-- No configured line/branch coverage thresholds or coverage report artifact.
 - The Playwright suite (`apps/e2e`) covers the invite-to-claim journey (desktop
   English/Hebrew-RTL and a mobile viewport), one admin flow (invite + promote),
   keyboard-only login, an axe accessibility scan of five pages/states, the
@@ -246,8 +276,6 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   future APNs/FCM adapters.
 - No audit-reporting, AI, or native mobile tests because those features are not
   implemented yet. Emergency escalation was removed from MVP scope.
-- API integration tests currently use the shared configured database rather than
-  an isolated disposable database for every run.
 
 When a new API route, interactive page/component, schema, or pure helper is
 added, add the matching test in the same pull request. Do not use this document
