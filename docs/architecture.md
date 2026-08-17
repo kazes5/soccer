@@ -23,7 +23,7 @@ features below are intentionally marked as not implemented.
 ```mermaid
 flowchart LR
     Browser[Next.js web client] -->|HTTP + cookies + CSRF| API[Fastify API]
-    Mobile[Future native client] -.->|planned shared API| API
+    Mobile[Expo native client, scaffolded] -.->|Bearer-token shared API, auth screens pending| API
     API --> Contracts[Shared Zod contracts]
     Browser --> Contracts
     Browser --> I18n[Shared i18n catalog]
@@ -183,8 +183,11 @@ The following are target capabilities, not current runtime behavior:
   member operations, reporting, and future-session bulk edits.
 - Add Playwright end-to-end coverage, accessibility scans, security checks, and
   load/concurrency checks before pilot release.
-- Add `apps/mobile` with Expo/React Native only after the web API and flows are
-  stable. Native clients should reuse contracts, i18n, tokens, and server-side
-  commands rather than duplicate business rules.
+- `apps/mobile` (Expo/React Native) scaffolding started 2026-08-18 — see
+  PLAN.md's Stage 8 Detailed Implementation Plan for the full checkpoint
+  breakdown, including why it started ahead of the "only after the web API
+  and flows are stable" sequencing this line originally described. Reuses
+  `@soccer/contracts` and `@soccer/i18n` unmodified and a new
+  `@soccer/ui-tokens/native` module, rather than duplicating business rules.
 
 For sequencing and explicit deferred scope, see [PLAN.md](../PLAN.md).

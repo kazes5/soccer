@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Soccer Carpool",
+    "slug": "soccer-carpool",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "soccer",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
