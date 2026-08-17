@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:integration": "tsx scripts/reset-test-database.ts && DATABASE_URL=${TEST_DATABASE_URL:-postgresql://soccer:soccer@localhost:5432/soccer_api_test} vitest run",
+    "test:integration": "tsx scripts/reset-test-database.ts && tsx scripts/run-integration-tests.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
