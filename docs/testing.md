@@ -255,6 +255,21 @@ package's "critical domain module" set — `apps/api`'s `src/lib/**` and
 mocked rather than unit-tested, per the table above) or the thinner
 browser-API adapters (`sse.ts`, `push.ts`, `use-notification-stream.ts`).
 
+```bash
+pnpm docker:up
+pnpm test:load
+```
+
+Resets a dedicated `soccer_load` database, seeds it via
+`apps/api/prisma/seed-load.ts` (120 team members, ~600 open shifts), starts
+real API and worker processes on dedicated ports, and runs three scenarios
+(`apps/load/src/scenarios/*.ts`) against them: schedule reads (`autocannon`),
+distinct-shift claim traffic (a custom concurrency harness), and notification
+fan-out (50 real SSE connections, measuring actual delivery latency).
+Provisional per-scenario budgets live in `apps/load/src/config.ts`. Runs
+against local dev hardware — this project has no staging environment — so
+treat results as a relative signal, not an absolute one.
+
 ## Planned coverage and known gaps
 
 These are intentionally deferred to Stage 6 or the relevant later stage in
@@ -271,7 +286,11 @@ These are intentionally deferred to Stage 6 or the relevant later stage in
   the pages listed above, not the whole app. No VoiceOver/NVDA/TalkBack smoke
   suite, and no automated check that RTL _reading order_ (as opposed to
   layout direction, which axe does catch via `html[dir]`) is correct.
-- No load test beyond the targeted ten-request shift claim race.
+- `pnpm test:load` (`apps/load`) covers schedule reads, distinct-shift claim
+  traffic, and notification fan-out at 120 seeded team members — but only
+  against local dev hardware (no staging environment exists for this
+  project), and its response budgets are provisional, not yet agreed with a
+  product/ops owner.
 - No production notification delivery test for browser push, SMS, email, or
   future APNs/FCM adapters.
 - No audit-reporting, AI, or native mobile tests because those features are not
