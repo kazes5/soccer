@@ -10,6 +10,8 @@ export const en = {
   'common.retry': 'Try again',
   'common.offlineBanner':
     "You're offline — showing the last loaded data. Actions are disabled until you're back online.",
+  'common.restartRequiredTitle': 'Restart required',
+  'common.restartRequiredBody': 'Please close and reopen the app to finish switching languages.',
 
   'nav.home': 'Home',
   'nav.schedule': 'Schedule',
@@ -553,6 +555,8 @@ export const he: Record<MessageKey, string> = {
   'common.retry': 'ניסיון נוסף',
   'common.offlineBanner':
     'אין חיבור לאינטרנט — מוצגים הנתונים האחרונים שנטענו. הפעולות מושבתות עד לחזרת החיבור.',
+  'common.restartRequiredTitle': 'נדרשת הפעלה מחדש',
+  'common.restartRequiredBody': 'סגרו ופתחו מחדש את האפליקציה כדי להשלים את החלפת השפה.',
 
   'nav.home': 'בית',
   'nav.schedule': 'לוח זמנים',

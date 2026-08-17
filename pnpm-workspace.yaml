@@ -34,3 +34,24 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - tsx@4.23.9
+  - '@expo/cli@57.0.16'
+  - '@expo/config@57.0.8'
+  - '@expo/fingerprint@0.20.8'
+  - '@expo/inline-modules@0.1.6'
+  - '@expo/log-box@57.0.3'
+  - '@expo/metro-runtime@57.0.11'
+  - expo-asset@57.0.12
+  - expo-constants@57.0.12
+  - expo-router@57.0.14
+  - expo-splash-screen@57.0.7
+  - expo@57.0.14
+  - expo-updates@57.0.15
+
+# image-size <=2.0.2 (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq): ICNS/JXL/HEIF
+# parser infinite-loop DoS. Transitive via apps/mobile's Expo/Metro dev
+# tooling only (expo > @expo/cli > ... > metro > image-size) — Metro's local
+# dev bundler, never shipped to a production app bundle or reachable by an
+# end user. No patched version exists yet (npm's `latest`/`legacy` dist-tags
+# both predate the fix), so unlike the `overrides` above there is nothing to
+# pin to; revisit once a fixed release is published.
+auditConfig: { ignoreGhsas: [ 'GHSA-w3rx-r6r6-pgpr', 'GHSA-5p2g-fcmc-qvqq' ] }
