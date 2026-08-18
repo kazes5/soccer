@@ -189,13 +189,30 @@ async function main() {
     throw new Error('Expected exactly two seeded parents.');
   }
 
+  // Fixed ids + upsert (not .create), like every other entity in this file —
+  // otherwise re-running this script duplicates these players on every seed.
+  const playerDefinitions = [
+    {
+      id: '00000000-0000-4000-8000-000000000301',
+      name: 'Yossi Levi',
+      age: 11,
+      parentUserId: aviLevi.id,
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000302',
+      name: 'Noa Katz',
+      age: 12,
+      parentUserId: sarahKatz.id,
+    },
+  ];
+
   const players = await Promise.all(
-    [
-      { name: 'Yossi Levi', age: 11, parentUserId: aviLevi.id },
-      { name: 'Noa Katz', age: 12, parentUserId: sarahKatz.id },
-    ].map((player) =>
-      prisma.player.create({
-        data: {
+    playerDefinitions.map(async (player) => {
+      const created = await prisma.player.upsert({
+        where: { id: player.id },
+        update: { teamId: team.id, name: player.name, age: player.age },
+        create: {
+          id: player.id,
           teamId: team.id,
           name: player.name,
           age: player.age,
@@ -203,8 +220,14 @@ async function main() {
             create: { userId: player.parentUserId, relationship: 'parent' },
           },
         },
-      }),
-    ),
+      });
+      await prisma.playerParent.upsert({
+        where: { playerId_userId: { playerId: player.id, userId: player.parentUserId } },
+        update: { relationship: 'parent' },
+        create: { playerId: player.id, userId: player.parentUserId, relationship: 'parent' },
+      });
+      return created;
+    }),
   );
 
   const oakSt = await prisma.collectionPoint.upsert({

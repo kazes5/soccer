@@ -2,9 +2,12 @@
 
 import { focusRingClassName } from '@soccer/ui-tokens';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, type ReactNode } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
+import { LogOutDialog, LogOutTrigger } from '@/components/log-out';
 import { useLocale } from '@/components/locale-provider';
+import { api } from '@/lib/api';
 
 export interface ShellNavItem {
   href: string;
@@ -18,19 +21,44 @@ export interface ShellNavItem {
  * a desktop sidebar above it. `navItems` is expected to grow as more
  * authenticated destinations (schedule, fairness stats, admin) land. The
  * mobile bar becomes horizontally scrollable once its items no longer fit.
+ * Renders a logout trigger itself so every authenticated page reachable
+ * through this shell has a way to log out, not just the pages that think to
+ * pass one.
+ *
+ * The mobile header and desktop sidebar are both always mounted (visibility
+ * is CSS-only, to avoid layout shift across the md breakpoint), so there are
+ * two LogOutTrigger buttons but exactly one LogOutDialog + one piece of
+ * confirm-open state shared between them — otherwise two independent
+ * <dialog> elements would each carry the confirm copy in the DOM at once.
+ *
+ * `isSingleTeamParent` only affects the confirm dialog's wording, so it's an
+ * optional pass-through (defaulting to the generic copy) rather than a fetch
+ * of its own here — a page that already loaded its session data (Home does)
+ * can pass the accurate value; one that hasn't isn't worth a fetch just for
+ * this.
  */
 export function AppShell({
   brand,
   navItems,
-  actions,
+  isSingleTeamParent = false,
   children,
 }: {
   brand: string;
   navItems: ShellNavItem[];
-  actions?: ReactNode;
+  isSingleTeamParent?: boolean;
   children: ReactNode;
 }) {
   const { t } = useLocale();
+  const router = useRouter();
+  const [confirmingLogOut, setConfirmingLogOut] = useState(false);
+
+  async function handleLogOut() {
+    setConfirmingLogOut(false);
+    await api.logout().catch(() => {
+      // Best-effort: even if the server call fails, still send the user home.
+    });
+    router.push('/');
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col md:flex-row">
@@ -45,7 +73,7 @@ export function AppShell({
         <span className="text-lg font-semibold tracking-tight">{brand}</span>
         <div className="flex items-center gap-2">
           <LanguageToggle />
-          {actions}
+          <LogOutTrigger onClick={() => setConfirmingLogOut(true)} />
         </div>
       </header>
 
@@ -58,7 +86,7 @@ export function AppShell({
         </nav>
         <div className="flex items-center justify-between gap-2 border-t border-surface-border px-2 pt-4">
           <LanguageToggle />
-          {actions}
+          <LogOutTrigger onClick={() => setConfirmingLogOut(true)} />
         </div>
       </aside>
 
@@ -74,6 +102,13 @@ export function AppShell({
           <BottomNavLink key={item.href} item={item} />
         ))}
       </nav>
+
+      <LogOutDialog
+        open={confirmingLogOut}
+        isSingleTeamParent={isSingleTeamParent}
+        onConfirm={handleLogOut}
+        onCancel={() => setConfirmingLogOut(false)}
+      />
     </div>
   );
 }

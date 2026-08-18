@@ -9,7 +9,7 @@ import type {
   TeamMembership,
 } from '@soccer/contracts';
 import type { Locale } from '@soccer/i18n';
-import { Calendar, Copy, Home, LogOut, ShieldCheck } from 'lucide-react';
+import { Calendar, Copy, Home, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -20,7 +20,6 @@ import {
   secondaryButtonClassName,
 } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { IconButton } from '@/components/ui/icon-button';
 import { OfflineBanner } from '@/components/ui/offline-banner';
@@ -71,7 +70,6 @@ export default function HomePage() {
   const [session, setSession] = useState<CurrentUserResponse | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unauthenticated'>('loading');
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
-  const [confirmingLogOut, setConfirmingLogOut] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,14 +102,6 @@ export default function HomePage() {
     }
   }, [status, router, pathname, searchParams]);
 
-  async function handleLogOut() {
-    setConfirmingLogOut(false);
-    await api.logout().catch(() => {
-      // Best-effort: even if the server call fails, still send the user home.
-    });
-    router.push('/');
-  }
-
   if (status !== 'ready' || !session) {
     return null;
   }
@@ -139,13 +129,7 @@ export default function HomePage() {
     <AppShell
       brand={t('common.appName')}
       navItems={navItems}
-      actions={
-        <IconButton
-          label={t('home.logOut')}
-          icon={<LogOut className="size-5" aria-hidden="true" />}
-          onClick={() => setConfirmingLogOut(true)}
-        />
-      }
+      isSingleTeamParent={isSingleTeamParent}
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 p-6">
         <div>
@@ -189,19 +173,6 @@ export default function HomePage() {
           )}
         </section>
       </div>
-
-      <ConfirmDialog
-        open={confirmingLogOut}
-        title={t('home.logOutConfirmTitle')}
-        description={t(
-          isSingleTeamParent ? 'home.logOutConfirmBodySingleTeam' : 'home.logOutConfirmBody',
-        )}
-        confirmLabel={t('home.logOut')}
-        cancelLabel={t('common.cancel')}
-        closeLabel={t('common.close')}
-        onConfirm={handleLogOut}
-        onCancel={() => setConfirmingLogOut(false)}
-      />
     </AppShell>
   );
 }
