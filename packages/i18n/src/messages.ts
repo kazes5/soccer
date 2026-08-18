@@ -931,7 +931,8 @@ export const he: Record<MessageKey, string> = {
   'notifications.loadMore': 'הצגת עוד',
   'notifications.loadingMore': 'טוען…',
   'notifications.dismissAriaLabel': 'התעלמות מהתראה',
-  'notifications.event.shiftClaimed': '{byUserName} נרשמ/ה ל{direction} שיוצאת מ {pointName} ({when})',
+  'notifications.event.shiftClaimed':
+    '{byUserName} נרשמ/ה ל{direction} שיוצאת מ {pointName} ({when})',
   'notifications.event.shiftReleased':
     '{byUserName} ויתר/ה על {direction} דרך {pointName} ({when})',
   'notifications.event.shiftReleasedMemberRemoved':
