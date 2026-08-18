@@ -487,10 +487,13 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | Remove users | ❌ | ✅ |
 | Promote/demote admins | ❌ | ✅ |
 | Edit schedule template | ❌ | ✅ |
-| Edit individual sessions | ❌ | ✅ |
-| Manage collection points | ❌ | ✅ |
+| Edit individual sessions (date/time/location/cancel) | ❌ | ✅ |
+| Manage a session's collection-point player rosters | ✅ | ✅ |
+| Manage collection points (create/edit/delete) | ❌ | ✅ |
 | View full audit log | ❌ | ✅ |
 | Configure notifications (team-wide) | ❌ | ✅ |
+
+**2026-08-18 revision note:** "Edit individual sessions" originally covered a session's collection-point player rosters too, restricting that to Admins. It's been split out into its own row: any team member (parent or admin) can now add/remove players at a session's collection point — not just the assigned driver, and not gated on passkey assurance, since this is now an ordinary parent action rather than an admin-only one. Editing the session itself (date/time/field location/cancellation) remains Admin-only, unchanged. See `apps/api/src/routes/sessions.ts`'s `PATCH /teams/:teamId/sessions/:sessionId/points/:pointId`.
 
 ---
 

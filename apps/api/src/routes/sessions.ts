@@ -284,8 +284,17 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const params = sessionPointParamsSchema.parse(request.params);
     const body = updateSessionPointPlayersRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
-    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
+    const membership = await requireTeamRole(app.prisma, currentUser.id, params.teamId, [
+      'admin',
+      'parent',
+    ]);
+    // Any team member can keep a session's rosters current, so this isn't
+    // gated on passkey assurance the way admin-only actions are — parents
+    // authenticate day-to-day with a password. Admins still get the extra
+    // check since it's cheap and this endpoint remains reachable by them too.
+    if (membership.role === 'admin') {
+      requirePrivilegedAssurance(currentUser);
+    }
 
     const assignment = await app.prisma.sessionPointAssignment.findUnique({
       where: {
@@ -329,7 +338,10 @@ export default async function sessionRoutes(app: FastifyInstance) {
       await recordAuditLog(tx, {
         teamId: params.teamId,
         actorId: currentUser.id,
-        actionType: 'session_point_players_updated',
+        actionType:
+          membership.role === 'admin'
+            ? 'session_point_players_updated'
+            : 'parent_session_point_players_updated',
         targetEntity: 'session_point_assignment',
         targetId: assignment.id,
         beforeState: { playerIds: assignment.playerIds },

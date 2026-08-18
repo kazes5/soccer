@@ -498,8 +498,13 @@ function SessionCard({
 }) {
   const { t } = useLocale();
   const formatted = formatSessionStartsAt(locale, practiceSession.startsAt, timeZone);
-  const canManage =
-    isAdmin && practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt);
+  const isUpcoming =
+    practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt);
+  // Editing the session itself (date/time/field location) stays admin-only.
+  // Managing a collection point's player roster is open to any team member —
+  // any parent can keep it current, not just the one driving.
+  const canEditSession = isAdmin && isUpcoming;
+  const canManagePlayers = isUpcoming;
 
   // Deep-linking from a notification (`/schedule?team=&session=&shift=`)
   // should land the reader on the right row, not just the right team — scroll
@@ -546,7 +551,7 @@ function SessionCard({
               {t('schedule.cancelled')}
             </span>
           )}
-          {canManage && (
+          {canEditSession && (
             <>
               <IconButton
                 label={t('schedule.editSessionAriaLabel', { date: formatted })}
@@ -611,7 +616,7 @@ function SessionCard({
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge tone={tone} label={label} />
-                {canManage && (
+                {canManagePlayers && (
                   <IconButton
                     label={t('schedule.managePlayersAriaLabel', { point: pointLabel })}
                     icon={<Users className="size-4" aria-hidden="true" />}

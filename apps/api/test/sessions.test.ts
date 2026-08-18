@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { generateSessionToken, hashSecret } from '../src/lib/crypto';
 import { instantToWallClock } from '../src/lib/timezone';
 import { futureMondayDateString, pastMondayDateString } from './support/dates';
 
@@ -71,6 +72,63 @@ describe('sessions', () => {
 
     return { adminToken, teamId, pointId, sessionId: session.id, playerId: playerResponse.id };
   }
+
+  async function addParent(teamId: string) {
+    const parent = await app.prisma.user.create({
+      data: {
+        name: 'Avi Levi',
+        phone: `+1555151${Math.floor(Math.random() * 9000 + 1000)}`,
+        teamMemberships: { create: { teamId, role: 'parent' } },
+      },
+    });
+    createdUserIds.push(parent.id);
+    const rawToken = generateSessionToken();
+    await app.prisma.session.create({
+      data: {
+        userId: parent.id,
+        tokenHash: hashSecret(rawToken),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    return rawToken;
+  }
+
+  it('lets a parent assign players to a session collection point without passkey assurance', async () => {
+    const { teamId, sessionId, pointId, playerId } = await setUpTeamWithSession();
+    const parentToken = await addParent(teamId);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}/points/${pointId}`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload: { direction: 'to_practice', playerIds: [playerId] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const point = response.json().points.find((p: { pointId: string }) => p.pointId === pointId);
+    expect(point.playerIds).toEqual([playerId]);
+
+    const auditEntries = await app.prisma.auditLog.findMany({
+      where: { teamId, actionType: 'parent_session_point_players_updated' },
+    });
+    expect(auditEntries).toHaveLength(1);
+  });
+
+  it("records the admin action type for an admin's player assignment", async () => {
+    const { adminToken, teamId, sessionId, pointId, playerId } = await setUpTeamWithSession();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}/points/${pointId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { direction: 'to_practice', playerIds: [playerId] },
+    });
+
+    const auditEntries = await app.prisma.auditLog.findMany({
+      where: { teamId, actionType: 'session_point_players_updated' },
+    });
+    expect(auditEntries).toHaveLength(1);
+  });
 
   it('lets an admin edit a scheduled session', async () => {
     const { adminToken, teamId, sessionId } = await setUpTeamWithSession();

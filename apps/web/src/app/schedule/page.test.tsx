@@ -390,7 +390,7 @@ describe('SchedulePage', () => {
     expect(screen.getByText('Parent')).toBeInTheDocument();
   });
 
-  it('does not show admin edit/cancel/manage-players controls for a non-admin', async () => {
+  it('does not show admin edit/cancel controls for a non-admin, but does show manage-players', async () => {
     vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
     vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ shiftStatus: 'open' }));
 
@@ -399,7 +399,7 @@ describe('SchedulePage', () => {
     await screen.findByText('Drop-off · Oak St');
     expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /manage players/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /manage players/i })).toBeInTheDocument();
   });
 
   it('does not show admin controls for a session that has already happened', async () => {
