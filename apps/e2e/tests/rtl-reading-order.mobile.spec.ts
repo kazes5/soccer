@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { acceptInvite } from '../fixtures/scenarios';
+import { loginAsSeededUser } from '../fixtures/scenarios';
 
 /**
  * Automated RTL *reading order* check — distinct from what
@@ -23,14 +23,15 @@ import { acceptInvite } from '../fixtures/scenarios';
  * needed. This test would catch a regression where some future change
  * hardcodes an LTR-only direction and silently breaks that.
  *
- * Uses hebrew-parent-6-demo — every other seeded Hebrew parent is already
- * claimed by an existing spec.
+ * Uses דניאל אזולאי (Hebrew parent 6) — every other seeded Hebrew parent is
+ * already claimed by an existing spec.
  */
 test('the bottom nav reads right-to-left in Hebrew', async ({ page, baseURL }) => {
-  await acceptInvite(page, baseURL, {
+  await loginAsSeededUser(page, baseURL, {
     locale: 'he',
-    inviteCode: 'hebrew-parent-6-demo',
+    phone: '+972507890123',
     teamName: 'נבחרת אריות U-12',
+    parentName: 'דניאל אזולאי',
   });
   // Home renders `null` for one tick while its own `api.me()` call is in
   // flight — wait for real content before measuring layout.

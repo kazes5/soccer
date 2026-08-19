@@ -14,6 +14,8 @@ describe('team routes', () => {
         teamName,
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone,
       },
     });

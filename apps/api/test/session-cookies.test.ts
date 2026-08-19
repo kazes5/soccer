@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { getCookie } from './support/cookies';
-import { FakeWebauthnVerifier } from './support/fake-webauthn-verifier';
+
+const PASSWORD = 'Cedar-River!Otter-52';
 
 describe('cookie-based sessions and CSRF', () => {
-  const app = buildApp({ webauthnVerifier: new FakeWebauthnVerifier() });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -24,6 +25,8 @@ describe('cookie-based sessions and CSRF', () => {
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
         adminPhone: '+15551240001',
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     const body = response.json();
@@ -46,45 +49,26 @@ describe('cookie-based sessions and CSRF', () => {
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
         adminPhone: phone,
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     const teamBody = teamResponse.json();
     createdTeamIds.push(teamBody.team.id);
     createdUserIds.push(teamBody.admin.id);
 
-    // Team creation issues a bearer session directly (no invite involved for
-    // the very first admin) — register a passkey on it via the authenticated
-    // pair of endpoints, then log in with that passkey to exercise the real
-    // cookie-issuing path under test here.
-    const registerOptions = await app.inject({
+    // Team creation already issues a session (and sets cookies), but that
+    // response is a bearer token, not the cookie-authenticated path under
+    // test here — log in again with the just-chosen password to exercise the
+    // real cookie-issuing route.
+    const loginResponse = await app.inject({
       method: 'POST',
-      url: '/auth/passkey/register/options',
-      headers: { authorization: `Bearer ${teamBody.sessionToken}` },
-    });
-    const { challengeId: registerChallengeId } = registerOptions.json();
-    const credentialId = `credential-${teamBody.admin.id}`;
-    await app.inject({
-      method: 'POST',
-      url: '/auth/passkey/register/verify',
-      headers: { authorization: `Bearer ${teamBody.sessionToken}` },
-      payload: { challengeId: registerChallengeId, response: { id: credentialId } },
+      url: '/auth/password/login',
+      payload: { identifier: phone, password: PASSWORD },
     });
 
-    const loginOptions = await app.inject({
-      method: 'POST',
-      url: '/auth/passkey/login/options',
-      payload: { phone },
-    });
-    const { challengeId } = loginOptions.json();
-
-    const verifyResponse = await app.inject({
-      method: 'POST',
-      url: '/auth/passkey/login/verify',
-      payload: { challengeId, response: { id: credentialId } },
-    });
-
-    const sessionToken = getCookie(verifyResponse, 'soccer_session')!;
-    const csrfToken = getCookie(verifyResponse, 'soccer_csrf')!;
+    const sessionToken = getCookie(loginResponse, 'soccer_session')!;
+    const csrfToken = getCookie(loginResponse, 'soccer_csrf')!;
     const cookieHeader = `soccer_session=${sessionToken}; soccer_csrf=${csrfToken}`;
     return { cookieHeader, csrfToken, teamId: teamBody.team.id };
   }
@@ -137,6 +121,8 @@ describe('cookie-based sessions and CSRF', () => {
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
         adminPhone: '+15551240008',
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     const teamBody = teamResponse.json();

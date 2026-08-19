@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort } from '../lib/queues';
@@ -100,7 +100,6 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const body = createScheduleTemplateRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const team = await app.prisma.team.findUniqueOrThrow({
       where: { id: params.teamId },
@@ -214,7 +213,6 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
     const body = updateScheduleTemplateRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const team = await app.prisma.team.findUniqueOrThrow({
       where: { id: params.teamId },

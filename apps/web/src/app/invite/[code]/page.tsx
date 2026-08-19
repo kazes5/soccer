@@ -1,8 +1,6 @@
 'use client';
 
 import type { InvitePreview } from '@soccer/contracts';
-import { WebAuthnError, browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -56,7 +54,6 @@ export default function AcceptInvitePage() {
   const [players, setPlayers] = useState<PlayerDraft[]>([{ name: '', age: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     api
@@ -82,110 +79,48 @@ export default function AcceptInvitePage() {
     setPlayers((current) => current.filter((_, i) => i !== index));
   }
 
-  async function registerPasskey() {
-    setError(null);
-    if (!browserSupportsWebAuthn()) {
-      setError(t('invite.passkeyNotSupported'));
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const { challengeId, options } = await api.getInvitePasskeyRegisterOptions(code);
-      const response = await startRegistration({
-        optionsJSON: options as PublicKeyCredentialCreationOptionsJSON,
-      });
-      await api.verifyInvitePasskeyRegister(code, { challengeId, response });
-      router.push('/home');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else if (err instanceof WebAuthnError) {
-        setError(t('invite.passkeyCancelled'));
-      } else {
-        setError(t('common.somethingWentWrong'));
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
-      if (preview?.requiresCode) {
-        if (!verificationToken) {
-          const verified = await api.verifyInviteCode(code, { code: onboardingCode });
-          setVerificationToken(verified.verificationToken);
-          setExistingAccount(verified.existingAccount);
-          setIsSubmitting(false);
-          return;
-        }
-        if (existingAccount) {
-          try {
-            await api.attachExistingAccountInvite(code, { verificationToken });
-            window.sessionStorage.removeItem(`invite-grant:${code}`);
-            router.push('/home');
-          } catch (attachError) {
-            if (attachError instanceof ApiError && attachError.status === 401) {
-              window.sessionStorage.setItem(`invite-grant:${code}`, verificationToken);
-              router.push(`/login?next=${encodeURIComponent(`/invite/${code}`)}`);
-              return;
-            }
-            throw attachError;
-          }
-          return;
-        }
-        await api.completePasswordOnboarding(code, {
-          verificationToken,
-          name,
-          language: locale,
-          password,
-          passwordConfirmation,
-          players: players
-            .filter((player) => player.name.trim().length > 0)
-            .map((player) => ({ name: player.name.trim(), age: parsePlayerAge(player.age) })),
-        });
-        router.push('/home');
+      if (!verificationToken) {
+        const verified = await api.verifyInviteCode(code, { code: onboardingCode });
+        setVerificationToken(verified.verificationToken);
+        setExistingAccount(verified.existingAccount);
+        setIsSubmitting(false);
         return;
       }
-      await api.acceptInvite(code, {
+      if (existingAccount) {
+        try {
+          await api.attachExistingAccountInvite(code, { verificationToken });
+          window.sessionStorage.removeItem(`invite-grant:${code}`);
+          router.push('/home');
+        } catch (attachError) {
+          if (attachError instanceof ApiError && attachError.status === 401) {
+            window.sessionStorage.setItem(`invite-grant:${code}`, verificationToken);
+            router.push(`/login?next=${encodeURIComponent(`/invite/${code}`)}`);
+            return;
+          }
+          throw attachError;
+        }
+        return;
+      }
+      await api.completePasswordOnboarding(code, {
+        verificationToken,
         name,
         language: locale,
+        password,
+        passwordConfirmation,
         players: players
           .filter((player) => player.name.trim().length > 0)
-          .map((player) => ({
-            name: player.name.trim(),
-            age: parsePlayerAge(player.age),
-          })),
+          .map((player) => ({ name: player.name.trim(), age: parsePlayerAge(player.age) })),
       });
-      // The account now exists — from here on, failure only affects passkey
-      // setup, never re-accepts the invite.
-      setAccepted(true);
-      await registerPasskey();
+      router.push('/home');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
       setIsSubmitting(false);
     }
-  }
-
-  if (accepted) {
-    return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 p-8 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">{t('invite.acceptedTitle')}</h1>
-        <p className="text-sm text-ink-muted">{t('invite.acceptedBody')}</p>
-        {error && <FormError>{error}</FormError>}
-        <button
-          type="button"
-          disabled={isSubmitting}
-          onClick={registerPasskey}
-          className={buttonClassName}
-        >
-          {isSubmitting ? t('invite.passkeySettingUp') : t('common.retry')}
-        </button>
-      </main>
-    );
   }
 
   if (previewFailed) {
@@ -227,7 +162,7 @@ export default function AcceptInvitePage() {
         <p className="mt-1 text-sm text-ink-muted">{t('invite.joinSubtitle')}</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {preview.requiresCode && !verificationToken && (
+        {!verificationToken && (
           <Field label={t('invite.codeLabel')}>
             <input
               required
@@ -242,7 +177,7 @@ export default function AcceptInvitePage() {
             />
           </Field>
         )}
-        {(!preview.requiresCode || verificationToken) && !existingAccount && (
+        {verificationToken && !existingAccount && (
           <>
             <Field label={t('invite.yourNameLabel')}>
               <input
@@ -289,34 +224,30 @@ export default function AcceptInvitePage() {
               </button>
             </div>
 
-            {preview.requiresCode && (
-              <>
-                <Field label={t('invite.passwordLabel')}>
-                  <input
-                    required
-                    type="password"
-                    minLength={15}
-                    maxLength={128}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className={inputClassName}
-                  />
-                </Field>
-                <Field label={t('invite.passwordConfirmationLabel')}>
-                  <input
-                    required
-                    type="password"
-                    minLength={15}
-                    maxLength={128}
-                    autoComplete="new-password"
-                    value={passwordConfirmation}
-                    onChange={(event) => setPasswordConfirmation(event.target.value)}
-                    className={inputClassName}
-                  />
-                </Field>
-              </>
-            )}
+            <Field label={t('invite.passwordLabel')}>
+              <input
+                required
+                type="password"
+                minLength={15}
+                maxLength={128}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClassName}
+              />
+            </Field>
+            <Field label={t('invite.passwordConfirmationLabel')}>
+              <input
+                required
+                type="password"
+                minLength={15}
+                maxLength={128}
+                autoComplete="new-password"
+                value={passwordConfirmation}
+                onChange={(event) => setPasswordConfirmation(event.target.value)}
+                className={inputClassName}
+              />
+            </Field>
           </>
         )}
 
@@ -328,7 +259,7 @@ export default function AcceptInvitePage() {
         <button type="submit" disabled={isSubmitting} className={buttonClassName}>
           {isSubmitting
             ? t('invite.submitting')
-            : preview.requiresCode && !verificationToken
+            : !verificationToken
               ? t('invite.verifyCode')
               : existingAccount
                 ? t('invite.attachExistingAccount')

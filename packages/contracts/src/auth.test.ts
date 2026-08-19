@@ -1,34 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { passkeyLoginOptionsRequestSchema, passkeyVerifyRequestSchema } from './auth';
+import { setPasswordRequestSchema } from './auth';
 
-describe('passkeyLoginOptionsRequestSchema', () => {
-  it('rejects a request with neither phone nor email', () => {
-    const result = passkeyLoginOptionsRequestSchema.safeParse({});
+describe('setPasswordRequestSchema', () => {
+  it('rejects mismatched password/confirmation', () => {
+    const result = setPasswordRequestSchema.safeParse({
+      password: 'Cedar-River!Otter-52',
+      passwordConfirmation: 'different',
+    });
 
     expect(result.success).toBe(false);
   });
 
-  it('accepts a request identified by phone', () => {
-    const result = passkeyLoginOptionsRequestSchema.safeParse({ phone: '+15550000001' });
-
-    expect(result.success).toBe(true);
-  });
-});
-
-describe('passkeyVerifyRequestSchema', () => {
-  it('requires a challengeId and a response', () => {
-    const result = passkeyVerifyRequestSchema.safeParse({
-      challengeId: '11111111-1111-4111-8111-111111111111',
-      response: { id: 'fake-credential' },
+  it('accepts a matching password/confirmation of sufficient length', () => {
+    const result = setPasswordRequestSchema.safeParse({
+      password: 'Cedar-River!Otter-52',
+      passwordConfirmation: 'Cedar-River!Otter-52',
     });
 
     expect(result.success).toBe(true);
   });
 
-  it('rejects a non-uuid challengeId', () => {
-    const result = passkeyVerifyRequestSchema.safeParse({
-      challengeId: 'not-a-uuid',
-      response: {},
+  it('rejects a password shorter than 15 characters', () => {
+    const result = setPasswordRequestSchema.safeParse({
+      password: 'short12',
+      passwordConfirmation: 'short12',
     });
 
     expect(result.success).toBe(false);

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
 import { generateSessionToken, hashSecret } from '../src/lib/crypto';
+import { hashPassword } from '../src/lib/passwords';
 
 describe('system administrator routes', () => {
   const app = buildApp({ systemAdminEnabled: true });
@@ -37,9 +38,8 @@ describe('system administrator routes', () => {
     options: {
       name?: string;
       systemAdmin?: boolean;
-      hasPasskey?: boolean;
+      hasPassword?: boolean;
       isActive?: boolean;
-      authMethod?: 'passkey' | 'password';
     } = {},
   ) {
     const suffix = randomUUID();
@@ -50,17 +50,10 @@ describe('system administrator routes', () => {
         normalizedEmail: `${suffix}@system.test`,
         systemRole: options.systemAdmin ? 'system_admin' : null,
         isActive: options.isActive ?? true,
-        ...(options.hasPasskey
+        ...(options.hasPassword
           ? {
-              passkeys: {
-                create: {
-                  credentialId: `credential-${suffix}`,
-                  publicKey: Buffer.from('system-test-public-key'),
-                  counter: 0,
-                  transports: ['internal'],
-                  deviceType: 'singleDevice',
-                  backedUp: false,
-                },
+              passwordCredential: {
+                create: { passwordHash: await hashPassword('Cedar-River!Otter-52') },
               },
             }
           : {}),
@@ -74,7 +67,6 @@ describe('system administrator routes', () => {
         userId: user.id,
         tokenHash: hashSecret(token),
         expiresAt: new Date(Date.now() + 60_000),
-        authMethod: options.authMethod ?? 'passkey',
       },
     });
     return { user, token };
@@ -89,7 +81,7 @@ describe('system administrator routes', () => {
   }
 
   it('returns 404 while the system-admin feature is disabled', async () => {
-    const { token } = await createUser({ systemAdmin: true, hasPasskey: true });
+    const { token } = await createUser({ systemAdmin: true, hasPassword: true });
 
     const response = await disabledApp.inject({
       method: 'GET',
@@ -101,25 +93,8 @@ describe('system administrator routes', () => {
     expect(response.json()).toEqual({ message: 'Not found.' });
   });
 
-  it('requires a privileged passkey session for system routes', async () => {
-    const { token } = await createUser({
-      systemAdmin: true,
-      hasPasskey: true,
-      authMethod: 'password',
-    });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/system/overview',
-      headers: { authorization: `Bearer ${token}` },
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(response.json().message).toContain('passkey');
-  });
-
   it('does not let the global role bypass ordinary team membership checks', async () => {
-    const { token } = await createUser({ systemAdmin: true, hasPasskey: true });
+    const { token } = await createUser({ systemAdmin: true, hasPassword: true });
     const team = await createTeam();
 
     const response = await app.inject({
@@ -136,9 +111,9 @@ describe('system administrator routes', () => {
     const { user: actor, token } = await createUser({
       name: 'Global Operator',
       systemAdmin: true,
-      hasPasskey: true,
+      hasPassword: true,
     });
-    const { user: member } = await createUser({ name: 'Visible Parent', hasPasskey: false });
+    const { user: member } = await createUser({ name: 'Visible Parent', hasPassword: false });
     const team = await createTeam('Visible Team');
     await app.prisma.teamMember.createMany({
       data: [
@@ -179,8 +154,8 @@ describe('system administrator routes', () => {
     expect(members.statusCode).toBe(200);
     expect(members.json().members).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: actor.id, role: 'admin', hasPasskey: true }),
-        expect.objectContaining({ id: member.id, role: 'parent', hasPasskey: false }),
+        expect.objectContaining({ id: actor.id, role: 'admin', hasPassword: true }),
+        expect.objectContaining({ id: member.id, role: 'parent', hasPassword: false }),
       ]),
     );
 
@@ -190,33 +165,25 @@ describe('system administrator routes', () => {
     ]);
   });
 
-  it('requires an active passkey owner, audits grant and revoke, and preserves the last admin', async () => {
+  it('requires an active password owner, audits grant and revoke, and preserves the last admin', async () => {
     const { user: actor, token } = await createUser({
       systemAdmin: true,
-      hasPasskey: true,
+      hasPassword: true,
     });
     const { user: target } = await createUser();
     const headers = { authorization: `Bearer ${token}` };
     const roleUrl = `/system/users/${target.id}/system-role`;
 
-    const withoutPasskey = await app.inject({
+    const withoutPassword = await app.inject({
       method: 'PATCH',
       url: roleUrl,
       headers,
       payload: { systemRole: 'system_admin' },
     });
-    expect(withoutPasskey.statusCode).toBe(409);
+    expect(withoutPassword.statusCode).toBe(409);
 
-    await app.prisma.passkey.create({
-      data: {
-        userId: target.id,
-        credentialId: `credential-${randomUUID()}`,
-        publicKey: Buffer.from('system-test-public-key'),
-        counter: 0,
-        transports: ['internal'],
-        deviceType: 'singleDevice',
-        backedUp: false,
-      },
+    await app.prisma.passwordCredential.create({
+      data: { userId: target.id, passwordHash: await hashPassword('Cedar-River!Otter-52') },
     });
     await app.prisma.user.update({ where: { id: target.id }, data: { isActive: false } });
     const inactive = await app.inject({
@@ -274,7 +241,7 @@ describe('system administrator routes', () => {
   it('changes a team role with normal side effects and makes a repeated no-op inert', async () => {
     const { token } = await createUser({
       systemAdmin: true,
-      hasPasskey: true,
+      hasPassword: true,
     });
     const { user: teamAdmin } = await createUser({ name: 'Team Admin' });
     const { user: parent } = await createUser({ name: 'Promoted Parent' });
@@ -331,7 +298,7 @@ describe('system administrator routes', () => {
     const { user: sysAdmin, token: sysAdminToken } = await createUser({
       name: 'Global Operator',
       systemAdmin: true,
-      hasPasskey: true,
+      hasPassword: true,
     });
     const team = await createTeam();
     await app.prisma.teamMember.createMany({
@@ -372,7 +339,7 @@ describe('system administrator routes', () => {
     const { user: actor, token } = await createUser({
       name: 'Global Operator',
       systemAdmin: true,
-      hasPasskey: true,
+      hasPassword: true,
     });
     const { token: parentToken } = await createUser();
     const entry = await app.prisma.systemAuditLog.create({
@@ -426,5 +393,159 @@ describe('system administrator routes', () => {
     expect(await app.prisma.systemAuditLog.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(
       entry,
     );
+  });
+
+  it('lets a system admin create a team, add a member directly, and set a password for any user', async () => {
+    const { token } = await createUser({ systemAdmin: true, hasPassword: true });
+    const headers = { authorization: `Bearer ${token}` };
+
+    const createTeamResponse = await app.inject({
+      method: 'POST',
+      url: '/system/teams',
+      headers,
+      payload: {
+        teamName: `System-created team ${randomUUID()}`,
+        season: 'Fall 2026',
+        adminName: 'Founding Admin',
+        adminEmail: `founding-${randomUUID()}@example.com`,
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
+      },
+    });
+    expect(createTeamResponse.statusCode).toBe(201);
+    const createdTeam = createTeamResponse.json();
+    expect(createdTeam).not.toHaveProperty('sessionToken');
+    createdTeamIds.push(createdTeam.team.id);
+    createdUserIds.push(createdTeam.admin.id);
+
+    const addMemberResponse = await app.inject({
+      method: 'POST',
+      url: `/system/teams/${createdTeam.team.id}/members`,
+      headers,
+      payload: {
+        role: 'parent',
+        name: 'Directly Added Parent',
+        email: `direct-${randomUUID()}@example.com`,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
+    });
+    expect(addMemberResponse.statusCode).toBe(201);
+    const addedMember = addMemberResponse.json();
+    createdUserIds.push(addedMember.id);
+    expect(addedMember).toMatchObject({ role: 'parent', hasPassword: true });
+
+    const setPasswordResponse = await app.inject({
+      method: 'POST',
+      url: `/system/users/${addedMember.id}/set-password`,
+      headers,
+      payload: {
+        password: 'Willow-Harbor!Finch-81',
+        passwordConfirmation: 'Willow-Harbor!Finch-81',
+      },
+    });
+    expect(setPasswordResponse.statusCode).toBe(204);
+
+    const oldLogin = await app.inject({
+      method: 'POST',
+      url: '/auth/password/login',
+      payload: {
+        identifier: (await app.prisma.user.findUniqueOrThrow({ where: { id: addedMember.id } }))
+          .email!,
+        password: 'Cedar-River!Otter-52',
+      },
+    });
+    expect(oldLogin.statusCode).toBe(401);
+  });
+
+  it('reactivates a previously-removed member with the same email instead of erroring', async () => {
+    const { token } = await createUser({ systemAdmin: true, hasPassword: true });
+    const headers = { authorization: `Bearer ${token}` };
+    const team = await createTeam();
+    const email = `rejoin-${randomUUID()}@example.com`;
+
+    // DELETE /teams/:teamId/members/:userId is an ordinary team-scoped route
+    // (CLAUDE.md §9.2: system_admin is never a bypass for /teams/*
+    // authorization), so removing the reactivation target needs a real team
+    // admin's session, not the system-admin token used everywhere else here.
+    const teamAdmin = await app.inject({
+      method: 'POST',
+      url: `/system/teams/${team.id}/members`,
+      headers,
+      payload: {
+        role: 'admin',
+        name: 'Team Admin',
+        email: `team-admin-${randomUUID()}@example.com`,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
+    });
+    expect(teamAdmin.statusCode).toBe(201);
+    const teamAdminId = teamAdmin.json().id as string;
+    createdUserIds.push(teamAdminId);
+    const teamAdminToken = generateSessionToken();
+    await app.prisma.session.create({
+      data: {
+        userId: teamAdminId,
+        tokenHash: hashSecret(teamAdminToken),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/system/teams/${team.id}/members`,
+      headers,
+      payload: {
+        role: 'parent',
+        name: 'Original Name',
+        email,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
+    });
+    expect(first.statusCode).toBe(201);
+    const firstUserId = first.json().id as string;
+    createdUserIds.push(firstUserId);
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/teams/${team.id}/members/${firstUserId}`,
+      headers: { authorization: `Bearer ${teamAdminToken}` },
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const reactivated = await app.inject({
+      method: 'POST',
+      url: `/system/teams/${team.id}/members`,
+      headers,
+      payload: {
+        role: 'admin',
+        name: 'Rejoined Name',
+        email,
+        password: 'Willow-Harbor!Finch-81',
+        passwordConfirmation: 'Willow-Harbor!Finch-81',
+      },
+    });
+    expect(reactivated.statusCode).toBe(201);
+    const body = reactivated.json();
+    expect(body.id).toBe(firstUserId);
+    expect(body).toMatchObject({ name: 'Rejoined Name', role: 'admin' });
+
+    const user = await app.prisma.user.findUniqueOrThrow({ where: { id: firstUserId } });
+    expect(user.isActive).toBe(true);
+
+    expect(
+      await app.prisma.teamMember.count({
+        where: { teamId: team.id, userId: firstUserId, role: 'admin' },
+      }),
+    ).toBe(1);
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/password/login',
+      payload: { identifier: email, password: 'Willow-Harbor!Finch-81' },
+    });
+    expect(login.statusCode).toBe(200);
   });
 });

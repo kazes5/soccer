@@ -1,5 +1,9 @@
 import {
+  createTeamRequestSchema,
+  setPasswordRequestSchema,
+  systemAddMemberRequestSchema,
   systemAuditListResponseSchema,
+  systemCreateTeamResponseSchema,
   systemOverviewSchema,
   systemTeamListResponseSchema,
   systemTeamMemberListResponseSchema,
@@ -10,14 +14,18 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireSystemAdmin } from '../lib/authorization';
+import { createOrReactivateTeamMember } from '../lib/direct-member';
 import { HttpError } from '../lib/errors';
 import { recordAuditLog } from '../lib/audit';
+import { normalizeEmail, normalizePhone } from '../lib/identifiers';
+import { assertAcceptablePassword, hashPassword } from '../lib/passwords';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort } from '../lib/queues';
 import { recordSystemAuditLog } from '../lib/system-audit';
 
 const idParams = z.object({ id: z.string().uuid() });
 const memberParams = z.object({ teamId: z.string().uuid(), userId: z.string().uuid() });
+const teamParams = z.object({ teamId: z.string().uuid() });
 const listQuery = z.object({
   search: z.string().trim().max(100).optional(),
   cursor: z.string().uuid().optional(),
@@ -87,7 +95,7 @@ export default async function systemRoutes(app: FastifyInstance) {
             email: true,
             isActive: true,
             systemRole: true,
-            _count: { select: { passkeys: true } },
+            passwordCredential: { select: { userId: true } },
           },
         },
       },
@@ -100,7 +108,7 @@ export default async function systemRoutes(app: FastifyInstance) {
         email: user.email,
         isActive: user.isActive,
         systemRole: user.systemRole,
-        hasPasskey: user._count.passkeys > 0,
+        hasPassword: user.passwordCredential !== null,
         role,
         joinedAt: joinedAt.toISOString(),
       })),
@@ -131,7 +139,8 @@ export default async function systemRoutes(app: FastifyInstance) {
         isActive: true,
         systemRole: true,
         createdAt: true,
-        _count: { select: { teamMemberships: true, passkeys: true } },
+        passwordCredential: { select: { userId: true } },
+        _count: { select: { teamMemberships: true } },
       },
     });
     const page = users.slice(0, query.limit);
@@ -143,7 +152,7 @@ export default async function systemRoutes(app: FastifyInstance) {
         email: user.email,
         isActive: user.isActive,
         systemRole: user.systemRole,
-        hasPasskey: user._count.passkeys > 0,
+        hasPassword: user.passwordCredential !== null,
         membershipCount: user._count.teamMemberships,
         createdAt: user.createdAt.toISOString(),
       })),
@@ -190,14 +199,14 @@ export default async function systemRoutes(app: FastifyInstance) {
         throw new HttpError(403, 'System administrator access is required.');
       const target = await tx.user.findUnique({
         where: { id },
-        include: { _count: { select: { passkeys: true, teamMemberships: true } } },
+        include: { passwordCredential: true },
       });
       if (!target) throw new HttpError(404, 'User not found.');
       if (
         body.systemRole === 'system_admin' &&
-        (!target.isActive || target._count.passkeys === 0)
+        (!target.isActive || target.passwordCredential === null)
       ) {
-        throw new HttpError(409, 'A system administrator must be active and have a passkey.');
+        throw new HttpError(409, 'A system administrator must be active and have a password set.');
       }
       if (target.systemRole === body.systemRole)
         return { id: target.id, systemRole: target.systemRole };
@@ -300,5 +309,173 @@ export default async function systemRoutes(app: FastifyInstance) {
       enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
     }
     return result.response;
+  });
+
+  // System admin creates a new team and its founding admin, with a password
+  // of the system admin's own choosing. Doesn't log the system admin in as
+  // that admin — they keep their own session — unlike the public self-serve
+  // POST /teams, which does.
+  app.post('/system/teams', async (request, reply) => {
+    const currentUser = await guard(app, request);
+    const body = createTeamRequestSchema.parse(request.body);
+    const password = assertAcceptablePassword(body.adminPassword, [
+      body.adminEmail ?? '',
+      body.adminPhone ?? '',
+    ]);
+    const passwordHash = await hashPassword(password);
+
+    const { team, admin } = await app.prisma.$transaction(async (tx) => {
+      const createdTeam = await tx.team.create({
+        data: { name: body.teamName, season: body.season, timezone: body.timezone },
+      });
+      const createdAdmin = await tx.user.create({
+        data: {
+          name: body.adminName,
+          phone: body.adminPhone,
+          email: body.adminEmail,
+          normalizedPhone: body.adminPhone ? normalizePhone(body.adminPhone) : undefined,
+          normalizedEmail: body.adminEmail ? normalizeEmail(body.adminEmail) : undefined,
+          languagePreference: body.adminLanguage,
+          passwordCredential: { create: { passwordHash } },
+          teamMemberships: { create: { teamId: createdTeam.id, role: 'admin' } },
+        },
+      });
+      await recordAuditLog(tx, {
+        teamId: createdTeam.id,
+        actorId: currentUser.id,
+        actionType: 'team_created',
+        targetEntity: 'team',
+        targetId: createdTeam.id,
+        afterState: { name: createdTeam.name, season: createdTeam.season },
+      });
+      await recordSystemAuditLog(tx, {
+        actorId: currentUser.id,
+        teamId: createdTeam.id,
+        actionType: 'team_created',
+        targetEntity: 'team',
+        targetId: createdTeam.id,
+        afterState: { name: createdTeam.name, season: createdTeam.season },
+      });
+      return { team: createdTeam, admin: createdAdmin };
+    });
+
+    reply.status(201);
+    return systemCreateTeamResponseSchema.parse({
+      team: { id: team.id, name: team.name, season: team.season, timezone: team.timezone },
+      admin: {
+        id: admin.id,
+        name: admin.name,
+        phone: admin.phone,
+        email: admin.email,
+        languagePreference: admin.languagePreference,
+      },
+    });
+  });
+
+  // System admin adds a parent or admin directly to an existing team, with a
+  // password of their own choosing.
+  app.post('/system/teams/:teamId/members', async (request, reply) => {
+    const currentUser = await guard(app, request);
+    const { teamId } = teamParams.parse(request.params);
+    const body = systemAddMemberRequestSchema.parse(request.body);
+    const team = await app.prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) throw new HttpError(404, 'Team not found.');
+
+    const result = await app.prisma.$transaction(async (tx) => {
+      const { user, reactivating } = await createOrReactivateTeamMember(tx, {
+        teamId,
+        role: body.role,
+        name: body.name,
+        phone: body.phone,
+        email: body.email,
+        language: body.language,
+        password: body.password,
+        players: body.role === 'parent' ? body.players : [],
+      });
+      await recordAuditLog(tx, {
+        teamId,
+        actorId: currentUser.id,
+        actionType: 'member_added_directly',
+        targetEntity: 'team_member',
+        targetId: user.id,
+        afterState: {
+          userId: user.id,
+          name: user.name,
+          role: body.role,
+          reactivated: reactivating,
+        },
+      });
+      await recordSystemAuditLog(tx, {
+        actorId: currentUser.id,
+        teamId,
+        actionType: 'member_added_directly',
+        targetEntity: 'team_member',
+        targetId: user.id,
+        afterState: {
+          userId: user.id,
+          name: user.name,
+          role: body.role,
+          reactivated: reactivating,
+        },
+      });
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId,
+        eventType: 'member_added_directly',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: user.id, userName: user.name },
+      });
+      return { user, outboxEventId: outboxEvent.id };
+    });
+
+    enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
+    reply.status(201);
+    return {
+      id: result.user.id,
+      name: result.user.name,
+      phone: result.user.phone,
+      email: result.user.email,
+      isActive: true,
+      systemRole: null,
+      hasPassword: true,
+      role: body.role,
+      joinedAt: result.user.createdAt.toISOString(),
+    };
+  });
+
+  // System admin resets any user's password, across any team.
+  app.post('/system/users/:id/set-password', async (request, reply) => {
+    const currentUser = await guard(app, request);
+    const { id } = idParams.parse(request.params);
+    const body = setPasswordRequestSchema.parse(request.body);
+
+    const target = await app.prisma.user.findUnique({ where: { id } });
+    if (!target) throw new HttpError(404, 'User not found.');
+
+    const password = assertAcceptablePassword(body.password, [
+      target.email ?? '',
+      target.phone ?? '',
+    ]);
+    const passwordHash = await hashPassword(password);
+
+    await app.prisma.$transaction(async (tx) => {
+      await tx.passwordCredential.upsert({
+        where: { userId: id },
+        create: { userId: id, passwordHash },
+        update: { passwordHash, passwordChangedAt: new Date() },
+      });
+      await tx.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await recordSystemAuditLog(tx, {
+        actorId: currentUser.id,
+        actionType: 'password_set_by_admin',
+        targetEntity: 'user',
+        targetId: id,
+      });
+    });
+
+    reply.status(204).send();
   });
 }

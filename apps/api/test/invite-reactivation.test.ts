@@ -17,7 +17,7 @@ const NEW_PASSWORD = 'Willow-Harbor!Finch-81';
  * legacy passkey invite flow.
  */
 describe('re-inviting a removed parent', () => {
-  const app = buildApp({ passwordAuthEnabled: true });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -38,6 +38,8 @@ describe('re-inviting a removed parent', () => {
         season: 'Fall 2026',
         adminName: 'Admin Parent',
         adminEmail: `admin-${suffix}@example.com`,
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     expect(response.statusCode).toBe(201);
@@ -54,7 +56,7 @@ describe('re-inviting a removed parent', () => {
   async function invitePasswordParent(teamId: string, adminToken: string, email: string) {
     const inviteResponse = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/password-invites`,
+      url: `/teams/${teamId}/invites`,
       headers: { authorization: `Bearer ${adminToken}` },
       payload: { email },
     });

@@ -80,14 +80,11 @@ revoked. Nothing further to clean up manually.
 
 **Re-inviting a previously-removed parent** (device lost, coming back to
 the team, etc.) works the same as inviting anyone new — send a fresh
-invite to their phone/email. If password auth is enabled, this reactivates
-their deactivated account in place rather than creating a duplicate or
-routing them into a dead end (see
+invite to their phone/email, or set a new password for them directly (see
 [authentication-and-system-admin.md](./authentication-and-system-admin.md)).
-For the legacy passkey-only invite flow, re-accepting an invite for someone
-still on the team re-issues a passkey to their existing account instead of
-creating a duplicate membership — this is the intended recovery path for a
-parent who lost their device, not a bug.
+Completing onboarding for the invite reactivates their deactivated account
+in place rather than creating a duplicate or routing them into a dead end —
+this is the intended recovery path for a parent who's locked out, not a bug.
 
 ## Notification failures
 
@@ -114,12 +111,16 @@ parent who lost their device, not a bug.
 2. Confirm scope: one team, one user, or everyone? Team/user-scoped issues
    are almost always data or authorization bugs; global outages are almost
    always Postgres/Redis connectivity.
-3. `PASSWORD_AUTH_ENABLED` and `SYSTEM_ADMIN_ENABLED` are the two rollback
-   levers for the newest surfaces (Stage 5's auth/system-admin work) — both
-   default `false` and can be flipped without a deploy if the runtime reads
-   them from environment. A regression isolated to password login or the
-   system console can be contained by disabling the relevant flag while a
-   fix is prepared, without taking down ordinary passkey/team-admin flows.
+3. `SYSTEM_ADMIN_ENABLED` is the rollback lever for the system console —
+   defaults `false` and can be flipped without a deploy if the runtime reads
+   it from environment. A regression isolated to the system console can be
+   contained by disabling this flag while a fix is prepared, without taking
+   down ordinary parent/team-admin flows. Password authentication itself has
+   no such flag — it's the only login method, for every role, as of the
+   2026-08-19 passkey removal (see
+   [authentication-and-system-admin.md](./authentication-and-system-admin.md)),
+   so a password-login regression can't be contained by disabling a flag; it
+   needs a real fix or a rollback deploy.
 4. There is no external status page or on-call rotation for this pilot —
    whoever is reachable handles it. Document what happened and the fix in
    `PLAN.md`'s progress notes once resolved, same as every other decision
@@ -215,13 +216,14 @@ processes — this project's own standing definition of "staging" (Stage 1,
 
 ## Session timeout
 
-Nothing to build here (Stage 5's checklist listed this as an open item,
-but the behavior already exists): sessions expire after 30 days of
-inactivity (`SESSION_TTL_DAYS`, CLAUDE.md §9.1), and sensitive actions
-(admin removal, schedule-template changes, adding a passkey) already force
-fresh passkey assurance via `requirePrivilegedAssurance` regardless of how
-old the session is. There is no idle-timeout warning UI — sessions simply
-stop working past their TTL and the user is redirected to `/login`.
+Sessions expire after 30 days of inactivity (`SESSION_TTL_DAYS`, CLAUDE.md
+§9.1). As of the 2026-08-19 passkey removal there is no separate step-up
+assurance level for sensitive actions (admin removal, schedule-template
+changes, etc.) — a password-authenticated session with the right role is
+sufficient for the remainder of its normal 30-day lifetime; the previous
+`requirePrivilegedAssurance` freshness re-check no longer exists. There is
+no idle-timeout warning UI — sessions simply stop working past their TTL and
+the user is redirected to `/login`.
 
 ## Pilot support
 

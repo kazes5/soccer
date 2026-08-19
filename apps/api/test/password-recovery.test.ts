@@ -27,15 +27,13 @@ function tokenFromResetUrl(resetUrl: string): string {
 
 describe('password recovery', () => {
   const recoveryProvider = new FakePasswordRecoveryProvider();
-  const app = buildApp({ passwordAuthEnabled: true, passwordRecoveryProvider: recoveryProvider });
+  const app = buildApp({ passwordRecoveryProvider: recoveryProvider });
   // A provider that exists but reports unconfigured — distinct from the
   // default DisabledPasswordRecoveryProvider, to prove the route itself
   // checks `isConfigured`, not just whether a provider object was supplied.
   const unconfiguredApp = buildApp({
-    passwordAuthEnabled: true,
     passwordRecoveryProvider: { isConfigured: false, sendReset: async () => {} },
   });
-  const disabledApp = buildApp({ passwordAuthEnabled: false });
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
 
@@ -47,10 +45,10 @@ describe('password recovery', () => {
     recoveryProvider.sent.length = 0;
   });
 
-  async function createTeamWithPasswordAdmin() {
+  async function createTeamWithPasswordAdmin(targetApp: typeof app = app) {
     const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
     const email = `admin-${suffix}@example.com`;
-    const teamResponse = await app.inject({
+    const teamResponse = await targetApp.inject({
       method: 'POST',
       url: '/teams',
       payload: {
@@ -58,20 +56,14 @@ describe('password recovery', () => {
         season: 'Fall 2026',
         adminName: 'Admin Parent',
         adminEmail: email,
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     const teamBody = teamResponse.json() as { team: { id: string }; admin: { id: string } };
     createdTeamIds.push(teamBody.team.id);
     createdUserIds.push(teamBody.admin.id);
-
-    // Give the admin a password credential the same way real onboarding
-    // would (password-invite flow) — simplest path here is a direct
-    // credential write, since what's under test is recovery, not onboarding.
-    const { hashPassword } = await import('../src/lib/passwords');
-    await app.prisma.passwordCredential.create({
-      data: { userId: teamBody.admin.id, passwordHash: await hashPassword(PASSWORD) },
-    });
-    await app.prisma.user.update({
+    await targetApp.prisma.user.update({
       where: { id: teamBody.admin.id },
       data: { normalizedEmail: normalizeEmail(email) },
     });
@@ -79,60 +71,26 @@ describe('password recovery', () => {
     return { userId: teamBody.admin.id, email };
   }
 
-  it('returns the same generic response for a real account, an unknown identifier, and a passkey-only account', async () => {
+  it('returns the same generic response for a real account and an unknown identifier', async () => {
     const { email } = await createTeamWithPasswordAdmin();
     const unknownEmail = `unknown-${randomUUID()}@example.com`;
 
-    // A real user who never set a password (legacy passkey-only onboarding)
-    // — recovery must not treat "no password credential" differently from
-    // "no account at all", or the response itself becomes an oracle.
-    const passkeyOnlyResponse = await app.inject({
-      method: 'POST',
-      url: '/teams',
-      payload: {
-        teamName: `Passkey only ${randomUUID()}`,
-        season: 'Fall 2026',
-        adminName: 'Passkey Admin',
-        adminEmail: `passkey-only-${randomUUID()}@example.com`,
-      },
-    });
-    const passkeyOnlyBody = passkeyOnlyResponse.json() as {
-      team: { id: string };
-      admin: { id: string; email: string };
-    };
-    createdTeamIds.push(passkeyOnlyBody.team.id);
-    createdUserIds.push(passkeyOnlyBody.admin.id);
-    await app.prisma.user.update({
-      where: { id: passkeyOnlyBody.admin.id },
-      data: { normalizedEmail: normalizeEmail(passkeyOnlyBody.admin.email) },
-    });
-
-    const [real, unknown, passkeyOnly] = await Promise.all([
+    const [real, unknown] = await Promise.all([
       app.inject({ method: 'POST', url: '/auth/password/forgot', payload: { identifier: email } }),
       app.inject({
         method: 'POST',
         url: '/auth/password/forgot',
         payload: { identifier: unknownEmail },
       }),
-      app.inject({
-        method: 'POST',
-        url: '/auth/password/forgot',
-        payload: { identifier: passkeyOnlyBody.admin.email },
-      }),
     ]);
 
     expect(real.statusCode).toBe(202);
     expect(unknown.statusCode).toBe(202);
-    expect(passkeyOnly.statusCode).toBe(202);
     expect(real.json()).toEqual(unknown.json());
-    expect(passkeyOnly.json()).toEqual(unknown.json());
 
     // Only the genuinely recoverable account actually got an email/token.
     expect(recoveryProvider.sent).toHaveLength(1);
     expect(recoveryProvider.sent[0]?.email).toBe(email);
-    expect(
-      await app.prisma.passwordResetToken.count({ where: { userId: passkeyOnlyBody.admin.id } }),
-    ).toBe(0);
   });
 
   it('completes a real reset end to end: old password stops working, new password works, other sessions are revoked', async () => {
@@ -143,7 +101,6 @@ describe('password recovery', () => {
         userId,
         tokenHash: hashSecret(otherSessionToken),
         expiresAt: new Date(Date.now() + 60_000),
-        authMethod: 'password',
       },
     });
 
@@ -288,29 +245,7 @@ describe('password recovery', () => {
   });
 
   it('sends nothing and creates no token when no recovery provider is configured', async () => {
-    const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-    const email = `unconfigured-${suffix}@example.com`;
-    const teamResponse = await unconfiguredApp.inject({
-      method: 'POST',
-      url: '/teams',
-      payload: {
-        teamName: `Unconfigured recovery ${suffix}`,
-        season: 'Fall 2026',
-        adminName: 'Admin Parent',
-        adminEmail: email,
-      },
-    });
-    const teamBody = teamResponse.json() as { team: { id: string }; admin: { id: string } };
-    createdTeamIds.push(teamBody.team.id);
-    createdUserIds.push(teamBody.admin.id);
-    await unconfiguredApp.prisma.user.update({
-      where: { id: teamBody.admin.id },
-      data: { normalizedEmail: normalizeEmail(email) },
-    });
-    const { hashPassword } = await import('../src/lib/passwords');
-    await unconfiguredApp.prisma.passwordCredential.create({
-      data: { userId: teamBody.admin.id, passwordHash: await hashPassword(PASSWORD) },
-    });
+    const { userId, email } = await createTeamWithPasswordAdmin(unconfiguredApp);
 
     const response = await unconfiguredApp.inject({
       method: 'POST',
@@ -319,11 +254,7 @@ describe('password recovery', () => {
     });
 
     expect(response.statusCode).toBe(202);
-    expect(
-      await unconfiguredApp.prisma.passwordResetToken.count({
-        where: { userId: teamBody.admin.id },
-      }),
-    ).toBe(0);
+    expect(await unconfiguredApp.prisma.passwordResetToken.count({ where: { userId } })).toBe(0);
   });
 
   it('rate-limits repeated recovery requests for the same account without revealing whether it exists', async () => {
@@ -349,26 +280,6 @@ describe('password recovery', () => {
     expect(recoveryProvider.sent).toHaveLength(
       env.PASSWORD_RESET_MAX_REQUESTS_PER_ACCOUNT_PER_HOUR,
     );
-  });
-
-  it('404s both endpoints while password auth is disabled', async () => {
-    const forgot = await disabledApp.inject({
-      method: 'POST',
-      url: '/auth/password/forgot',
-      payload: { identifier: 'someone@example.com' },
-    });
-    const reset = await disabledApp.inject({
-      method: 'POST',
-      url: '/auth/password/reset',
-      payload: {
-        token: 'x'.repeat(32),
-        password: NEW_PASSWORD,
-        passwordConfirmation: NEW_PASSWORD,
-      },
-    });
-
-    expect(forgot.statusCode).toBe(404);
-    expect(reset.statusCode).toBe(404);
   });
 
   it('rejects an unrecognized reset token with the same generic message as an expired one', async () => {

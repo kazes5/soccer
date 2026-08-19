@@ -28,6 +28,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listSystemTeams: vi.fn(),
       listSystemUsers: vi.fn(),
       updateSystemRole: vi.fn(),
+      systemCreateTeam: vi.fn(),
+      systemSetPassword: vi.fn(),
     },
   };
 });
@@ -42,7 +44,6 @@ const systemAdmin: CurrentUserResponse = {
   },
   teamMemberships: [],
   systemRole: 'system_admin',
-  authMethod: 'passkey',
 };
 
 const overview: SystemOverview = {
@@ -72,7 +73,7 @@ const users: SystemUser[] = [
     email: systemAdmin.user.email,
     isActive: true,
     systemRole: 'system_admin',
-    hasPasskey: true,
+    hasPassword: true,
     membershipCount: 0,
     createdAt: '2026-08-01T10:00:00.000Z',
   },
@@ -83,7 +84,7 @@ const users: SystemUser[] = [
     email: 'ari@example.com',
     isActive: true,
     systemRole: null,
-    hasPasskey: true,
+    hasPassword: true,
     membershipCount: 2,
     createdAt: '2026-08-02T10:00:00.000Z',
   },
@@ -102,6 +103,8 @@ describe('SystemPage', () => {
         ...users[1]!,
         systemRole: 'system_admin',
       });
+    vi.mocked(api.systemCreateTeam).mockReset();
+    vi.mocked(api.systemSetPassword).mockReset();
   });
 
   it('redirects an unauthenticated visitor to login and does not load system data', async () => {
@@ -124,15 +127,6 @@ describe('SystemPage', () => {
     expect(api.getSystemOverview).not.toHaveBeenCalled();
     expect(api.listSystemTeams).not.toHaveBeenCalled();
     expect(api.listSystemUsers).not.toHaveBeenCalled();
-  });
-
-  it('requires a passkey-authenticated session for a system administrator', async () => {
-    vi.mocked(api.me).mockResolvedValue({ ...systemAdmin, authMethod: 'password' });
-
-    renderWithProviders(<SystemPage />);
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fsystem'));
-    expect(api.getSystemOverview).not.toHaveBeenCalled();
   });
 
   it('shows loading and then an error when system data cannot be loaded', async () => {
@@ -189,6 +183,81 @@ describe('SystemPage', () => {
       }),
     );
     await waitFor(() => expect(api.me).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('creates a team with a founding admin and reloads system data', async () => {
+    vi.mocked(api.systemCreateTeam).mockResolvedValue({
+      team: {
+        id: '66666666-6666-4666-8666-666666666666',
+        name: 'U-11 Strikers',
+        season: 'Fall 2026',
+        timezone: 'Asia/Jerusalem',
+      },
+      admin: {
+        id: '77777777-7777-4777-8777-777777777777',
+        name: 'Founding Admin',
+        phone: '+15550009999',
+        email: null,
+        languagePreference: 'en',
+      },
+    });
+    renderWithProviders(<SystemPage />);
+    await screen.findByRole('heading', { level: 1, name: 'System administration' });
+
+    fireEvent.change(screen.getByPlaceholderText('U-12 Wildcats'), {
+      target: { value: 'U-11 Strikers' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Fall 2026'), { target: { value: 'Fall 2026' } });
+    fireEvent.change(screen.getByPlaceholderText('Dana Cohen'), {
+      target: { value: 'Founding Admin' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), {
+      target: { value: '+15550009999' },
+    });
+    const passwordFields = screen.getAllByLabelText(/password/i);
+    fireEvent.change(passwordFields[0]!, { target: { value: 'Cedar-River!Otter-52' } });
+    fireEvent.change(passwordFields[1]!, { target: { value: 'Cedar-River!Otter-52' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create team' }));
+
+    await waitFor(() =>
+      expect(api.systemCreateTeam).toHaveBeenCalledWith({
+        teamName: 'U-11 Strikers',
+        season: 'Fall 2026',
+        adminName: 'Founding Admin',
+        adminLanguage: 'en',
+        adminPhone: '+15550009999',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
+      }),
+    );
+    await waitFor(() => expect(api.listSystemTeams).toHaveBeenCalledTimes(2));
+  });
+
+  it('sets a password for a user from the users list', async () => {
+    vi.mocked(api.systemSetPassword).mockResolvedValue(undefined);
+    renderWithProviders(<SystemPage />);
+
+    const ariRow = (await screen.findByText('Ari Levi')).closest('li');
+    fireEvent.click(within(ariRow!).getByRole('button', { name: 'Set password' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Set a new password for Ari Levi',
+    });
+    fireEvent.change(within(dialog).getByLabelText('New password (15 characters or more)'), {
+      target: { value: 'Willow-Harbor!Finch-81' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Confirm new password'), {
+      target: { value: 'Willow-Harbor!Finch-81' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Set password' }));
+
+    await waitFor(() =>
+      expect(api.systemSetPassword).toHaveBeenCalledWith(users[1]!.id, {
+        password: 'Willow-Harbor!Finch-81',
+        passwordConfirmation: 'Willow-Harbor!Finch-81',
+      }),
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

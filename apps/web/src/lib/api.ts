@@ -1,6 +1,6 @@
 import {
-  type AcceptInviteRequest,
-  type AcceptInviteResponse,
+  type AddParentRequest,
+  type AddParentResponse,
   type AuditLogFilter,
   type AuditLogListQuery,
   type AuditLogListResponse,
@@ -9,6 +9,7 @@ import {
   type CollectionPointListResponse,
   type CollectionPointRequest,
   type CreateInviteRequest,
+  type CreatePlayerRequest,
   type CreateTeamRequest,
   type CreateTeamResponse,
   type CurrentUserResponse,
@@ -21,21 +22,24 @@ import {
   type CreatePushSubscriptionRequest,
   type DeletePushSubscriptionRequest,
   type MemberNotificationPreferences,
+  type PlayerDetail,
   type TeamMemberListResponse,
   type UpdateMemberRoleRequest,
   type UpdateMemberRoleResponse,
+  type UpdatePlayerRequest,
   type NotificationListResponse,
-  type PasskeyChallengeResponse,
-  type PasskeyLoginOptionsRequest,
-  type PasskeyVerifyRequest,
   type PasswordLoginRequest,
   type PasswordChangeRequest,
   type ForgotPasswordRequest,
   type ResetPasswordRequest,
+  type SetPasswordRequest,
   type VerifyInviteCodeRequest,
   type VerifyInviteCodeResponse,
   type CompletePasswordOnboardingRequest,
   type AttachExistingAccountInviteRequest,
+  type SystemAddMemberRequest,
+  type SystemAddMemberResponse,
+  type SystemCreateTeamResponse,
   type SystemOverview,
   type SystemTeamListResponse,
   type SystemTeamMemberListResponse,
@@ -60,7 +64,7 @@ import {
   type UpdateScheduleTemplateResponse,
   type UpdateSessionPointPlayersRequest,
   type UpdateSessionRequest,
-  acceptInviteResponseSchema,
+  addParentResponseSchema,
   auditLogListResponseSchema,
   authSessionResponseSchema,
   collectionPointListResponseSchema,
@@ -73,8 +77,10 @@ import {
   inviteSummarySchema,
   memberNotificationPreferencesSchema,
   notificationListResponseSchema,
-  passkeyChallengeResponseSchema,
+  playerDetailSchema,
   verifyInviteCodeResponseSchema,
+  systemAddMemberResponseSchema,
+  systemCreateTeamResponseSchema,
   systemOverviewSchema,
   systemTeamListResponseSchema,
   systemTeamMemberListResponseSchema,
@@ -178,19 +184,6 @@ export const api = {
       responseSchema: createTeamResponseSchema,
     }),
 
-  // Log in on a device that already has a registered passkey.
-  getPasskeyLoginOptions: (body: PasskeyLoginOptionsRequest) =>
-    request<PasskeyChallengeResponse>('/auth/passkey/login/options', {
-      method: 'POST',
-      body,
-      responseSchema: passkeyChallengeResponseSchema,
-    }),
-  verifyPasskeyLogin: (body: PasskeyVerifyRequest) =>
-    request<AuthSessionResponse>('/auth/passkey/login/verify', {
-      method: 'POST',
-      body,
-      responseSchema: authSessionResponseSchema,
-    }),
   passwordLogin: (body: PasswordLoginRequest) =>
     request<AuthSessionResponse>('/auth/password/login', {
       method: 'POST',
@@ -212,38 +205,6 @@ export const api = {
       responseSchema: z.unknown(),
     }),
 
-  // Register an additional passkey for the *currently authenticated* user —
-  // used right after `createTeam` (which issues a session with no invite
-  // involved) and for adding a second device later.
-  getPasskeyRegisterOptions: () =>
-    request<PasskeyChallengeResponse>('/auth/passkey/register/options', {
-      method: 'POST',
-      responseSchema: passkeyChallengeResponseSchema,
-    }),
-  verifyPasskeyRegister: (body: PasskeyVerifyRequest) =>
-    request<unknown>('/auth/passkey/register/verify', {
-      method: 'POST',
-      body,
-      responseSchema: z.unknown(),
-    }),
-
-  // Register a brand-new parent's first passkey, scoped by the invite code
-  // they just accepted — no session exists yet at this point.
-  getInvitePasskeyRegisterOptions: (code: string) =>
-    request<PasskeyChallengeResponse>(
-      `/invites/${encodeURIComponent(code)}/passkey/register/options`,
-      {
-        method: 'POST',
-        responseSchema: passkeyChallengeResponseSchema,
-      },
-    ),
-  verifyInvitePasskeyRegister: (code: string, body: PasskeyVerifyRequest) =>
-    request<AuthSessionResponse>(`/invites/${encodeURIComponent(code)}/passkey/register/verify`, {
-      method: 'POST',
-      body,
-      responseSchema: authSessionResponseSchema,
-    }),
-
   me: () => request<CurrentUserResponse>('/auth/me', { responseSchema: currentUserResponseSchema }),
 
   getInvitePreview: (code: string) =>
@@ -251,12 +212,6 @@ export const api = {
       responseSchema: invitePreviewSchema,
     }),
 
-  acceptInvite: (code: string, body: AcceptInviteRequest) =>
-    request<AcceptInviteResponse>(`/invites/${encodeURIComponent(code)}/accept`, {
-      method: 'POST',
-      body,
-      responseSchema: acceptInviteResponseSchema,
-    }),
   verifyInviteCode: (token: string, body: VerifyInviteCodeRequest) =>
     request<VerifyInviteCodeResponse>(`/invites/${encodeURIComponent(token)}/verify-code`, {
       method: 'POST',
@@ -279,22 +234,27 @@ export const api = {
       responseSchema: z.unknown(),
     }),
 
-  createInvite: async (teamId: string, body: CreateInviteRequest) => {
-    try {
-      return await request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/password-invites`, {
-        method: 'POST',
-        body,
-        responseSchema: inviteSummarySchema,
-      });
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 404) throw error;
-      return request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/invites`, {
-        method: 'POST',
-        body,
-        responseSchema: inviteSummarySchema,
-      });
-    }
-  },
+  createInvite: (teamId: string, body: CreateInviteRequest) =>
+    request<InviteSummary>(`/teams/${encodeURIComponent(teamId)}/invites`, {
+      method: 'POST',
+      body,
+      responseSchema: inviteSummarySchema,
+    }),
+
+  // Admin directly creates a parent account with a password of their own
+  // choosing — an alternative to the invite-link flow above.
+  addParent: (teamId: string, body: AddParentRequest) =>
+    request<AddParentResponse>(`/teams/${encodeURIComponent(teamId)}/members/parents`, {
+      method: 'POST',
+      body,
+      responseSchema: addParentResponseSchema,
+    }),
+
+  setMemberPassword: (teamId: string, userId: string, body: SetPasswordRequest) =>
+    request<unknown>(
+      `/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/set-password`,
+      { method: 'POST', body, responseSchema: z.unknown() },
+    ),
 
   logout: () => request<unknown>('/auth/logout', { method: 'POST', responseSchema: z.unknown() }),
 
@@ -342,6 +302,29 @@ export const api = {
       `/system/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
       { method: 'PATCH', body, responseSchema: updateMemberRoleResponseSchema },
     ),
+
+  // System admin creates a new team + founding admin — unlike createTeam
+  // above, this does not log the caller in as that admin.
+  systemCreateTeam: (body: CreateTeamRequest) =>
+    request<SystemCreateTeamResponse>('/system/teams', {
+      method: 'POST',
+      body,
+      responseSchema: systemCreateTeamResponseSchema,
+    }),
+
+  systemAddMember: (teamId: string, body: SystemAddMemberRequest) =>
+    request<SystemAddMemberResponse>(`/system/teams/${encodeURIComponent(teamId)}/members`, {
+      method: 'POST',
+      body,
+      responseSchema: systemAddMemberResponseSchema,
+    }),
+
+  systemSetPassword: (userId: string, body: SetPasswordRequest) =>
+    request<unknown>(`/system/users/${encodeURIComponent(userId)}/set-password`, {
+      method: 'POST',
+      body,
+      responseSchema: z.unknown(),
+    }),
 
   listSessions: (teamId: string) =>
     request<SessionListResponse>(`/teams/${encodeURIComponent(teamId)}/sessions`, {
@@ -440,6 +423,25 @@ export const api = {
     request<PlayerListResponse>(`/teams/${encodeURIComponent(teamId)}/players`, {
       responseSchema: playerListResponseSchema,
     }),
+
+  createPlayer: (teamId: string, body: CreatePlayerRequest) =>
+    request<PlayerDetail>(`/teams/${encodeURIComponent(teamId)}/players`, {
+      method: 'POST',
+      body,
+      responseSchema: playerDetailSchema,
+    }),
+
+  updatePlayer: (teamId: string, playerId: string, body: UpdatePlayerRequest) =>
+    request<PlayerDetail>(
+      `/teams/${encodeURIComponent(teamId)}/players/${encodeURIComponent(playerId)}`,
+      { method: 'PATCH', body, responseSchema: playerDetailSchema },
+    ),
+
+  deletePlayer: (teamId: string, playerId: string) =>
+    request<unknown>(
+      `/teams/${encodeURIComponent(teamId)}/players/${encodeURIComponent(playerId)}`,
+      { method: 'DELETE', responseSchema: z.unknown() },
+    ),
 
   listTeamRoster: (teamId: string) =>
     request<TeamRosterResponse>(`/teams/${encodeURIComponent(teamId)}/roster`, {

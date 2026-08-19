@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { languageSchema } from './enums';
-import { acceptInvitePlayerSchema, playerSummarySchema } from './player';
-import { teamSummarySchema } from './team';
-import { userSummarySchema } from './user';
+import { acceptInvitePlayerSchema } from './player';
 
 export const inviteStatusSchema = z.enum(['pending', 'accepted', 'expired', 'revoked']);
 export type InviteStatus = z.infer<typeof inviteStatusSchema>;
@@ -23,7 +21,7 @@ export const inviteSummarySchema = z.object({
   id: z.string().uuid(),
   teamId: z.string().uuid(),
   code: z.string(),
-  onboardingCode: z.string().optional(),
+  onboardingCode: z.string(),
   phone: z.string().nullable(),
   email: z.string().nullable(),
   status: inviteStatusSchema,
@@ -35,23 +33,8 @@ export const invitePreviewSchema = z.object({
   status: inviteStatusSchema,
   expiresAt: z.string().datetime(),
   team: z.object({ id: z.string().uuid(), name: z.string() }),
-  requiresCode: z.boolean().default(false),
 });
 export type InvitePreview = z.infer<typeof invitePreviewSchema>;
-
-export const acceptInviteRequestSchema = z.object({
-  name: z.string().min(1).max(255),
-  language: languageSchema.default('en'),
-  players: z.array(acceptInvitePlayerSchema).default([]),
-});
-export type AcceptInviteRequest = z.input<typeof acceptInviteRequestSchema>;
-
-export const acceptInviteResponseSchema = z.object({
-  user: userSummarySchema,
-  team: teamSummarySchema,
-  players: z.array(playerSummarySchema),
-});
-export type AcceptInviteResponse = z.infer<typeof acceptInviteResponseSchema>;
 
 export const verifyInviteCodeRequestSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
@@ -64,9 +47,12 @@ export const verifyInviteCodeResponseSchema = z.object({
 });
 export type VerifyInviteCodeResponse = z.infer<typeof verifyInviteCodeResponseSchema>;
 
-export const completePasswordOnboardingRequestSchema = acceptInviteRequestSchema
-  .extend({
+export const completePasswordOnboardingRequestSchema = z
+  .object({
     verificationToken: z.string().min(32),
+    name: z.string().min(1).max(255),
+    language: languageSchema.default('en'),
+    players: z.array(acceptInvitePlayerSchema).default([]),
     password: z.string().min(15).max(128),
     passwordConfirmation: z.string().min(1).max(128),
   })

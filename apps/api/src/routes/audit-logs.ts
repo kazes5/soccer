@@ -6,7 +6,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Prisma } from '../../generated/prisma/client';
-import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 
@@ -113,7 +113,6 @@ export default async function auditLogRoutes(app: FastifyInstance) {
     const query = auditLogListQuerySchema.parse(request.query);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const rows = await app.prisma.auditLog.findMany({
       where: auditLogWhere(params.teamId, query),
@@ -136,7 +135,6 @@ export default async function auditLogRoutes(app: FastifyInstance) {
     const query = auditLogFilterSchema.parse(request.query);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const rows = await app.prisma.auditLog.findMany({
       where: auditLogWhere(params.teamId, query),

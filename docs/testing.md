@@ -11,21 +11,23 @@ or production-provider coverage.
 
 ## Test layers
 
-| Layer                | Location                               | Harness                                                                | What it protects                                                                             |
-| -------------------- | -------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Shared contracts     | `packages/contracts/src/*.test.ts`     | Vitest and Zod                                                         | Valid and invalid request/response shapes and domain enums                                   |
-| i18n                 | `packages/i18n/src/index.test.ts`      | Vitest                                                                 | Locale switching, RTL direction, message lookup, and formatting helpers                      |
-| UI tokens            | `packages/ui-tokens/src/index.test.ts` | Vitest                                                                 | Token exports and semantic status/focus mappings                                             |
-| API integration      | `apps/api/test/*.test.ts`              | Vitest, Fastify `.inject()`, real PostgreSQL                           | Routes, authorization, transactions, cookies, audit effects, and conflicts                   |
-| API pure logic       | `apps/api/src/lib/*.test.ts`           | Vitest                                                                 | RRULE parsing and recurrence generation                                                      |
-| Web components/pages | `apps/web/src/**/*.test.tsx`           | Vitest, React Testing Library, jsdom                                   | Rendered states, user actions, API success/error handling, and localization shell behavior   |
-| Browser E2E          | `apps/e2e/tests/*.spec.ts`             | Playwright, real Chromium, live API/web servers, a disposable database | Full-stack journeys through a real browser — no mocking, real HTTP, real WebAuthn ceremonies |
+| Layer                | Location                               | Harness                                                                | What it protects                                                                           |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Shared contracts     | `packages/contracts/src/*.test.ts`     | Vitest and Zod                                                         | Valid and invalid request/response shapes and domain enums                                 |
+| i18n                 | `packages/i18n/src/index.test.ts`      | Vitest                                                                 | Locale switching, RTL direction, message lookup, and formatting helpers                    |
+| UI tokens            | `packages/ui-tokens/src/index.test.ts` | Vitest                                                                 | Token exports and semantic status/focus mappings                                           |
+| API integration      | `apps/api/test/*.test.ts`              | Vitest, Fastify `.inject()`, real PostgreSQL                           | Routes, authorization, transactions, cookies, audit effects, and conflicts                 |
+| API pure logic       | `apps/api/src/lib/*.test.ts`           | Vitest                                                                 | RRULE parsing and recurrence generation                                                    |
+| Web components/pages | `apps/web/src/**/*.test.tsx`           | Vitest, React Testing Library, jsdom                                   | Rendered states, user actions, API success/error handling, and localization shell behavior |
+| Browser E2E          | `apps/e2e/tests/*.spec.ts`             | Playwright, real Chromium, live API/web servers, a disposable database | Full-stack journeys through a real browser — no mocking, real HTTP                         |
 
-The API's WebAuthn verifier is injected through `buildApp({ webauthnVerifier })`,
-so tests never need a real browser/authenticator to complete a passkey ceremony
-— except `apps/api/src/lib/webauthn.test.ts`, which deliberately drives the real
-`SimpleWebauthnVerifier` (not the injected fake) to prove `@simplewebauthn/server`'s
-own origin/RP ID checks actually reject spoofed values.
+**2026-08-19 note:** Passkeys/WebAuthn were removed entirely (see CLAUDE.md
+§9.1's revision note) — password is now the only login method, for every
+role. `apps/api/src/lib/webauthn.test.ts`, the injectable `webauthnVerifier`
+test seam, and every passkey-ceremony step described below are gone. The
+sections below have been updated to describe the current, password-only
+coverage.
+
 API tests use the configured PostgreSQL database (`soccer_dev` under plain
 `pnpm test`) and clean up their created records. `pnpm run test:integration`
 (`apps/api/scripts/reset-test-database.ts`) instead resets a dedicated
@@ -36,21 +38,35 @@ disposable-per-run guarantee without needing a separate container.
 ## Covered API scenarios
 
 - Health and readiness responses, including a live database readiness check.
-- Team creation with the first admin and session creation.
-- Invite-scoped passkey registration (including the not-yet-accepted and
-  past-the-registration-window rejections), authenticated passkey registration
-  for an already-logged-in user, identifier-first passkey login, mismatched
-  and reused-challenge rejection, and session behavior.
+- Team creation with the first admin (password chosen directly, no separate
+  credential ceremony) and session creation.
+- Password login (identifier-first, phone or email), including the
+  same-response enumeration defense for unknown/wrong-password accounts and
+  per-account/per-IP failure-rate limiting.
 - httpOnly session cookies, CSRF enforcement, bearer compatibility, `/auth/me`,
   logout, and cookie clearing.
 - CORS behavior for the configured web origin and rejection of unsafe origins.
-- Invite creation authorization, invite preview, acceptance, expiry/reuse rules,
-  existing-user multi-team joining, linked players, and concurrent acceptance.
+- Invite creation authorization, invite preview, code verification and its
+  attempt-rate limiting, password-onboarding completion (including
+  verification-token replay rejection and deactivated-account reactivation),
+  existing-account attach, linked players, and concurrent acceptance.
 - Team metadata visibility: authentication and matching membership are required;
   a member of another team receives no team details.
 - Team member listing, admin-only role changes, removal, session revocation,
   future-shift reopening with historical assignment preservation, and a
   concurrent two-admin demotion race that always leaves one admin.
+- Admin directly adding a parent with a chosen password (non-admin rejection,
+  duplicate-contact conflict, password-policy rejection, linked players,
+  audit/outbox effects) and admin-initiated password reset for an existing
+  team member (non-admin rejection, unknown target, session revocation, audit
+  entry).
+- System admin creating a team + founding admin (no session handed to the
+  caller, unlike the public self-serve flow), adding a parent or admin
+  directly to any team, and resetting any user's password across any team —
+  each with role/flag-disabled rejection and audit/outbox effects.
+- Player create/update/delete: team-admin scoped to their own team, system
+  admin across any team, parent-linking on create and on update (replacing,
+  not appending, the linked parents), and audit records.
 - Push subscription registration, ownership/upsert behavior, and removal.
 - Collection-point creation, listing, update, coordinate clearing, invalid team
   data, and deletion protection once scheduled shifts reference a point.
@@ -64,35 +80,50 @@ disposable-per-run guarantee without needing a separate container.
 - Password hashing/validation policy (length bounds, common-password and
   identifier-substring rejection, NFC normalization) and the dummy-hash/
   real-hash Argon2 parameter parity the account-enumeration defense depends on.
-- Password recovery: enumeration-resistant `forgot` responses (including for a
-  passkey-only account), full reset round-trip with other-session revocation,
-  single-use/expiry/superseded-by-a-newer-request token rules, password-
-  strength validation on reset, and per-account/per-IP rate limiting.
+- Password recovery: enumeration-resistant `forgot` responses, full reset
+  round-trip with other-session revocation, single-use/expiry/superseded-by-
+  a-newer-request token rules, password-strength validation on reset, and
+  per-account/per-IP rate limiting.
 - Team and global audit-log immutability (no route can modify or delete an
   entry, for anyone) and the global (`/system/audit-logs`) listing endpoint.
+- `pnpm system-admin:grant`'s bootstrap safeguard now requires the target to
+  have a password credential set (not a passkey).
 
 ## Covered contract and web scenarios
 
-Shared contract tests cover valid and invalid payloads for auth, teams, invites,
-players, collection points, schedule templates, health, and shared response
-shapes. i18n tests cover English/Hebrew key parity and locale helpers. UI token
-tests cover token exports and distinct status semantics.
+Shared contract tests cover valid and invalid payloads for auth (including
+`setPasswordRequestSchema`), teams (password-bearing team creation), invites
+(password onboarding), members (`addParentRequestSchema`), system
+(`systemAddMemberRequestSchema`, `systemCreateTeamResponseSchema`), players
+(`createPlayerRequestSchema`/`updatePlayerRequestSchema`), collection points,
+schedule templates, health, and shared response shapes. i18n tests cover
+English/Hebrew key parity and locale helpers. UI token tests cover token
+exports and distinct status semantics.
 
 Web tests cover:
 
 - Landing page and route-level content.
-- Team creation form success and validation/error states.
-- Passkey login form: options request, ceremony, loading, unrecognized-contact,
-  and cancelled-ceremony states.
-- Team creation and invite-acceptance passkey setup, including retry after a
-  cancelled ceremony without re-creating the team or re-accepting the invite.
-- Invite preview, acceptance, not-found, and error states.
+- Team creation form success and validation/error states (including the
+  admin's own password/confirmation fields).
+- Password login form: identifier + password submission, redirect handling
+  (including rejection of an external `next` path), and server-error display.
+- Invite preview, code verification, password-onboarding completion (with
+  linked players and the selected-language passed through), existing-account
+  attach, not-found, and error states.
 - Home authentication, singular single-team parent copy, multi-team selection,
   admin invite creation, copy-link and logout interactions, and parent/admin
   visibility differences.
 - Admin member management: role/contact filters, phone/email invites,
   confirmation-gated promotion, demotion and removal, local state updates,
-  final-admin disabled controls, and concurrent-conflict reload behavior.
+  final-admin disabled controls, concurrent-conflict reload behavior, adding a
+  parent directly with a chosen password (success and duplicate-contact
+  error), and setting an existing member's password.
+- The system console: overview/teams/users display, the system-role grant
+  confirmation flow, creating a team with a founding admin, and setting a
+  user's password.
+- The system console's per-team page: member list, promote/demote
+  confirmation, adding a member with a chosen role and password (success and
+  duplicate-contact error), and setting a member's password.
 - Schedule loading, empty/error states, rendering sessions and shifts, claim,
   release, and conflict feedback.
 - Parent-facing Home, Schedule, Notifications, Swaps, and notification settings
@@ -105,37 +136,38 @@ Web tests cover:
 
 ## Covered E2E scenarios
 
-- The core parent journey, once in English and once in Hebrew/RTL: accept a
-  team invite (registering the required passkey via a Chrome DevTools Protocol
-  virtual authenticator — no real device needed), land on Home, claim an open
-  shift from the Schedule page, and see it reflected back on Home. Runs
-  against `apps/api/prisma/seed.ts`'s seeded demo teams on a disposable
-  database reset before every run (`apps/e2e/scripts/reset-database.ts`), not
-  the shared dev database.
-- The same core journey again at a mobile-browser viewport (`mobile-chromium`
-  Playwright project, `Pixel 5` device profile), proving the responsive
-  layout — bottom nav instead of sidebar — actually carries a real user
-  through the flow, not just renders. Claims a different shift than the
-  desktop English journey (they share a team) to avoid a claim race between
-  parallel workers.
-- Admin team management: sign in as the seeded admin via the same invite/
-  passkey path parents use, invite a new parent by email, and promote an
-  existing seeded parent to admin through the real confirmation-dialog flow
-  (not a direct API call), verifying the dialog copy, the resulting toast,
-  and the updated role badge.
-- Keyboard-only operation of the login page: Tab through the identifier,
-  password, "Log in", and "Continue with passkey" controls in order and
-  activate the passkey button with Enter — no seeded account needed, since an
-  unrecognized identifier still proves the round trip via the server's
-  standard not-registered response.
-- Automated accessibility scans (`@axe-core/playwright`) of the login page,
-  an invite preview, the full parent journey (Home and Schedule, EN+HE), and
-  the admin members page (Hebrew) — zero violations required. Caught one real
-  bug: the shared "danger"/"open" status color failed WCAG AA contrast
-  (4.02:1 against white, need 4.5:1) — fixed in `globals.css`. Each scan
-  waits for the page's own `h1` before running, since every authenticated
-  page renders `null` for one tick while its `api.me()` call is in flight,
-  and axe would otherwise flag the landmark/heading that's about to exist.
+Every scenario below runs against `apps/api/prisma/seed.ts`'s seeded demo
+teams on a disposable database reset before every run
+(`apps/e2e/scripts/reset-database.ts`), not the shared dev database, and
+authenticates with the password-only flow (CLAUDE.md §9.1) — there is no
+passkey/WebAuthn step anywhere in the app or this suite.
+
+- The core parent journey, once in English and once in Hebrew/RTL: get into
+  the app, claim an open shift from the Schedule page, and see it reflected
+  back on Home. The two locales deliberately exercise the two different ways
+  a parent gets in — the English run logs in directly as an already-seeded
+  user, while the Hebrew run drives the real invite-link + code + password
+  onboarding flow from scratch, so onboarding itself is proven without a
+  separate dedicated spec. Repeated once more at a mobile viewport
+  (`mobile-chromium` project, `Pixel 5` profile, its own seeded parent and
+  shift position) to prove the responsive layout — bottom nav instead of
+  sidebar — actually carries a real user through the flow, not just renders.
+- Admin team management, all in one test under a single admin session:
+  inviting a new parent by email, promoting an existing parent to admin,
+  adding a parent directly with an admin-chosen password, and resetting an
+  existing member's password — through the real confirmation-dialog / dialog
+  flows, not direct API calls.
+- The system console (`/system`): bootstraps a seeded parent into the global
+  `system_admin` capability the same way a real operator would, by shelling
+  out to the `pnpm system-admin:grant` script
+  (`apps/e2e/fixtures/system-admin.ts`), which requires the target to
+  already have a password set — then, in one continuous session, verifies
+  cross-team visibility, the console's own "target must already have a
+  password" grant safeguard, the global audit log recording the bootstrap,
+  creating a team directly with its founding admin's password chosen on the
+  spot, adding a member to an existing team, and resetting any user's
+  password (each with a follow-up login in a fresh browser context, proving
+  the chosen/reset password actually works).
 - Shift swaps end to end: two real, independently authenticated browser
   contexts stand in for two parents — one holds a shift, the other requests
   it, the holder accepts through `/swaps`' real confirm flow, and the shift
@@ -150,14 +182,35 @@ Web tests cover:
   worker process (`apps/api/src/worker/index.ts`) — see "Verification
   commands" below; without it, this is the one spec that hangs until
   timeout, since nothing ever produces the `UserNotification` row or SSE
-  push.
-- The system console (`/system`): bootstraps a seeded parent into the
-  global `system_admin` capability the same way a real operator would — by
-  shelling out to the `pnpm system-admin:grant` script
-  (`apps/e2e/fixtures/system-admin.ts`), which itself requires the target to
-  already hold a passkey — then verifies cross-team visibility, the
-  console's own "target must already hold a passkey" grant safeguard, and
-  the global audit log recording the bootstrap.
+  push. The worker and the API server it shares a BullMQ queue with must
+  also agree on `QUEUE_PREFIX` (`apps/e2e/playwright.config.ts` sets it to
+  `'e2e'` for both) — Redis is one shared instance across every local
+  environment on a machine, and without a prefix of its own this suite's
+  jobs can be silently raced (and no-op'd) by a developer's unrelated
+  `pnpm dev` worker or by `apps/api/test/worker.test.ts`'s own short-lived
+  BullMQ Worker, either of which would otherwise leave every notification
+  undelivered with no error anywhere.
+- Keyboard-only operation of the login page: Tab through the identifier,
+  password, and "Log in" controls in order and submit with Enter — no
+  seeded account needed, since an unrecognized identifier still proves the
+  round trip via the server's standard not-registered response.
+- Offline behavior: a real CDP network-condition toggle
+  (`browserContext.setOffline()`, not a mock) proves the last-loaded
+  schedule/shift data stays visible and clearly marked as cached, mutating
+  actions are disabled (no misleading local claim confirmation), and
+  reconnecting refetches canonical state.
+- Automated RTL _reading order_ on the mobile bottom nav: distinct from what
+  the accessibility scan's `dir`-attribute checks cover, this verifies
+  `AppShell`'s bottom nav actually renders right-to-left visually for a
+  Hebrew reader (first nav item rightmost), not just structurally.
+- Automated accessibility scans (`@axe-core/playwright`) of the login page,
+  an invite preview, the full parent journey (Home and Schedule, EN+HE), and
+  the admin members page — zero violations required. Caught one real bug:
+  the shared "danger"/"open" status color failed WCAG AA contrast (4.02:1
+  against white, need 4.5:1) — fixed in `globals.css`. Each scan waits for
+  the page's own `h1` before running, since every authenticated page renders
+  `null` for one tick while its `api.me()` call is in flight, and axe would
+  otherwise flag the landmark/heading that's about to exist.
 
 Each Playwright spec that touches shift claiming targets a specific
 seeded parent/team/shift so that specs sharing a team (see
@@ -229,7 +282,12 @@ This resets a dedicated `soccer_e2e` database (see `apps/e2e/.env.example` to
 customize ports/URLs), starts real API and web dev servers on dedicated ports
 (3100/4100, so it never collides with a developer's own `pnpm dev`) plus the
 notification worker process (`SYSTEM_ADMIN_ENABLED=true` too, for
-system-console.spec.ts), and runs the suite against them.
+system-console.spec.ts), and runs the suite against them. The dedicated
+ports keep the HTTP servers from colliding, but Redis (BullMQ) is one shared
+instance regardless of port — the API and worker processes both also set
+`QUEUE_PREFIX=e2e` so their notification jobs can't be raced by an unrelated
+`pnpm dev` worker or `apps/api/test/worker.test.ts`'s own BullMQ Worker on
+the same machine; see `apps/api/src/lib/queues.ts`.
 
 `pnpm test` (and `pnpm --filter @soccer/api test` / `--filter @soccer/web
 test`) runs against whichever database `DATABASE_URL` already points at —

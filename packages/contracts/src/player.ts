@@ -22,3 +22,22 @@ export const acceptInvitePlayerSchema = z.object({
   age: z.number().int().positive().max(25).optional(),
 });
 export type AcceptInvitePlayer = z.infer<typeof acceptInvitePlayerSchema>;
+
+export const playerDetailSchema = playerSummarySchema.extend({
+  parentUserIds: z.array(z.string().uuid()),
+});
+export type PlayerDetail = z.infer<typeof playerDetailSchema>;
+
+export const createPlayerRequestSchema = z.object({
+  name: z.string().min(1).max(255),
+  age: z.number().int().positive().max(25).optional(),
+  parentUserIds: z.array(z.string().uuid()).max(10).default([]),
+});
+export type CreatePlayerRequest = z.input<typeof createPlayerRequestSchema>;
+
+export const updatePlayerRequestSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  age: z.number().int().positive().max(25).nullable().optional(),
+  parentUserIds: z.array(z.string().uuid()).max(10).optional(),
+});
+export type UpdatePlayerRequest = z.input<typeof updatePlayerRequestSchema>;

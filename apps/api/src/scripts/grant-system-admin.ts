@@ -15,12 +15,13 @@ export async function grantInitialSystemAdmin(prisma: PrismaClient, identifier: 
         isActive: true,
         OR: [{ id: identifier }, normalized],
       },
-      include: { _count: { select: { passkeys: true } } },
+      include: { passwordCredential: true },
       take: 2,
     });
     if (candidates.length !== 1) throw new Error('Expected exactly one active matching user.');
     const target = candidates[0]!;
-    if (target._count.passkeys === 0) throw new Error('The target user must have a passkey.');
+    if (target.passwordCredential === null)
+      throw new Error('The target user must have a password set.');
     const existingCount = await tx.user.count({
       where: { systemRole: 'system_admin', isActive: true },
     });

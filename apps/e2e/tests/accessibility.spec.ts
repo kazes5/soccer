@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { acceptInvite } from '../fixtures/scenarios';
+import { loginAsSeededUser } from '../fixtures/scenarios';
 
 /**
  * Stage 6's accessibility gate (CLAUDE.md acceptance criteria: color-blind
@@ -24,9 +24,8 @@ async function expectNoViolations(page: Page) {
 
   const { violations } = await new AxeBuilder({ page })
     // The native <dialog> backdrop (::backdrop) isn't part of the document
-    // tree axe walks, and neither Playwright's virtual authenticator prompts
-    // nor third-party icon SVGs (lucide-react, decorative, aria-hidden) are
-    // real content to audit.
+    // tree axe walks, and third-party icon SVGs (lucide-react, decorative,
+    // aria-hidden) aren't real content to audit.
     .exclude('script')
     // `target-size` (WCAG 2.2 AA, 2.5.8) is off by default — axe only runs
     // WCAG 2.1 rules unless asked. Its 24px floor is lower than CLAUDE.md
@@ -49,7 +48,12 @@ for (const locale of ['en', 'he'] as const) {
     await page.goto('/login');
     await expectNoViolations(page);
 
-    const inviteCode = locale === 'en' ? 'english-parent-4-demo' : 'hebrew-parent-2-demo';
+    // These are the same not-yet-onboarded invites golden-path.spec.ts's
+    // Hebrew scenario also uses — this test only reads the page, it never
+    // submits the form, so it doesn't matter whether it observes the
+    // pending join-form screen or (if golden-path's acceptance already
+    // completed) the "no longer valid" screen; both need to be violation-free.
+    const inviteCode = locale === 'en' ? 'english-new-parent-demo' : 'hebrew-new-parent-demo';
     await page.goto(`/invite/${inviteCode}`);
     await expectNoViolations(page);
   });
@@ -58,10 +62,12 @@ for (const locale of ['en', 'he'] as const) {
     page,
     baseURL,
   }) => {
-    const inviteCode = locale === 'en' ? 'english-parent-4-demo' : 'hebrew-parent-2-demo';
-    const teamName = locale === 'en' ? 'U-12 Wildcats' : 'נבחרת אריות U-12';
+    const scenario =
+      locale === 'en'
+        ? { phone: '+15550000002', teamName: 'U-12 Wildcats', parentName: 'Avi Levi' }
+        : { phone: '+972503456789', teamName: 'נבחרת אריות U-12', parentName: 'שרה כץ' };
 
-    await acceptInvite(page, baseURL, { locale, inviteCode, teamName });
+    await loginAsSeededUser(page, baseURL, { locale, ...scenario });
     await expectNoViolations(page);
 
     const nav = page.getByRole('navigation', { name: /primary navigation|ניווט ראשי/i });
@@ -71,15 +77,16 @@ for (const locale of ['en', 'he'] as const) {
   });
 }
 
-// Uses the Hebrew admin invite (rather than english-admin-demo) so this
-// doesn't race admin-management.spec.ts, which also recovers the English
-// admin — two concurrent acceptances of the *same* invite code race on its
-// pending→accepted transition, and the loser never sees the join form.
+// Uses the Hebrew admin (rather than the English admin admin-management.spec.ts
+// logs in as) purely so this doesn't share an identity with a spec that
+// mutates data under that session — nothing here would actually race with
+// password login, but keeping distinct identities avoids any doubt.
 test('the admin members page has no accessibility violations', async ({ page, baseURL }) => {
-  await acceptInvite(page, baseURL, {
+  await loginAsSeededUser(page, baseURL, {
     locale: 'he',
-    inviteCode: 'hebrew-admin-demo',
+    phone: '+972501234567',
     teamName: 'נבחרת אריות U-12',
+    parentName: 'יעל כהן',
   });
 
   const nav = page.getByRole('navigation', { name: /ניווט ראשי/i });

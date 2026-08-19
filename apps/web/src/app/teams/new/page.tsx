@@ -1,7 +1,5 @@
 'use client';
 
-import { WebAuthnError, browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Field, FormError, buttonClassName, inputClassName } from '@/components/form-controls';
@@ -16,74 +14,29 @@ export default function CreateTeamPage() {
   const [season, setSeason] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminPhone, setAdminPhone] = useState('');
-  const [teamCreated, setTeamCreated] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPasswordConfirmation, setAdminPasswordConfirmation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function registerPasskey() {
-    setError(null);
-    if (!browserSupportsWebAuthn()) {
-      setError(t('teamsNew.passkeyNotSupported'));
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const { challengeId, options } = await api.getPasskeyRegisterOptions();
-      const response = await startRegistration({
-        optionsJSON: options as PublicKeyCredentialCreationOptionsJSON,
-      });
-      await api.verifyPasskeyRegister({ challengeId, response });
-      router.push('/home');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else if (err instanceof WebAuthnError) {
-        setError(t('teamsNew.passkeyCancelled'));
-      } else {
-        setError(t('common.somethingWentWrong'));
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
-      await api.createTeam({ teamName, season, adminName, adminPhone });
-      // The team (and the admin's cookie session) now exist — from here on,
-      // failure only affects passkey setup, never re-creates the team.
-      setTeamCreated(true);
-      await registerPasskey();
+      await api.createTeam({
+        teamName,
+        season,
+        adminName,
+        adminPhone,
+        adminPassword,
+        adminPasswordConfirmation,
+      });
+      router.push('/home');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
       setIsSubmitting(false);
     }
-  }
-
-  if (teamCreated) {
-    return (
-      <main className="relative mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 p-8 text-center">
-        <div className="absolute top-4 end-4">
-          <LanguageToggle />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t('teamsNew.passkeyTitle')}</h1>
-          <p className="mt-1 text-sm text-ink-muted">{t('teamsNew.passkeySubtitle')}</p>
-        </div>
-        {error && <FormError>{error}</FormError>}
-        <button
-          type="button"
-          disabled={isSubmitting}
-          onClick={registerPasskey}
-          className={buttonClassName}
-        >
-          {isSubmitting ? t('teamsNew.passkeySettingUp') : t('common.retry')}
-        </button>
-      </main>
-    );
   }
 
   return (
@@ -132,6 +85,30 @@ export default function CreateTeamPage() {
             className={inputClassName}
             placeholder="+15551234567"
             dir="ltr"
+          />
+        </Field>
+        <Field label={t('teamsNew.passwordLabel')}>
+          <input
+            required
+            type="password"
+            minLength={15}
+            maxLength={128}
+            autoComplete="new-password"
+            value={adminPassword}
+            onChange={(e) => setAdminPassword(e.target.value)}
+            className={inputClassName}
+          />
+        </Field>
+        <Field label={t('teamsNew.passwordConfirmationLabel')}>
+          <input
+            required
+            type="password"
+            minLength={15}
+            maxLength={128}
+            autoComplete="new-password"
+            value={adminPasswordConfirmation}
+            onChange={(e) => setAdminPasswordConfirmation(e.target.value)}
+            className={inputClassName}
           />
         </Field>
         {error && <FormError>{error}</FormError>}

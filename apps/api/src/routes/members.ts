@@ -1,13 +1,18 @@
 import {
+  addParentRequestSchema,
+  setPasswordRequestSchema,
   teamMemberListResponseSchema,
+  teamMemberSummarySchema,
   teamRosterResponseSchema,
   updateMemberRoleRequestSchema,
 } from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
+import { createOrReactivateTeamMember } from '../lib/direct-member';
 import { HttpError } from '../lib/errors';
+import { assertAcceptablePassword, hashPassword } from '../lib/passwords';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
 import { syncShiftReminders } from '../lib/reminders';
@@ -21,7 +26,6 @@ export default async function memberRoutes(app: FastifyInstance) {
     const params = paramsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const members = await app.prisma.teamMember.findMany({
       where: { teamId: params.teamId },
@@ -68,7 +72,6 @@ export default async function memberRoutes(app: FastifyInstance) {
     const body = updateMemberRoleRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const updated = await app.prisma.$transaction(async (tx) => {
       // Serialize every role/removal mutation for this team. Without this row
@@ -146,7 +149,6 @@ export default async function memberRoutes(app: FastifyInstance) {
     const params = memberParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const result = await app.prisma.$transaction(async (tx) => {
       const eventIds: string[] = [];
@@ -307,6 +309,100 @@ export default async function memberRoutes(app: FastifyInstance) {
       enqueueOutboxEventBestEffort(app.outboxQueue, outboxEventId);
     }
     enqueueScheduledTaskBestEffort(app.scheduledTaskQueue, result.reminders);
+
+    reply.status(204).send();
+  });
+
+  // Admin directly creates a parent account with a password of their own
+  // choosing — an alternative onboarding path alongside the invite-link flow
+  // above, not a replacement for it (some admins will still prefer to send a
+  // link; others would rather hand someone a password in person).
+  app.post('/teams/:teamId/members/parents', async (request, reply) => {
+    const params = paramsSchema.parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    const body = addParentRequestSchema.parse(request.body);
+
+    const result = await app.prisma.$transaction(async (tx) => {
+      const { user, reactivating } = await createOrReactivateTeamMember(tx, {
+        teamId: params.teamId,
+        role: 'parent',
+        name: body.name,
+        phone: body.phone,
+        email: body.email,
+        language: body.language,
+        password: body.password,
+        players: body.players,
+      });
+      await recordAuditLog(tx, {
+        teamId: params.teamId,
+        actorId: currentUser.id,
+        actionType: 'member_added_directly',
+        targetEntity: 'team_member',
+        targetId: user.id,
+        afterState: { userId: user.id, name: user.name, role: 'parent', reactivated: reactivating },
+      });
+      const outboxEvent = await recordOutboxEvent(tx, {
+        teamId: params.teamId,
+        eventType: 'member_added_directly',
+        category: 'admin_changes',
+        recipientScope: { type: 'team_broadcast' },
+        payload: { userId: user.id, userName: user.name },
+      });
+      return { user, outboxEventId: outboxEvent.id };
+    });
+
+    enqueueOutboxEventBestEffort(app.outboxQueue, result.outboxEventId);
+    reply.status(201);
+    return teamMemberSummarySchema.parse({
+      userId: result.user.id,
+      name: result.user.name,
+      phone: result.user.phone,
+      email: result.user.email,
+      role: 'parent',
+      joinedAt: result.user.createdAt.toISOString(),
+    });
+  });
+
+  // Admin resets a password on a team member's behalf — the practical stand-in
+  // for self-service "forgot password" while no recovery email/SMS provider is
+  // configured, and a general lever for a parent who's simply locked out.
+  app.post('/teams/:teamId/members/:userId/set-password', async (request, reply) => {
+    const params = memberParamsSchema.parse(request.params);
+    const currentUser = requireAuth(request);
+    await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
+    const body = setPasswordRequestSchema.parse(request.body);
+
+    const target = await app.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
+      include: { user: true },
+    });
+    if (!target) throw new HttpError(404, 'This person is not on the team.');
+
+    const password = assertAcceptablePassword(body.password, [
+      target.user.email ?? '',
+      target.user.phone ?? '',
+    ]);
+    const passwordHash = await hashPassword(password);
+
+    await app.prisma.$transaction(async (tx) => {
+      await tx.passwordCredential.upsert({
+        where: { userId: params.userId },
+        create: { userId: params.userId, passwordHash },
+        update: { passwordHash, passwordChangedAt: new Date() },
+      });
+      await tx.session.updateMany({
+        where: { userId: params.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await recordAuditLog(tx, {
+        teamId: params.teamId,
+        actorId: currentUser.id,
+        actionType: 'password_set_by_admin',
+        targetEntity: 'user',
+        targetId: params.userId,
+      });
+    });
 
     reply.status(204).send();
   });

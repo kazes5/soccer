@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
@@ -124,7 +124,6 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const body = updateSessionRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const existing = await loadSession(app.prisma, params.sessionId);
     if (!existing || existing.teamId !== params.teamId) {
@@ -226,7 +225,6 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const params = sessionParamsSchema.parse(request.params);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const existing = await loadSession(app.prisma, params.sessionId);
     if (!existing || existing.teamId !== params.teamId) {
@@ -302,13 +300,6 @@ export default async function sessionRoutes(app: FastifyInstance) {
       'admin',
       'parent',
     ]);
-    // Any team member can keep a session's rosters current, so this isn't
-    // gated on passkey assurance the way admin-only actions are — parents
-    // authenticate day-to-day with a password. Admins still get the extra
-    // check since it's cheap and this endpoint remains reachable by them too.
-    if (membership.role === 'admin') {
-      requirePrivilegedAssurance(currentUser);
-    }
 
     const assignment = await app.prisma.sessionPointAssignment.findUnique({
       where: {

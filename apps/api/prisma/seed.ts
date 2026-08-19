@@ -4,57 +4,64 @@ import { PrismaClient } from '../generated/prisma/client';
 import { env } from '../src/env';
 import { normalizeEmail, normalizePhone } from '../src/lib/identifiers';
 import { combineDateAndTime, generateOccurrences } from '../src/lib/recurrence';
+import { hashPassword } from '../src/lib/passwords';
+import { hashSecret } from '../src/lib/crypto';
 import { createSessionWithShifts } from '../src/routes/schedule-templates';
 import { wallClockToInstant } from '../src/lib/timezone';
 
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+// Every seeded account (except the one reserved below to demonstrate the
+// system console's "must have a password" safeguard) logs in with this same
+// fixed demo password — see docs/installation.md's credentials table.
+export const DEMO_PASSWORD = 'Soccer-Carpool-Demo-2026!';
+
 // Local demo invites are intentionally long-lived. They are only created by the
 // seed script and are reset to pending on each reseed, so this avoids making a
 // developer regenerate test links while keeping the normal invite TTL unchanged.
 const TEST_INVITE_EXPIRY = new Date('9999-12-31T23:59:59.999Z');
+const TEST_ONBOARDING_CODE = '000000';
 
-type DemoInviteUser = { phone: string | null; email: string | null };
-
-// Shared by both demo teams below. A pending invite for a user who already has
-// team membership (but no passkey yet) resolves through the existing
-// "invite_accepted_for_recovery" path (see apps/api/src/routes/invites.ts) —
-// the same recovery flow CLAUDE.md §9.1 documents for a lost/inaccessible
-// device — so this is safe to point at already-seeded users, not just brand
-// new ones.
-async function upsertDemoInvites(
+/** A single not-yet-onboarded invite per team, for exercising the invite-link
+ *  + code onboarding UI itself. Every other seeded user already has a
+ *  password credential set directly (below), which is now the normal way an
+ *  admin or system admin adds someone — the invite-link flow is one option
+ *  among several, not the only path a developer needs a working demo of. */
+async function upsertDemoInvite(
   teamId: string,
   createdByUserId: string,
-  invites: Array<{ code: string; label: string; user: DemoInviteUser }>,
+  linkToken: string,
+  user: { phone: string | null; email: string | null },
 ) {
-  for (const invite of invites) {
-    await prisma.invite.upsert({
-      where: { code: invite.code },
-      update: {
-        teamId,
-        phone: invite.user.phone,
-        email: invite.user.email,
-        status: 'pending',
-        acceptedByUserId: null,
-        acceptedAt: null,
-        createdByUserId,
-        expiresAt: TEST_INVITE_EXPIRY,
-      },
-      create: {
-        teamId,
-        code: invite.code,
-        phone: invite.user.phone,
-        email: invite.user.email,
-        createdByUserId,
-        expiresAt: TEST_INVITE_EXPIRY,
-      },
-    });
-  }
-  return invites.map(({ code, label }) => ({ code, label }));
+  const code = hashSecret(linkToken);
+  await prisma.invite.upsert({
+    where: { code },
+    update: {
+      teamId,
+      phone: user.phone,
+      email: user.email,
+      status: 'pending',
+      acceptedByUserId: null,
+      acceptedAt: null,
+      createdByUserId,
+      expiresAt: TEST_INVITE_EXPIRY,
+    },
+    create: {
+      teamId,
+      code,
+      onboardingCodeHash: hashSecret(`${linkToken}:${TEST_ONBOARDING_CODE}`),
+      phone: user.phone,
+      email: user.email,
+      createdByUserId,
+      expiresAt: TEST_INVITE_EXPIRY,
+    },
+  });
 }
 
 async function main() {
+  const demoPasswordHash = await hashPassword(DEMO_PASSWORD);
+
   // One-time cleanup for local databases seeded before this id was fixed to be a
   // schema-valid UUID (see below) — without this, re-running seed against such a
   // database would upsert-create a *second*, duplicate "U-12 Wildcats" team,
@@ -79,6 +86,7 @@ async function main() {
     update: {
       normalizedPhone: normalizePhone('+15550000001'),
       normalizedEmail: normalizeEmail('dana@example.com'),
+      passwordCredential: { upsert: { create: { passwordHash: demoPasswordHash }, update: {} } },
     },
     create: {
       name: 'Dana Cohen',
@@ -87,67 +95,69 @@ async function main() {
       email: 'dana@example.com',
       normalizedEmail: normalizeEmail('dana@example.com'),
       languagePreference: 'he',
+      passwordCredential: { create: { passwordHash: demoPasswordHash } },
     },
   });
 
+  const parentDefinitions = [
+    { name: 'Avi Levi', phone: '+15550000002', email: 'avi@example.com', language: 'he' as const },
+    {
+      name: 'Sarah Katz',
+      phone: '+15550000003',
+      email: 'sarah@example.com',
+      language: 'en' as const,
+    },
+    {
+      name: 'Noa Peretz',
+      phone: '+15550000004',
+      email: 'noa@example.com',
+      language: 'en' as const,
+    },
+    {
+      name: 'Ron Mizrahi',
+      phone: '+15550000005',
+      email: 'ron@example.com',
+      language: 'en' as const,
+    },
+    {
+      name: 'Liat Shapira',
+      phone: '+15550000006',
+      email: 'liat@example.com',
+      language: 'he' as const,
+    },
+    // No password credential — reserved for apps/e2e/tests/system-console.spec.ts,
+    // which needs a team member it can rely on to demonstrate the system
+    // console's "target must have a password set" grant safeguard.
+    {
+      name: 'Maya Golan',
+      phone: '+15550000007',
+      email: 'maya@example.com',
+      language: 'en' as const,
+    },
+    // Dedicated to apps/e2e/tests/offline.spec.ts — every other seeded parent
+    // (English or Hebrew) is already claimed by an existing spec.
+    {
+      name: 'Tomer Adler',
+      phone: '+15550000008',
+      email: 'tomer@example.com',
+      language: 'en' as const,
+    },
+  ];
+
   const parents = await Promise.all(
-    [
-      {
-        name: 'Avi Levi',
-        phone: '+15550000002',
-        email: 'avi@example.com',
-        language: 'he' as const,
-      },
-      {
-        name: 'Sarah Katz',
-        phone: '+15550000003',
-        email: 'sarah@example.com',
-        language: 'en' as const,
-      },
-      {
-        name: 'Noa Peretz',
-        phone: '+15550000004',
-        email: 'noa@example.com',
-        language: 'en' as const,
-      },
-      {
-        name: 'Ron Mizrahi',
-        phone: '+15550000005',
-        email: 'ron@example.com',
-        language: 'en' as const,
-      },
-      {
-        name: 'Liat Shapira',
-        phone: '+15550000006',
-        email: 'liat@example.com',
-        language: 'he' as const,
-      },
-      // Gets an auto-numbered invite code (english-parent-6-demo, from the
-      // `parents.map` below) like everyone else, but no E2E spec ever
-      // accepts it — so she reliably has no passkey for the whole suite's
-      // lifetime. Exists for apps/e2e/tests/system-console.spec.ts, which
-      // needs a team member it can rely on to demonstrate the system
-      // console's "target must already hold a passkey" grant safeguard.
-      {
-        name: 'Maya Golan',
-        phone: '+15550000007',
-        email: 'maya@example.com',
-        language: 'en' as const,
-      },
-      // Dedicated to apps/e2e/tests/offline.spec.ts — every other seeded
-      // parent (English or Hebrew) is already claimed by an existing spec.
-      {
-        name: 'Tomer Adler',
-        phone: '+15550000008',
-        email: 'tomer@example.com',
-        language: 'en' as const,
-      },
-    ].map((parent) =>
+    parentDefinitions.map((parent, index) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
         update: {
           normalizedPhone: normalizePhone(parent.phone),
           normalizedEmail: normalizeEmail(parent.email),
+          ...(index === 5
+            ? {}
+            : {
+                passwordCredential: {
+                  upsert: { create: { passwordHash: demoPasswordHash }, update: {} },
+                },
+              }),
         },
         create: {
           name: parent.name,
@@ -156,6 +166,9 @@ async function main() {
           email: parent.email,
           normalizedEmail: normalizeEmail(parent.email),
           languagePreference: parent.language,
+          ...(index === 5
+            ? {}
+            : { passwordCredential: { create: { passwordHash: demoPasswordHash } } }),
         },
       }),
     ),
@@ -292,33 +305,25 @@ async function main() {
     }
   }
 
-  const englishInvites = await upsertDemoInvites(team.id, admin.id, [
-    { code: 'english-admin-demo', label: 'admin', user: admin },
-    ...parents.map((parent, index) => ({
-      code: `english-parent-${index + 1}-demo`,
-      label: `parent ${index + 1}`,
-      user: parent,
-    })),
-  ]);
+  await upsertDemoInvite(team.id, admin.id, 'english-new-parent-demo', {
+    phone: '+15550000009',
+    email: 'new-parent@example.com',
+  });
 
   console.log(
     `Seeded team "${team.name}" with 1 admin (${admin.name}), ${parents.length} parents, ${players.length} players, 2 collection points, and ${sessionsCreated || 'no new'} sessions.\n` +
-      `Passkey setup invites:\n` +
-      englishInvites
-        .map(({ label, code }) => `  ${label}: http://localhost:3000/invite/${code}`)
-        .join('\n'),
+      `Log in as any seeded user with password "${DEMO_PASSWORD}" (see docs/installation.md).\n` +
+      `New-parent onboarding demo: http://localhost:3000/invite/english-new-parent-demo (code ${TEST_ONBOARDING_CODE})`,
   );
 
-  const hebrewDemo = await seedHebrewDemoData();
+  const hebrewDemo = await seedHebrewDemoData(demoPasswordHash);
   console.log(
-    `Seeded Hebrew demo team "${hebrewDemo.team.name}" with passkey setup invites:\n` +
-      hebrewDemo.invites
-        .map(({ label, code }) => `  ${label}: http://localhost:3000/invite/${code}`)
-        .join('\n'),
+    `Seeded Hebrew demo team "${hebrewDemo.team.name}".\n` +
+      `New-parent onboarding demo: http://localhost:3000/invite/hebrew-new-parent-demo (code ${TEST_ONBOARDING_CODE})`,
   );
 }
 
-async function seedHebrewDemoData() {
+async function seedHebrewDemoData(demoPasswordHash: string) {
   const team = await prisma.team.upsert({
     where: { id: '00000000-0000-4000-8000-000000000002' },
     update: { name: 'נבחרת אריות U-12', season: 'סתיו 2026', timezone: 'Asia/Jerusalem' },
@@ -339,6 +344,7 @@ async function seedHebrewDemoData() {
       normalizedEmail: normalizeEmail('yael@example.test'),
       languagePreference: 'he',
       isActive: true,
+      passwordCredential: { upsert: { create: { passwordHash: demoPasswordHash }, update: {} } },
     },
     create: {
       name: 'יעל כהן',
@@ -347,43 +353,20 @@ async function seedHebrewDemoData() {
       email: 'yael@example.test',
       normalizedEmail: normalizeEmail('yael@example.test'),
       languagePreference: 'he',
+      passwordCredential: { create: { passwordHash: demoPasswordHash } },
     },
   });
 
   const parents = await Promise.all(
     [
-      {
-        name: 'אבי לוי',
-        phone: '+972502345678',
-        email: 'avi.he@example.test',
-      },
-      {
-        name: 'שרה כץ',
-        phone: '+972503456789',
-        email: 'sarah.he@example.test',
-      },
-      {
-        name: 'מיכל פרץ',
-        phone: '+972504567890',
-        email: 'michal.he@example.test',
-      },
-      {
-        name: 'רון מזרחי',
-        phone: '+972505678901',
-        email: 'ron.he@example.test',
-      },
-      {
-        name: 'ליאת שפירא',
-        phone: '+972506789012',
-        email: 'liat.he@example.test',
-      },
+      { name: 'אבי לוי', phone: '+972502345678', email: 'avi.he@example.test' },
+      { name: 'שרה כץ', phone: '+972503456789', email: 'sarah.he@example.test' },
+      { name: 'מיכל פרץ', phone: '+972504567890', email: 'michal.he@example.test' },
+      { name: 'רון מזרחי', phone: '+972505678901', email: 'ron.he@example.test' },
+      { name: 'ליאת שפירא', phone: '+972506789012', email: 'liat.he@example.test' },
       // Dedicated to apps/e2e/tests/rtl-reading-order.mobile.spec.ts — every other
       // seeded Hebrew parent is already claimed by an existing spec.
-      {
-        name: 'דניאל אזולאי',
-        phone: '+972507890123',
-        email: 'daniel.he@example.test',
-      },
+      { name: 'דניאל אזולאי', phone: '+972507890123', email: 'daniel.he@example.test' },
     ].map((parent) =>
       prisma.user.upsert({
         where: { phone: parent.phone },
@@ -394,12 +377,16 @@ async function seedHebrewDemoData() {
           normalizedEmail: normalizeEmail(parent.email),
           languagePreference: 'he',
           isActive: true,
+          passwordCredential: {
+            upsert: { create: { passwordHash: demoPasswordHash }, update: {} },
+          },
         },
         create: {
           ...parent,
           normalizedPhone: normalizePhone(parent.phone),
           normalizedEmail: normalizeEmail(parent.email),
           languagePreference: 'he',
+          passwordCredential: { create: { passwordHash: demoPasswordHash } },
         },
       }),
     ),
@@ -531,16 +518,12 @@ async function seedHebrewDemoData() {
     }
   }
 
-  const invites = await upsertDemoInvites(team.id, admin.id, [
-    { code: 'hebrew-admin-demo', label: 'admin', user: admin },
-    ...parents.map((parent, index) => ({
-      code: `hebrew-parent-${index + 1}-demo`,
-      label: `parent ${index + 1}`,
-      user: parent,
-    })),
-  ]);
+  await upsertDemoInvite(team.id, admin.id, 'hebrew-new-parent-demo', {
+    phone: '+972509999999',
+    email: 'new-parent.he@example.test',
+  });
 
-  return { team, sessionsCreated, invites };
+  return { team, sessionsCreated };
 }
 
 main()

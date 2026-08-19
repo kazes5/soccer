@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { systemRoleSchema, teamRoleSchema } from './enums';
+import { languageSchema, systemRoleSchema, teamRoleSchema } from './enums';
+import { acceptInvitePlayerSchema } from './player';
+import { teamSummarySchema } from './team';
+import { userSummarySchema } from './user';
 
 export const systemOverviewSchema = z.object({
   teams: z.number().int().nonnegative(),
@@ -32,7 +35,7 @@ export const systemUserSchema = z.object({
   email: z.string().nullable(),
   isActive: z.boolean(),
   systemRole: systemRoleSchema.nullable(),
-  hasPasskey: z.boolean(),
+  hasPassword: z.boolean(),
   membershipCount: z.number().int().nonnegative(),
   createdAt: z.string().datetime(),
 });
@@ -51,7 +54,7 @@ export const systemTeamMemberSchema = systemUserSchema
     email: true,
     isActive: true,
     systemRole: true,
-    hasPasskey: true,
+    hasPassword: true,
   })
   .extend({ role: teamRoleSchema, joinedAt: z.string().datetime() });
 export type SystemTeamMember = z.infer<typeof systemTeamMemberSchema>;
@@ -81,3 +84,37 @@ export const systemAuditListResponseSchema = z.object({
   nextCursor: z.string().uuid().nullable().optional(),
 });
 export type SystemAuditListResponse = z.infer<typeof systemAuditListResponseSchema>;
+
+/** System admin adding a parent or admin directly to an existing team, with a
+ *  password of the system admin's choosing. */
+export const systemAddMemberRequestSchema = z
+  .object({
+    role: teamRoleSchema,
+    name: z.string().min(1).max(255),
+    phone: z.string().min(1).max(20).optional(),
+    email: z.string().email().optional(),
+    language: languageSchema.default('en'),
+    password: z.string().min(15).max(128),
+    passwordConfirmation: z.string().min(1).max(128),
+    players: z.array(acceptInvitePlayerSchema).default([]),
+  })
+  .refine((data) => Number(Boolean(data.phone)) + Number(Boolean(data.email)) === 1, {
+    message: 'Provide exactly one of phone or email.',
+    path: ['phone'],
+  })
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: 'Passwords do not match.',
+    path: ['passwordConfirmation'],
+  });
+export type SystemAddMemberRequest = z.input<typeof systemAddMemberRequestSchema>;
+export const systemAddMemberResponseSchema = systemTeamMemberSchema;
+export type SystemAddMemberResponse = z.infer<typeof systemAddMemberResponseSchema>;
+
+/** Unlike the public self-serve POST /teams, this doesn't log the caller in
+ *  as the new team's admin — the system admin keeps their own session — so
+ *  there's no sessionToken/sessionExpiresAt to return. */
+export const systemCreateTeamResponseSchema = z.object({
+  team: teamSummarySchema,
+  admin: userSummarySchema,
+});
+export type SystemCreateTeamResponse = z.infer<typeof systemCreateTeamResponseSchema>;

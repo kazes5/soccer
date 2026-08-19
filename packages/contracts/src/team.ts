@@ -19,10 +19,16 @@ export const createTeamRequestSchema = z
     adminPhone: z.string().min(1).max(20).optional(),
     adminEmail: z.string().email().optional(),
     adminLanguage: languageSchema.default('en'),
+    adminPassword: z.string().min(15).max(128),
+    adminPasswordConfirmation: z.string().min(1).max(128),
   })
   .refine((data) => Boolean(data.adminPhone ?? data.adminEmail), {
     message: 'Provide adminPhone or adminEmail.',
     path: ['adminPhone'],
+  })
+  .refine((data) => data.adminPassword === data.adminPasswordConfirmation, {
+    message: 'Passwords do not match.',
+    path: ['adminPasswordConfirmation'],
   });
 export type CreateTeamRequest = z.input<typeof createTeamRequestSchema>;
 

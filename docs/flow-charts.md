@@ -16,17 +16,13 @@ the same behavior in prose.
 ```mermaid
 flowchart TD
     A([Start]) --> B[Open `/teams/new`]
-    B --> C[Enter team name, season, admin name, and phone]
+    B --> C[Enter team name, season, admin name, phone, and password]
     C --> D[Submit create-team form]
     D --> E{Team creation succeeds?}
     E -->|No| F[Show error and keep form data]
     F --> D
-    E -->|Yes| G[API creates team and authenticated admin session]
-    G --> H[Prompt for passkey registration]
-    H --> I{Passkey setup succeeds?}
-    I -->|No| J[Stay on passkey retry screen]
-    J --> H
-    I -->|Yes| K[Open `/home`]
+    E -->|Yes| G[API creates team, admin, and authenticated session]
+    G --> K[Open `/home`]
     K --> L([Continue to admin Home flow])
 ```
 
@@ -35,8 +31,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     A([Start]) --> B[Open `/login`]
-    B --> C[Enter phone or email on file]
-    C --> D[Start passkey login]
+    B --> C[Enter phone or email on file, and password]
+    C --> D[Submit password login]
     D --> E{Login succeeds?}
     E -->|No| F[Show error]
     F --> B
@@ -368,23 +364,24 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Parent receives invite link]) --> B[Open `/invite/[code]`]
+    A([Parent receives invite link + separate code]) --> B[Open `/invite/[code]`]
     B --> C{Invite exists, is pending, and has not expired?}
     C -->|No| D[Show invalid or expired state]
     D --> E[Ask admin for a new invite]
     E --> F([End])
     C -->|Yes| G[Review team preview]
-    G --> H[Enter name and optional linked players]
-    H --> I[Submit join-team form]
-    I --> J{Invite acceptance succeeds?}
-    J -->|No| K[Show error]
-    K --> B
-    J -->|Yes| L[Create or link parent membership]
-    L --> M[Prompt for passkey registration]
-    M --> N{Passkey setup succeeds?}
-    N -->|No| O[Stay on passkey retry screen]
-    O --> M
-    N -->|Yes| P[Open `/home`]
+    G --> H[Enter the six-digit code]
+    H --> I{Code verification succeeds?}
+    I -->|No| J[Show error, retry]
+    J --> H
+    I -->|Yes| K{Contact already has an active account?}
+    K -->|Yes| L[Log in, then attach membership]
+    L --> P[Open `/home`]
+    K -->|No| M[Enter name, players, and choose a password]
+    M --> N[Submit join-team form]
+    N --> O{Onboarding succeeds?}
+    O -->|No| J
+    O -->|Yes| P
     P --> Q([Continue to parent Home flow])
 ```
 
@@ -393,8 +390,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     A([Start]) --> B[Open `/login`]
-    B --> C[Enter phone or email on file]
-    C --> D[Start passkey login]
+    B --> C[Enter phone or email on file, and password]
+    C --> D[Submit password login]
     D --> E{Login succeeds?}
     E -->|No| F[Show error]
     F --> B
@@ -568,8 +565,10 @@ flowchart TD
   entirely for single-team parents. Every team switch reloads data in the
   selected team's scope. Admin-only
   destinations appear only when the active membership has the admin role.
-- First-time parents register a passkey through their invite. Returning admins
-  and parents use `/login` on a device with a registered passkey.
+- First-time parents choose a password through their invite (or an admin sets
+  one for them directly, with no invite involved). Returning admins and
+  parents use `/login` with their phone/email and password — the only login
+  method, for every role.
 - Trips to practice and from practice are independent. A member can claim or
   release one direction without changing the other.
 - Claim and release conflicts reload server state because the API is

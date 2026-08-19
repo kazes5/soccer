@@ -15,8 +15,16 @@ export const SCHEDULED_TASK_QUEUE_NAME = 'scheduled-tasks';
  * long-running worker process) would otherwise accumulate forever under the
  * same keys real dev/prod jobs use. A test-only key prefix keeps that state
  * fully separate — it starts empty every time and never touches real jobs.
+ *
+ * `QUEUE_PREFIX` lets a caller override this explicitly (see env.ts) for an
+ * environment that's neither vitest's `NODE_ENV=test` nor real dev/prod —
+ * the e2e suite sets it to `'e2e'` so its own long-running worker process
+ * doesn't collide with either a developer's `pnpm dev` worker (default,
+ * unprefixed) or a concurrently-running `worker.test.ts`, which really does
+ * spin up a short-lived real BullMQ Worker against the `test`-prefixed
+ * queue.
  */
-export const QUEUE_PREFIX = env.NODE_ENV === 'test' ? 'test' : undefined;
+export const QUEUE_PREFIX = env.QUEUE_PREFIX ?? (env.NODE_ENV === 'test' ? 'test' : undefined);
 
 /**
  * Shared BullMQ job options: a deterministic `jobId` (the outbox/scheduled-

@@ -7,10 +7,16 @@ import { recordAuditLog } from '../lib/audit';
 import { setSessionCookies } from '../lib/cookies';
 import { generateSessionToken, hashSecret } from '../lib/crypto';
 import { normalizeEmail, normalizePhone } from '../lib/identifiers';
+import { assertAcceptablePassword, hashPassword } from '../lib/passwords';
 
 export default async function teamRoutes(app: FastifyInstance) {
   app.post('/teams', async (request, reply) => {
     const body = createTeamRequestSchema.parse(request.body);
+    const password = assertAcceptablePassword(body.adminPassword, [
+      body.adminEmail ?? '',
+      body.adminPhone ?? '',
+    ]);
+    const passwordHash = await hashPassword(password);
 
     const { team, admin, sessionToken, sessionExpiresAt } = await app.prisma.$transaction(
       async (tx) => {
@@ -30,6 +36,7 @@ export default async function teamRoutes(app: FastifyInstance) {
             normalizedPhone: body.adminPhone ? normalizePhone(body.adminPhone) : undefined,
             normalizedEmail: body.adminEmail ? normalizeEmail(body.adminEmail) : undefined,
             languagePreference: body.adminLanguage,
+            passwordCredential: { create: { passwordHash } },
             teamMemberships: {
               create: { teamId: createdTeam.id, role: 'admin' },
             },
@@ -52,7 +59,6 @@ export default async function teamRoutes(app: FastifyInstance) {
             userId: createdAdmin.id,
             tokenHash: hashSecret(token),
             expiresAt,
-            authMethod: 'bootstrap',
           },
         });
 

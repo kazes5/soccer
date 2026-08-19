@@ -3,19 +3,26 @@
 import type { SystemOverview, SystemTeam, SystemUser } from '@soccer/contracts';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useLocale } from '@/components/locale-provider';
 import { AppShell } from '@/components/ui/shell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
+import { Dialog } from '@/components/ui/dialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import { buttonClassName, secondaryButtonClassName } from '@/components/form-controls';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
+import {
+  Field,
+  FormError,
+  buttonClassName,
+  inputClassName,
+  secondaryButtonClassName,
+} from '@/components/form-controls';
 import { systemNavItems } from '@/lib/system-nav';
 
 export default function SystemPage() {
   const router = useRouter();
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [overview, setOverview] = useState<SystemOverview | null>(null);
   const [teams, setTeams] = useState<SystemTeam[] | null>(null);
   const [users, setUsers] = useState<SystemUser[] | null>(null);
@@ -25,6 +32,21 @@ export default function SystemPage() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<SystemUser | null>(null);
 
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamSeason, setNewTeamSeason] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminContact, setNewAdminContact] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminPasswordConfirmation, setNewAdminPasswordConfirmation] = useState('');
+  const [createTeamError, setCreateTeamError] = useState<string | null>(null);
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+
+  const [passwordTarget, setPasswordTarget] = useState<SystemUser | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState('');
+  const [setPasswordError, setSetPasswordError] = useState<string | null>(null);
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+
   const load = useCallback(async () => {
     let me;
     try {
@@ -33,8 +55,8 @@ export default function SystemPage() {
       router.replace('/login?next=%2Fsystem');
       return;
     }
-    if (me.systemRole !== 'system_admin' || me.authMethod !== 'passkey') {
-      router.replace(me.systemRole === 'system_admin' ? '/login?next=%2Fsystem' : '/home');
+    if (me.systemRole !== 'system_admin') {
+      router.replace('/home');
       return;
     }
 
@@ -86,6 +108,55 @@ export default function SystemPage() {
     setUsersCursor(next.nextCursor ?? null);
   }
 
+  async function handleCreateTeam(event: FormEvent) {
+    event.preventDefault();
+    setCreateTeamError(null);
+    setIsCreatingTeam(true);
+    try {
+      const contact = newAdminContact.trim();
+      await api.systemCreateTeam({
+        teamName: newTeamName,
+        season: newTeamSeason,
+        adminName: newAdminName,
+        adminLanguage: locale,
+        adminPassword: newAdminPassword,
+        adminPasswordConfirmation: newAdminPasswordConfirmation,
+        ...(contact.includes('@') ? { adminEmail: contact } : { adminPhone: contact }),
+      });
+      setNewTeamName('');
+      setNewTeamSeason('');
+      setNewAdminName('');
+      setNewAdminContact('');
+      setNewAdminPassword('');
+      setNewAdminPasswordConfirmation('');
+      await load();
+    } catch (err) {
+      setCreateTeamError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
+    } finally {
+      setIsCreatingTeam(false);
+    }
+  }
+
+  async function handleSetPassword(event: FormEvent) {
+    event.preventDefault();
+    if (!passwordTarget) return;
+    setSetPasswordError(null);
+    setIsSettingPassword(true);
+    try {
+      await api.systemSetPassword(passwordTarget.id, {
+        password: newPassword,
+        passwordConfirmation: newPasswordConfirmation,
+      });
+      setPasswordTarget(null);
+      setNewPassword('');
+      setNewPasswordConfirmation('');
+    } catch (err) {
+      setSetPasswordError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
+    } finally {
+      setIsSettingPassword(false);
+    }
+  }
+
   return (
     <AppShell brand={t('common.appName')} navItems={systemNavItems(t, 'overview')}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6">
@@ -119,6 +190,91 @@ export default function SystemPage() {
                   <div className="text-sm text-ink-muted">{t(key)}</div>
                 </div>
               ))}
+            </section>
+            <section aria-labelledby="create-team-title" className="flex flex-col gap-3">
+              <h2 id="create-team-title" className="text-lg font-semibold">
+                {t('system.createTeamTitle')}
+              </h2>
+              <form
+                onSubmit={handleCreateTeam}
+                className="grid gap-3 rounded-xl border border-surface-border bg-surface p-4 shadow-raised sm:grid-cols-2"
+              >
+                <Field label={t('teamsNew.teamNameLabel')}>
+                  <input
+                    required
+                    value={newTeamName}
+                    onChange={(event) => setNewTeamName(event.target.value)}
+                    className={inputClassName}
+                    placeholder="U-12 Wildcats"
+                  />
+                </Field>
+                <Field label={t('teamsNew.seasonLabel')}>
+                  <input
+                    required
+                    value={newTeamSeason}
+                    onChange={(event) => setNewTeamSeason(event.target.value)}
+                    className={inputClassName}
+                    placeholder="Fall 2026"
+                  />
+                </Field>
+                <Field label={t('system.newAdminNameLabel')}>
+                  <input
+                    required
+                    value={newAdminName}
+                    onChange={(event) => setNewAdminName(event.target.value)}
+                    className={inputClassName}
+                    placeholder="Dana Cohen"
+                  />
+                </Field>
+                <Field label={t('system.newAdminContactLabel')}>
+                  <input
+                    required
+                    type="text"
+                    autoComplete="off"
+                    value={newAdminContact}
+                    onChange={(event) => setNewAdminContact(event.target.value)}
+                    className={inputClassName}
+                    placeholder="+15551234567"
+                    dir="ltr"
+                  />
+                </Field>
+                <Field label={t('teamsNew.passwordLabel')}>
+                  <input
+                    required
+                    type="password"
+                    minLength={15}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={newAdminPassword}
+                    onChange={(event) => setNewAdminPassword(event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+                <Field label={t('teamsNew.passwordConfirmationLabel')}>
+                  <input
+                    required
+                    type="password"
+                    minLength={15}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={newAdminPasswordConfirmation}
+                    onChange={(event) => setNewAdminPasswordConfirmation(event.target.value)}
+                    className={inputClassName}
+                  />
+                </Field>
+                {createTeamError && (
+                  <div className="sm:col-span-2">
+                    <FormError>{createTeamError}</FormError>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={isCreatingTeam}
+                  className={`${buttonClassName} self-start sm:col-span-2`}
+                >
+                  {isCreatingTeam ? t('teamsNew.submitting') : t('system.createTeamSubmit')}
+                </button>
+              </form>
             </section>
             <section className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">{t('system.teams')}</h2>
@@ -174,27 +330,37 @@ export default function SystemPage() {
                           {t('system.membershipCount', { count: user.membershipCount })}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        aria-label={`${
-                          user.systemRole === 'system_admin'
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className={secondaryButtonClassName}
+                          onClick={() => setPasswordTarget(user)}
+                        >
+                          {t('system.setPassword')}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${
+                            user.systemRole === 'system_admin'
+                              ? t('system.revoke')
+                              : t('system.grant')
+                          }: ${user.name}`}
+                          disabled={
+                            busyUserId === user.id ||
+                            (!user.hasPassword && user.systemRole === null)
+                          }
+                          onClick={() => setPendingUser(user)}
+                          className={
+                            user.systemRole === 'system_admin'
+                              ? secondaryButtonClassName
+                              : buttonClassName
+                          }
+                        >
+                          {user.systemRole === 'system_admin'
                             ? t('system.revoke')
-                            : t('system.grant')
-                        }: ${user.name}`}
-                        disabled={
-                          busyUserId === user.id || (!user.hasPasskey && user.systemRole === null)
-                        }
-                        onClick={() => setPendingUser(user)}
-                        className={
-                          user.systemRole === 'system_admin'
-                            ? secondaryButtonClassName
-                            : buttonClassName
-                        }
-                      >
-                        {user.systemRole === 'system_admin'
-                          ? t('system.revoke')
-                          : t('system.grant')}
-                      </button>
+                            : t('system.grant')}
+                        </button>
+                      </div>
                     </div>
                   </DataListItem>
                 ))}
@@ -237,6 +403,54 @@ export default function SystemPage() {
           if (pendingUser) void toggleSystemRole(pendingUser);
         }}
       />
+
+      <Dialog
+        open={passwordTarget !== null}
+        onClose={() => {
+          if (!isSettingPassword) {
+            setPasswordTarget(null);
+            setSetPasswordError(null);
+            setNewPassword('');
+            setNewPasswordConfirmation('');
+          }
+        }}
+        closeDisabled={isSettingPassword}
+        title={t('system.setPasswordTitle', { name: passwordTarget?.name ?? '' })}
+        closeLabel={t('common.close')}
+      >
+        <form onSubmit={handleSetPassword} className="flex flex-col gap-3">
+          <Field label={t('adminMembers.setPasswordNewLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          <Field label={t('adminMembers.setPasswordConfirmLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={newPasswordConfirmation}
+              onChange={(event) => setNewPasswordConfirmation(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          {setPasswordError && <FormError>{setPasswordError}</FormError>}
+          <button type="submit" disabled={isSettingPassword} className={buttonClassName}>
+            {isSettingPassword
+              ? t('adminMembers.setPasswordSubmitting')
+              : t('adminMembers.setPasswordSubmit')}
+          </button>
+        </form>
+      </Dialog>
     </AppShell>
   );
 }

@@ -21,6 +21,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...actual.api,
       me: vi.fn(),
       createInvite: vi.fn(),
+      addParent: vi.fn(),
+      setMemberPassword: vi.fn(),
       listTeamMembers: vi.fn(),
       updateTeamMemberRole: vi.fn(),
       removeTeamMember: vi.fn(),
@@ -90,6 +92,8 @@ describe('AdminMembersPage', () => {
     replace.mockClear();
     vi.mocked(api.me).mockReset().mockResolvedValue(adminUser);
     vi.mocked(api.createInvite).mockReset();
+    vi.mocked(api.addParent).mockReset();
+    vi.mocked(api.setMemberPassword).mockReset();
     vi.mocked(api.listTeamMembers)
       .mockReset()
       .mockResolvedValue({ members: [dana, avi, noa] });
@@ -152,6 +156,7 @@ describe('AdminMembersPage', () => {
       id: '44444444-4444-4444-8444-444444444444',
       teamId: TEAM_ID,
       code: 'invite-code-123',
+      onboardingCode: '123456',
       phone: null,
       email: 'parent@example.com',
       status: 'pending',
@@ -177,6 +182,7 @@ describe('AdminMembersPage', () => {
         id: '44444444-4444-4444-8444-444444444444',
         teamId: TEAM_ID,
         code: 'first-invite-code',
+        onboardingCode: '123456',
         phone: '+15550004444',
         email: null,
         status: 'pending',
@@ -293,5 +299,96 @@ describe('AdminMembersPage', () => {
     expect(
       await screen.findByText("Couldn't load team members. Please try again."),
     ).toBeInTheDocument();
+  });
+
+  it('adds a parent directly with a chosen password and shows it in the list', async () => {
+    const added: TeamMemberSummary = {
+      userId: '55555555-5555-4555-8555-555555555555',
+      name: 'New Parent',
+      phone: '+15550005555',
+      email: null,
+      role: 'parent',
+      joinedAt: '2026-08-19T10:00:00.000Z',
+    };
+    vi.mocked(api.addParent).mockResolvedValue(added);
+    renderWithProviders(<AdminMembersPage />);
+    await screen.findByText('Avi Levi');
+
+    fireEvent.change(screen.getByLabelText("Parent's name"), {
+      target: { value: 'New Parent' },
+    });
+    fireEvent.change(screen.getByLabelText("Parent's phone number or email"), {
+      target: { value: '+15550005555' },
+    });
+    fireEvent.change(screen.getByLabelText('Password (15 characters or more)'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add parent' }));
+
+    await waitFor(() =>
+      expect(api.addParent).toHaveBeenCalledWith(TEAM_ID, {
+        name: 'New Parent',
+        language: 'en',
+        phone: '+15550005555',
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      }),
+    );
+    expect(await screen.findByText('New Parent')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Team members (4)' })).toBeInTheDocument();
+  });
+
+  it('shows the server error when adding a parent fails', async () => {
+    vi.mocked(api.addParent).mockRejectedValue(
+      new ApiError(409, 'A person with this phone or email already has an account.'),
+    );
+    renderWithProviders(<AdminMembersPage />);
+    await screen.findByText('Avi Levi');
+
+    fireEvent.change(screen.getByLabelText("Parent's name"), { target: { value: 'Dup Parent' } });
+    fireEvent.change(screen.getByLabelText("Parent's phone number or email"), {
+      target: { value: '+15550001111' },
+    });
+    fireEvent.change(screen.getByLabelText('Password (15 characters or more)'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add parent' }));
+
+    expect(
+      await screen.findByText('A person with this phone or email already has an account.'),
+    ).toBeInTheDocument();
+  });
+
+  it('sets a password for an existing member', async () => {
+    vi.mocked(api.setMemberPassword).mockResolvedValue(undefined);
+    renderWithProviders(<AdminMembersPage />);
+
+    const aviRow = (await screen.findByText('Avi Levi')).closest('li');
+    fireEvent.click(within(aviRow!).getByRole('button', { name: 'Set password' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Set a new password for Avi Levi',
+    });
+    fireEvent.change(within(dialog).getByLabelText('New password (15 characters or more)'), {
+      target: { value: 'Willow-Harbor!Finch-81' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Confirm new password'), {
+      target: { value: 'Willow-Harbor!Finch-81' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Set password' }));
+
+    await waitFor(() =>
+      expect(api.setMemberPassword).toHaveBeenCalledWith(TEAM_ID, avi.userId, {
+        password: 'Willow-Harbor!Finch-81',
+        passwordConfirmation: 'Willow-Harbor!Finch-81',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

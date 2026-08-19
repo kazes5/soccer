@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { acceptInvite } from '../fixtures/scenarios';
+import { loginAsSeededUser } from '../fixtures/scenarios';
 
 /**
  * Web MVP's offline behavior (CLAUDE.md/PLAN.md architecture decision):
@@ -9,20 +9,21 @@ import { acceptInvite } from '../fixtures/scenarios';
  * The durable offline mutation queue belongs to the native phase, not this.
  *
  * Uses `browserContext.setOffline()` (a real CDP network-condition toggle,
- * not a mock) against english-parent-7-demo — every other seeded parent is
- * already claimed by an existing spec, and Maya Golan (english-parent-6-demo)
- * is deliberately never accepted by any spec (system-console.spec.ts relies
- * on her staying passkey-less), so both Home and Schedule are checked in one
- * test with one identity rather than needing a second seeded parent.
+ * not a mock) against Tomer Adler — every other seeded parent is already
+ * claimed by an existing spec, and Maya Golan is deliberately never logged
+ * in by any spec (system-console.spec.ts relies on her staying
+ * password-less), so both Home and Schedule are checked in one test with
+ * one identity rather than needing a second seeded parent.
  */
 test('shows cached data and disables actions while offline, then refetches on reconnect', async ({
   page,
   baseURL,
 }) => {
-  await acceptInvite(page, baseURL, {
+  await loginAsSeededUser(page, baseURL, {
     locale: 'en',
-    inviteCode: 'english-parent-7-demo',
+    phone: '+15550000008',
     teamName: 'U-12 Wildcats',
+    parentName: 'Tomer Adler',
   });
   // Home's own data (sessions/stats/pending swaps) fetches after mount —
   // wait for it to settle before going offline, or the in-flight fetch

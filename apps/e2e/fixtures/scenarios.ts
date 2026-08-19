@@ -1,14 +1,95 @@
 import { expect, type Page } from '@playwright/test';
-import { addVirtualAuthenticator } from './webauthn';
 
-export interface InviteScenario {
+/**
+ * Every seeded user (apps/api/prisma/seed.ts) except Maya Golan logs in with
+ * this same fixed password directly — no invite/passkey ceremony needed
+ * anymore. Kept here as a literal (not imported from apps/api, which this
+ * package doesn't depend on as a library) matching how seeded invite codes
+ * were already hardcoded as literals before this file's password-auth
+ * rewrite.
+ */
+export const DEMO_PASSWORD = 'Soccer-Carpool-Demo-2026!';
+
+export interface SeededUserScenario {
   locale: 'en' | 'he';
-  inviteCode: string;
+  phone: string;
   teamName: string;
+  parentName: string;
+  password?: string;
 }
 
-export interface GoldenPathScenario extends InviteScenario {
+/**
+ * Logs in as an already-seeded user by phone + the shared demo password —
+ * the normal path for every spec that just needs an authenticated session
+ * for a specific seeded identity, now that there's no passkey ceremony to
+ * drive. Shared base for every E2E flow that starts from an existing account.
+ */
+export async function loginAsSeededUser(
+  page: Page,
+  baseURL: string | undefined,
+  scenario: SeededUserScenario,
+): Promise<void> {
+  // The server reads the locale choice from a cookie for the initial render
+  // (layout.tsx, via next/headers — see LocaleProvider) — set it before
+  // navigating so the whole flow, including RTL layout, renders in the
+  // target language from the very first paint rather than defaulting to
+  // English and switching mid-test.
+  await page
+    .context()
+    .addCookies([{ name: 'soccer.locale', value: scenario.locale, url: baseURL }]);
+
+  await page.goto('/login');
+  await page.getByLabel(/phone number or email|מספר טלפון או אימייל/i).fill(scenario.phone);
+  await page.getByLabel(/^password$|^סיסמה$/i).fill(scenario.password ?? DEMO_PASSWORD);
+  await page.getByRole('button', { name: /^log in$|^התחברות$/i }).click();
+
+  await page.waitForURL('**/home', { timeout: 15_000 });
+  await expect(page.getByText(new RegExp(`(Welcome|היי), ${scenario.parentName}`))).toBeVisible();
+}
+
+export interface InviteOnboardingScenario {
+  locale: 'en' | 'he';
+  inviteCode: string;
+  onboardingCode: string;
+  teamName: string;
   parentName: string;
+}
+
+/**
+ * Drives the real invite-link + one-time-code + password onboarding flow
+ * (apps/web/src/app/invite/[code]/page.tsx) end to end for a brand-new
+ * parent, landing on Home. Distinct from `loginAsSeededUser` above: this is
+ * the one spec (golden-path.spec.ts's Hebrew scenario) that still exercises
+ * onboarding itself, using the single not-yet-accepted invite seed.ts
+ * creates per team (`english-new-parent-demo` / `hebrew-new-parent-demo`,
+ * fixed onboarding code `000000`) — every other spec logs in directly as an
+ * already-seeded user instead, which is simpler and doesn't contend for a
+ * shared not-yet-accepted invite row across parallel workers.
+ */
+export async function acceptInvite(
+  page: Page,
+  baseURL: string | undefined,
+  scenario: InviteOnboardingScenario,
+): Promise<void> {
+  await page
+    .context()
+    .addCookies([{ name: 'soccer.locale', value: scenario.locale, url: baseURL }]);
+
+  await page.goto(`/invite/${scenario.inviteCode}`);
+  await expect(page.getByRole('heading', { name: new RegExp(scenario.teamName) })).toBeVisible();
+
+  await page.getByLabel(/invitation code|קוד הזמנה/i).fill(scenario.onboardingCode);
+  await page.getByRole('button', { name: /verify invitation|אימות ההזמנה/i }).click();
+
+  await page.getByLabel(/your name|השם שלכם/i).fill(scenario.parentName);
+  await page.getByLabel(/create a password|יצירת סיסמה/i).fill(DEMO_PASSWORD);
+  await page.getByLabel(/confirm password|אימות סיסמה/i).fill(DEMO_PASSWORD);
+  await page.getByRole('button', { name: /^join team$|^הצטרפות לקבוצה$/i }).click();
+
+  await page.waitForURL('**/home', { timeout: 15_000 });
+}
+
+export interface ClaimShiftScenario {
   claimButtonName: string;
   mineStatusText: string;
   /**
@@ -31,64 +112,12 @@ export interface GoldenPathScenario extends InviteScenario {
 }
 
 /**
- * Accepts a team invite (registering the required passkey along the way via
- * a Chrome DevTools Protocol virtual authenticator — every onboarding path
- * needs one, CLAUDE.md §9.1) and lands on Home. Shared base for every E2E
- * flow that starts from an invite link, whether the invite targets a brand
- * new member or recovers an already-seeded one (CLAUDE.md §9.1's recovery
- * path) — both submit the same form and land the same place.
+ * Claims one open shift from an already-authenticated Home page and confirms
+ * it's reflected back — the core parent journey CLAUDE.md exists to support.
+ * Shared by every spec that logs a parent in (via either helper above) and
+ * then claims a shift, so the claiming logic itself is defined once.
  */
-export async function acceptInvite(
-  page: Page,
-  baseURL: string | undefined,
-  scenario: InviteScenario,
-) {
-  await addVirtualAuthenticator(page);
-
-  // The server reads the locale choice from a cookie for the initial render
-  // (layout.tsx, via next/headers — see LocaleProvider) — set it before
-  // navigating so the whole flow, including RTL layout, renders in the
-  // target language from the very first paint rather than defaulting to
-  // English and switching mid-test.
-  await page
-    .context()
-    .addCookies([{ name: 'soccer.locale', value: scenario.locale, url: baseURL }]);
-
-  await page.goto(`/invite/${scenario.inviteCode}`);
-  await expect(page.getByRole('heading', { name: new RegExp(scenario.teamName) })).toBeVisible();
-
-  // This invite recovers an already-seeded team member (CLAUDE.md §9.1's
-  // recovery path), so the submitted name/players are accepted but ignored
-  // server-side — any non-empty name satisfies the required field.
-  await page.getByLabel(/your name|השם שלכם/i).fill('E2E Test');
-  await page.getByRole('button', { name: /join|הצטרפות/i }).click();
-
-  await expect(
-    page.getByRole('heading', { name: /you're on the team!|אתם בקבוצה!/i }),
-  ).toBeVisible();
-
-  // Passkey registration runs automatically right after acceptance (see
-  // invite/[code]/page.tsx) — with the virtual authenticator active it
-  // completes without any user interaction and establishes the session,
-  // redirecting to Home.
-  await page.waitForURL('**/home', { timeout: 15_000 });
-}
-
-/**
- * The core parent journey CLAUDE.md exists to support: accept an invite,
- * claim an open carpool shift, and see it reflected back on Home. Shared
- * by the desktop, Hebrew/RTL, and mobile-viewport specs so the flow itself
- * is defined once — only the scenario data (locale, seeded invite code,
- * viewport via Playwright project) differs.
- */
-export async function acceptInviteAndClaimShift(
-  page: Page,
-  baseURL: string | undefined,
-  scenario: GoldenPathScenario,
-) {
-  await acceptInvite(page, baseURL, scenario);
-
-  await expect(page.getByText(new RegExp(`(Welcome|היי), ${scenario.parentName}`))).toBeVisible();
+export async function claimAnOpenShift(page: Page, scenario: ClaimShiftScenario): Promise<void> {
   await expect(page.getByText(/^0 shifts coming up$|^הסעות בקרוב: 0$/)).toBeVisible();
 
   // Scoped to the primary nav landmark — Home also has a "+N more on the
