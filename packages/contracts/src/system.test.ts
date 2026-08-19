@@ -65,6 +65,7 @@ describe('systemCreateTeamResponseSchema', () => {
         name: 'U-12 Wildcats',
         season: 'Fall 2026',
         timezone: 'Asia/Jerusalem',
+        primaryColor: null,
       },
       admin: {
         id: '22222222-2222-4222-8222-222222222222',
@@ -84,6 +85,7 @@ describe('systemCreateTeamResponseSchema', () => {
         name: 'U-12 Wildcats',
         season: 'Fall 2026',
         timezone: 'Asia/Jerusalem',
+        primaryColor: null,
       },
       admin: {
         id: '22222222-2222-4222-8222-222222222222',

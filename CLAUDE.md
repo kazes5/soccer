@@ -497,6 +497,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | Edit individual sessions (date/time/location/cancel) | ❌ | ✅ |
 | Manage a session's collection-point player rosters | ✅ | ✅ |
 | Manage collection points (create/edit/delete) | ❌ | ✅ |
+| Set the team's accent color | ❌ | ✅ |
 | View full audit log | ❌ | ✅ |
 | Configure notifications (team-wide) | ❌ | ✅ |
 
@@ -725,7 +726,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 - Notifications preferences (SMS, email, push) in addition to push-only.
 - Fairness-based recommendations ("You've done 3 pickups, 1 drop-off; consider a drop-off this week?").
 - Team messaging (in-app discussion board for session-specific logistics).
-- Per-team accent color: an admin picks a color to replace the default brand accent across that team's UI. Planned 2026-08-20 — see PLAN.md's "Team Color Theming" planning section for the design (a `Team.primaryColor` field, applied as a CSS custom property at the team-scoped layout root). Scoped to non-semantic "brand" elements only (buttons, header accent, links) — the fixed status colors (green="mine", red="open"/urgent, gray="covered", CLAUDE.md §3.8) are never affected by a team's color choice, to preserve the color-blind-friendly, consistent-across-teams status vocabulary.
+- ~~Per-team accent color~~ — **shipped 2026-08-20**, no longer roadmap. An admin picks a color from a curated 9-color palette (green, blue, indigo, purple, fuchsia, slate, red, orange, yellow) on a new `/admin/team-settings` page to replace the default brand accent across that team's UI. Backed by a nullable `Team.primaryColor` field, delivered via a per-team `<style>` override of `--color-brand-*` CSS custom properties (see `apps/web/src/components/team-brand-style.tsx`) rather than an inline style prop, so it composes correctly with dark mode. Scoped to non-semantic "brand" elements only (buttons, active nav tab, links, success toast) — the fixed status colors (green="mine", red/orange="open"/urgent, amber="attention", teal="pending", gray="covered", CLAUDE.md §3.8) are never affected by a team's color choice, kept as a genuinely separate `--color-brand-*` token set from the status tokens even where a default happens to match. `red`/`orange`/`yellow` were added after the initial 6-color palette shipped, at explicit product request, despite sitting in the same hue family as the fixed status tones — see `packages/ui-tokens/src/brand.ts`'s doc comment for why that's an accepted, knowing trade-off rather than an oversight. See PLAN.md's Stage 7 "Team Color Theming" section for the full design record.
 
 **v1.2**
 - Player attendance tracking (who actually showed up / no-show record).

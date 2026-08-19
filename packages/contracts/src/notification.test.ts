@@ -27,6 +27,16 @@ describe('notificationSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts member_added_directly', () => {
+    const result = notificationSchema.safeParse({
+      ...base,
+      eventType: 'member_added_directly',
+      category: 'admin_changes',
+      payload: { userId: 'user-1', userName: 'Noa Ben-David' },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects an invalid event type', () => {
     const result = notificationSchema.safeParse({ ...base, eventType: 'not_a_real_event' });
     expect(result.success).toBe(false);

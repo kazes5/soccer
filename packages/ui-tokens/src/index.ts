@@ -4,3 +4,4 @@ export * from './motion';
 export * from './elevation';
 export * from './focus';
 export * from './status';
+export * from './brand';

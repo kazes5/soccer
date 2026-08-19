@@ -193,6 +193,7 @@ describe('SystemPage', () => {
         name: 'U-11 Strikers',
         season: 'Fall 2026',
         timezone: 'Asia/Jerusalem',
+        primaryColor: null,
       },
       admin: {
         id: '77777777-7777-4777-8777-777777777777',

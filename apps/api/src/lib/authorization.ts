@@ -1,4 +1,4 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient, TeamRole } from '../../generated/prisma/client';
 import type { CurrentUser } from '../plugins/auth';
 import { HttpError } from './errors';
@@ -38,4 +38,24 @@ export async function requireTeamRole(
   }
 
   return membership;
+}
+
+/** A team admin manages their own team; a system admin manages any team —
+ *  both are "administrative" here. Mirrors system.ts's own guard() in
+ *  requiring `systemAdminEnabled` before the system-admin fallback, so the
+ *  console's kill-switch also disables this for a system admin with no
+ *  team membership of their own. Shared by players.ts and teams.ts. */
+export async function requireTeamOrSystemAdmin(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  teamId: string,
+): Promise<CurrentUser> {
+  const currentUser = requireAuth(request);
+  const membership = await app.prisma.teamMember.findUnique({
+    where: { teamId_userId: { teamId, userId: currentUser.id } },
+  });
+  if (membership?.role === 'admin') return currentUser;
+  if (!app.systemAdminEnabled) throw new HttpError(403, 'Admin access is required for this team.');
+  await requireSystemAdmin(app.prisma, currentUser);
+  return currentUser;
 }

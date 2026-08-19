@@ -78,6 +78,16 @@ describe('describeNotification', () => {
     expect(result.href).toBeNull();
   });
 
+  it('renders member_added_directly with no deep link', () => {
+    const result = describeNotification(t, 'en', timeZone, teamId, {
+      eventType: 'member_added_directly',
+      payload: { userId: 'user-1', userName: 'Noa Ben-David' },
+    });
+
+    expect(result.text).toBe('Noa Ben-David was added to the team by an admin');
+    expect(result.href).toBeNull();
+  });
+
   it('renders schedule_template_created with a deep link to the templates admin page', () => {
     const result = describeNotification(t, 'en', timeZone, teamId, {
       eventType: 'schedule_template_created',

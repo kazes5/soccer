@@ -29,7 +29,7 @@ const AUTO_DISMISS_MS = 5000;
 
 const toneClassName: Record<ToastTone, string> = {
   default: 'bg-ink text-surface',
-  success: 'bg-status-mine text-status-mine-contrast',
+  success: 'bg-brand text-brand-contrast',
   error: 'bg-status-open text-status-open-contrast',
 };
 

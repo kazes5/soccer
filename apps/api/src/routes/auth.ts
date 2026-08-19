@@ -5,6 +5,7 @@ import {
   passwordLoginRequestSchema,
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
+  type TeamAccentColor,
 } from '@soccer/contracts';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../env';
@@ -291,6 +292,7 @@ export default async function authRoutes(app: FastifyInstance) {
         teamName: membership.team.name,
         role: membership.role,
         timezone: membership.team.timezone,
+        primaryColor: membership.team.primaryColor,
       })),
       systemRole: app.systemAdminEnabled ? user.systemRole : null,
       csrfToken: request.cookies[CSRF_COOKIE_NAME],
@@ -318,7 +320,11 @@ function toMemberships(
   memberships: Array<{
     teamId: string;
     role: 'parent' | 'admin';
-    team: { name: string; timezone: string };
+    team: {
+      name: string;
+      timezone: string;
+      primaryColor: TeamAccentColor | null;
+    };
   }>,
 ) {
   return memberships.map((membership) => ({
@@ -326,5 +332,6 @@ function toMemberships(
     teamName: membership.team.name,
     role: membership.role,
     timezone: membership.team.timezone,
+    primaryColor: membership.team.primaryColor,
   }));
 }

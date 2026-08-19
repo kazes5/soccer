@@ -6,7 +6,7 @@ export const inputClassName = `min-h-11 rounded-lg border border-surface-border 
 const buttonBaseClassName =
   'inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50';
 
-export const buttonClassName = `${buttonBaseClassName} bg-status-mine text-status-mine-contrast hover:brightness-95 ${focusRingClassName}`;
+export const buttonClassName = `${buttonBaseClassName} bg-brand text-brand-contrast hover:brightness-95 ${focusRingClassName}`;
 
 export const secondaryButtonClassName = `${buttonBaseClassName} border border-surface-border text-ink hover:bg-surface-soft ${focusRingClassName}`;
 

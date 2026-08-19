@@ -7,32 +7,11 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requireSystemAdmin, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamOrSystemAdmin, requireTeamRole } from '../lib/authorization';
 import { HttpError } from '../lib/errors';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const playerParamsSchema = z.object({ teamId: z.string().uuid(), playerId: z.string().uuid() });
-
-/** A team admin manages their own team's roster; a system admin manages any
- *  team's — both are "administrative" here, unlike the read endpoint below,
- *  which any team member (parent or admin) can use. Mirrors system.ts's own
- *  guard() in requiring `systemAdminEnabled` before the system-admin
- *  fallback, so the console's kill-switch also disables this route for a
- *  system admin with no team membership of their own. */
-async function requireTeamOrSystemAdmin(
-  app: FastifyInstance,
-  request: Parameters<typeof requireAuth>[0],
-  teamId: string,
-) {
-  const currentUser = requireAuth(request);
-  const membership = await app.prisma.teamMember.findUnique({
-    where: { teamId_userId: { teamId, userId: currentUser.id } },
-  });
-  if (membership?.role === 'admin') return currentUser;
-  if (!app.systemAdminEnabled) throw new HttpError(403, 'Admin access is required for this team.');
-  await requireSystemAdmin(app.prisma, currentUser);
-  return currentUser;
-}
 
 /** Every parentUserId must already be a member (any role) of this team —
  *  otherwise a caller could link a player to an unrelated team's user,

@@ -1,12 +1,13 @@
 'use client';
 
-import { focusRingClassName } from '@soccer/ui-tokens';
+import { focusRingClassName, type BrandColorKey } from '@soccer/ui-tokens';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
 import { LogOutDialog, LogOutTrigger } from '@/components/log-out';
 import { useLocale } from '@/components/locale-provider';
+import { TeamBrandStyle } from '@/components/team-brand-style';
 import { api } from '@/lib/api';
 
 export interface ShellNavItem {
@@ -41,11 +42,16 @@ export function AppShell({
   brand,
   navItems,
   isSingleTeamParent = false,
+  accentColor = null,
   children,
 }: {
   brand: string;
   navItems: ShellNavItem[];
   isSingleTeamParent?: boolean;
+  /** The active team's chosen accent color (from `teamMemberships[].primaryColor`),
+   *  or `null` for the default brand color — omitted entirely on pages with no
+   *  team context (e.g. the system console). */
+  accentColor?: BrandColorKey | null;
   children: ReactNode;
 }) {
   const { t } = useLocale();
@@ -62,6 +68,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col md:flex-row">
+      <TeamBrandStyle color={accentColor} />
       <a
         href="#main-content"
         className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:start-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-ink focus-visible:px-4 focus-visible:py-2 focus-visible:text-surface"
@@ -138,7 +145,7 @@ function BottomNavLink({ item }: { item: ShellNavItem }) {
       href={item.href}
       aria-current={item.active ? 'page' : undefined}
       className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${
-        item.active ? 'text-status-mine-on' : 'text-ink-muted'
+        item.active ? 'text-brand-on' : 'text-ink-muted'
       } ${focusRingClassName}`}
     >
       <span className="size-5" aria-hidden="true">

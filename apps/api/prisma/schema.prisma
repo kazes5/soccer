@@ -21,6 +21,24 @@ enum Language {
   he
 }
 
+// A curated palette, not free-text/arbitrary hex — every entry is a named,
+// WCAG-AA-contrast-checked color pair (light + dark) defined once in
+// packages/ui-tokens/src/brand.ts, the single source of truth for the
+// actual hex values. `green` is the app's existing default brand color
+// (identical to the pre-existing --color-status-mine values), so a team
+// with no explicit choice renders pixel-identical to before this feature.
+enum TeamAccentColor {
+  green
+  blue
+  indigo
+  purple
+  fuchsia
+  slate
+  red
+  orange
+  yellow
+}
+
 enum NotificationChannel {
   push
   sms
@@ -147,12 +165,15 @@ model User {
 }
 
 model Team {
-  id        String   @id @default(uuid())
-  name      String
-  season    String
-  timezone  String   @default("Asia/Jerusalem")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String           @id @default(uuid())
+  name         String
+  season       String
+  timezone     String           @default("Asia/Jerusalem")
+  // Null means "use the app's default brand color" — additive, so every
+  // existing team keeps rendering exactly as before with zero backfill.
+  primaryColor TeamAccentColor? @map("primary_color")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
 
   members                    TeamMember[]
   players                    Player[]

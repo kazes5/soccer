@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app';
+import { generateSessionToken, hashSecret } from '../src/lib/crypto';
 
 describe('team routes', () => {
   const app = buildApp();
@@ -71,6 +72,7 @@ describe('team routes', () => {
       name: 'U-12 Wildcats',
       season: 'Fall 2026',
       timezone: 'Asia/Jerusalem',
+      primaryColor: null,
     });
   });
 
@@ -94,5 +96,77 @@ describe('team routes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).not.toHaveProperty('name');
+  });
+
+  describe('PATCH /teams/:teamId/accent-color', () => {
+    it('lets a team admin set and clear the accent color, audit-logged', async () => {
+      const { body } = await createTeam('+15551230006');
+
+      const setResponse = await app.inject({
+        method: 'PATCH',
+        url: `/teams/${body.team.id}/accent-color`,
+        headers: { authorization: `Bearer ${body.sessionToken}` },
+        payload: { primaryColor: 'blue' },
+      });
+      expect(setResponse.statusCode).toBe(200);
+      expect(setResponse.json().primaryColor).toBe('blue');
+
+      const auditEntries = await app.prisma.auditLog.findMany({
+        where: { teamId: body.team.id, actionType: 'team_accent_color_updated' },
+      });
+      expect(auditEntries).toHaveLength(1);
+      expect(auditEntries[0]?.beforeState).toEqual({ primaryColor: null });
+      expect(auditEntries[0]?.afterState).toEqual({ primaryColor: 'blue' });
+
+      const clearResponse = await app.inject({
+        method: 'PATCH',
+        url: `/teams/${body.team.id}/accent-color`,
+        headers: { authorization: `Bearer ${body.sessionToken}` },
+        payload: { primaryColor: null },
+      });
+      expect(clearResponse.statusCode).toBe(200);
+      expect(clearResponse.json().primaryColor).toBeNull();
+    });
+
+    it('rejects a non-admin caller', async () => {
+      const { body } = await createTeam('+15551230007');
+      const parentToken = generateSessionToken();
+      const parent = await app.prisma.user.create({
+        data: { name: 'Parent Two', phone: '+15551230008' },
+      });
+      createdUserIds.push(parent.id);
+      await app.prisma.teamMember.create({
+        data: { teamId: body.team.id, userId: parent.id, role: 'parent' },
+      });
+      await app.prisma.session.create({
+        data: {
+          userId: parent.id,
+          tokenHash: hashSecret(parentToken),
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/teams/${body.team.id}/accent-color`,
+        headers: { authorization: `Bearer ${parentToken}` },
+        payload: { primaryColor: 'blue' },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('rejects an unrecognized color value', async () => {
+      const { body } = await createTeam('+15551230009');
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/teams/${body.team.id}/accent-color`,
+        headers: { authorization: `Bearer ${body.sessionToken}` },
+        payload: { primaryColor: 'not-a-real-color' },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
   });
 });

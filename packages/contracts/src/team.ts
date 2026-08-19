@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { languageSchema } from './enums';
+import { languageSchema, teamAccentColorSchema } from './enums';
 import { userSummarySchema } from './user';
 
 export const teamSummarySchema = z.object({
@@ -7,8 +7,15 @@ export const teamSummarySchema = z.object({
   name: z.string(),
   season: z.string(),
   timezone: z.string(),
+  primaryColor: teamAccentColorSchema.nullable(),
 });
 export type TeamSummary = z.infer<typeof teamSummarySchema>;
+
+/** Team-admin or system-admin only — see PATCH /teams/:teamId/accent-color. */
+export const updateTeamAccentColorRequestSchema = z.object({
+  primaryColor: teamAccentColorSchema.nullable(),
+});
+export type UpdateTeamAccentColorRequest = z.infer<typeof updateTeamAccentColorRequestSchema>;
 
 export const createTeamRequestSchema = z
   .object({

@@ -65,7 +65,11 @@ export default function AccountSettingsPage() {
   ];
 
   return (
-    <AppShell brand={t('common.appName')} navItems={navItems}>
+    <AppShell
+      brand={t('common.appName')}
+      navItems={navItems}
+      accentColor={activeMembership?.primaryColor}
+    >
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
         <h1 className="text-xl font-semibold tracking-tight">{t('settingsAccount.title')}</h1>
 

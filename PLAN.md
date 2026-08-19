@@ -876,14 +876,37 @@ Depends on a stable Web MVP pilot and prioritizes validated pilot needs.
 - [ ] Add optional multi-shift trade offers only after designing transactional reservation/acceptance semantics and conflict recovery.
 - [ ] Add Claude-powered web chat through the existing command/query layer: tool allowlists, server-side permission evaluation, explicit destructive-action confirmation, concise responses, transcript minimization, and `source: ai_chat` audit context.
 - [ ] Add AI evaluation fixtures in English and Hebrew for questions, valid actions, unsafe requests, ambiguous intents, stale state, and permission denial.
-- [ ] Add per-team accent color theming — see "Team Color Theming" below for the design. Planned 2026-08-20, not yet implemented.
+- [x] Add per-team accent color theming — see "Team Color Theming" below. Planned 2026-08-20, implemented and shipped the same day.
 
-### Team Color Theming (planned 2026-08-20, not yet implemented)
+### Team Color Theming (shipped 2026-08-20)
 
 An admin picks a color for their team, replacing the default brand accent
 across that team's UI — requested by the user, explicitly deferred until
 after the production auth-hardening work in "Production Deployment" below
 was verified and deployed.
+
+**As built** (see CLAUDE.md's §12 roadmap entry for the user-facing
+summary): a nullable `Team.primaryColor` (`TeamAccentColor` Postgres enum:
+`green | blue | indigo | purple | fuchsia | slate | red | orange | yellow`;
+the last three added right after the initial six shipped, at explicit
+product request), delivered client-side via a per-team injected `<style>`
+block (`apps/web/src/components/team-brand-style.tsx`) overriding
+`--color-brand`/`-subtle`/`-on`/`-contrast`, which is a *new*, separate CSS
+custom property set from the pre-existing `--color-status-mine` tokens (not
+a reuse/rename) even though `green`'s values are identical — so the
+"mine"/"open"/"attention"/"pending" status vocabulary CLAUDE.md §3.8
+requires stays fixed regardless of a team's color choice. Every palette
+entry (`packages/ui-tokens/src/brand.ts`) is WCAG-AA contrast-checked by an
+automated test (`brand.test.ts`), not just eyeballed. Admin UI is a swatch
+picker at `/admin/team-settings`, wired to `PATCH
+/teams/:teamId/accent-color` (team-admin own-team, or system-admin any
+team). An inline `style` prop was deliberately avoided for delivery — it
+would out-specificity the `prefers-color-scheme: dark` media block and
+silently break dark mode for any team with a chosen color, which the real
+injected `<style>` element's own nested `@media` block avoids.
+
+**Original design sketch below, superseded by the above but kept for
+history:**
 
 **Scope:** non-semantic "brand" surfaces only — primary buttons, header/nav
 accent, links. The *status* colors CLAUDE.md §3.8 defines (green = "mine",
@@ -931,9 +954,29 @@ so this scoping doesn't require new visual language, only wiring.
    per-user color customization (this is team-level only, matching how
    admins already control most shared team-facing settings).
 
-Not started. No code, schema, or contract changes exist yet for this — this
-section is planning only, recorded here so the design survives past this
-conversation.
+**Update:** implemented later the same day, essentially matching this
+sketch — see "As built" above for what actually shipped and where it
+diverged (curated 9-color palette rather than a to-be-decided validation
+approach; delivery via an injected `<style>` element rather than a
+layout-root inline custom property, specifically to not break dark mode).
+
+While closing this out, a genuine pre-existing bug surfaced and was fixed in
+the same PR: `apps/api/src/routes/members.ts` and `system.ts` had emitted a
+`member_added_directly` notification `eventType` since the admin-direct-
+creation feature shipped, but `packages/contracts/src/notification.ts`'s
+`notificationEventTypeSchema` enum never included it. The SSE stream
+tolerated this (a per-row `safeParse` skip — see `notifications.ts`'s
+`sendRow`), but `GET /teams/:teamId/notifications` used a throwing
+`.parse()` on the whole list, so any user with even one such row in their
+history got a hard 500 loading `/notifications` — intermittent in practice,
+only reproducing when another spec's concurrent "add parent directly"
+action landed on a shared team during `apps/e2e`'s `fullyParallel` run,
+which is exactly what made `notifications.spec.ts` flake here. Fixed by
+adding the missing enum value and giving the list endpoint the same
+per-row-skip resilience the SSE stream already had, plus a proper
+`describeNotification` case (web) and push-payload case (API) instead of
+relying on their existing generic fallbacks. Confirmed fixed with 3
+consecutive clean `pnpm test:e2e` runs (15/15) after the change.
 
 ## Stage 8: Native Mobile Application
 
