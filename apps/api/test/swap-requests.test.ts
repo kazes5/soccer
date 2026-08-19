@@ -168,6 +168,34 @@ describe('swap requests', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('rejects requesting a swap on a session from a past calendar day', async () => {
+    const { teamId, sessionId, shiftId, requester } = await setUpTeamWithClaimedShift();
+    await app.prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/swap-requests`,
+      headers: { authorization: `Bearer ${requester.sessionToken}` },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('still lets a parent request a swap on a session scheduled earlier today', async () => {
+    const { teamId, sessionId, shiftId, requester } = await setUpTeamWithClaimedShift();
+    await app.prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() - 5 * 60 * 1000) },
+    });
+
+    const swapRequest = await createSwapRequest(teamId, shiftId, requester.sessionToken);
+
+    expect(swapRequest.status).toBe('pending');
+  });
+
   it('rejects requesting a shift that is still open (unclaimed)', async () => {
     const { adminToken, teamId } = await setUpTeamWithClaimedShift();
 

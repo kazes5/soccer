@@ -29,3 +29,18 @@ export function instantToWallClock(
     time: `${parts.hour}:${parts.minute}`,
   };
 }
+
+/**
+ * True if `instant`'s calendar date in `timeZone` is strictly before today's
+ * — mirrors the API's own `isPastCalendarDay` (see
+ * `apps/api/src/lib/timezone.ts`), so the client only shows actions the
+ * server will actually accept. A session stays actionable for its entire
+ * calendar day even after its scheduled start time passes.
+ */
+export function isPastCalendarDay(
+  instant: Date,
+  timeZone: string,
+  now: Date = new Date(),
+): boolean {
+  return instantToWallClock(instant, timeZone).date < instantToWallClock(now, timeZone).date;
+}

@@ -305,6 +305,62 @@ describe('shifts', () => {
     expect(response.statusCode).toBe(409);
   });
 
+  it('rejects claiming a shift on a session from a past calendar day', async () => {
+    const { adminToken, teamId, sessionId, shiftId } = await setUpTeamWithShift();
+    const parent = await addParent(teamId, adminToken);
+    await app.prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/claim`,
+      headers: { authorization: `Bearer ${parent.sessionToken}` },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('still lets a parent claim a shift on a session scheduled earlier today', async () => {
+    const { adminToken, teamId, sessionId, shiftId } = await setUpTeamWithShift();
+    const parent = await addParent(teamId, adminToken);
+    await app.prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() - 5 * 60 * 1000) },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/claim`,
+      headers: { authorization: `Bearer ${parent.sessionToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('rejects releasing a shift on a session from a past calendar day', async () => {
+    const { adminToken, teamId, sessionId, shiftId } = await setUpTeamWithShift();
+    const parent = await addParent(teamId, adminToken);
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/claim`,
+      headers: { authorization: `Bearer ${parent.sessionToken}` },
+    });
+    await app.prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/shifts/${shiftId}/release`,
+      headers: { authorization: `Bearer ${parent.sessionToken}` },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
   it('yields exactly one success out of ten concurrent claims on the same shift', async () => {
     const { adminToken, teamId, shiftId } = await setUpTeamWithShift();
     const parents = await Promise.all(

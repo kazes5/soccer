@@ -46,7 +46,7 @@ import {
   updateSessionInSessions,
   updateShiftInSessions,
 } from '@/lib/sessions';
-import { instantToWallClock } from '@/lib/timezone';
+import { instantToWallClock, isPastCalendarDay } from '@/lib/timezone';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
@@ -55,11 +55,12 @@ function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   return shift.assignedUserId === currentUserId ? 'mine' : 'covered';
 }
 
-/** A session is a read-only historical record once its start time has passed —
- * mirrors the API's own `assertSessionNotPast` guard, so admin controls never
- * show for an action the server would reject anyway. */
-function isSessionPast(startsAt: string): boolean {
-  return new Date(startsAt).getTime() <= Date.now();
+/** A session is a read-only historical record once its calendar day (in the
+ * team's own timezone) has ended, not merely once its start time has passed —
+ * mirrors the API's own `assertSessionNotPast`/`isPastCalendarDay` guards, so
+ * these controls never show for an action the server would reject anyway. */
+function isSessionPast(startsAt: string, timeZone: string): boolean {
+  return isPastCalendarDay(new Date(startsAt), timeZone);
 }
 
 export default function SchedulePage() {
@@ -499,7 +500,7 @@ function SessionCard({
   const { t } = useLocale();
   const formatted = formatSessionStartsAt(locale, practiceSession.startsAt, timeZone);
   const isUpcoming =
-    practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt);
+    practiceSession.status === 'scheduled' && !isSessionPast(practiceSession.startsAt, timeZone);
   // Editing the session itself (date/time/field location) stays admin-only.
   // Managing a collection point's player roster is open to any team member —
   // any parent can keep it current, not just the one driving.
@@ -583,9 +584,9 @@ function SessionCard({
                   ? t('schedule.statusSwapPending')
                   : t('schedule.statusOpen');
           const isPending = pendingShiftId === point.shift.id;
-          const canClaim = practiceSession.status === 'scheduled' && point.shift.status === 'open';
-          const canRelease = practiceSession.status === 'scheduled' && tone === 'mine';
-          const canRequestSwap = practiceSession.status === 'scheduled' && tone === 'covered';
+          const canClaim = isUpcoming && point.shift.status === 'open';
+          const canRelease = isUpcoming && tone === 'mine';
+          const canRequestSwap = isUpcoming && tone === 'covered';
           const directionLabel =
             point.direction === 'to_practice'
               ? t('schedule.toPractice')

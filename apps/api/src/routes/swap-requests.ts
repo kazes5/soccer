@@ -23,6 +23,7 @@ import {
   swapRequestInclude,
   toSwapRequestDto,
 } from '../lib/swap-requests';
+import { isPastCalendarDay } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
@@ -62,13 +63,16 @@ export default async function swapRequestRoutes(app: FastifyInstance) {
 
     const shift = await app.prisma.shift.findUnique({
       where: { id: params.shiftId },
-      include: { session: true, point: true },
+      include: { session: { include: { team: { select: { timezone: true } } } }, point: true },
     });
     if (!shift || shift.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Shift not found.');
     }
     if (shift.session.status !== 'scheduled') {
       throw new HttpError(409, 'This session is no longer scheduled.');
+    }
+    if (isPastCalendarDay(shift.session.startsAt, shift.session.team.timezone)) {
+      throw new HttpError(409, 'This session has already happened and can no longer be swapped.');
     }
     if (shift.status !== 'claimed' || !shift.assignedUserId) {
       throw new HttpError(409, 'This shift is not currently held by anyone to request.');

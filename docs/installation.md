@@ -198,6 +198,7 @@ interferes with a `pnpm dev` you already have running. See
   matching the `soccer_csrf` cookie.
 - Prisma client errors after schema changes: run `pnpm db:generate` again.
 
-Production hosting, staging, observability, and external provider setup are not
-covered by this local installation guide; those decisions remain open in
+Production hosting is covered separately in [Deployment](./deployment.md).
+Staging, observability, and external provider setup are not covered by this
+local installation guide; those decisions remain open in
 [PLAN.md](../PLAN.md).
