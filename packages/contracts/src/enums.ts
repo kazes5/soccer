@@ -6,9 +6,6 @@ export type TeamRole = z.infer<typeof teamRoleSchema>;
 export const systemRoleSchema = z.enum(['system_admin']);
 export type SystemRole = z.infer<typeof systemRoleSchema>;
 
-export const authMethodSchema = z.enum(['bootstrap', 'password', 'passkey']);
-export type AuthMethod = z.infer<typeof authMethodSchema>;
-
 export const languageSchema = z.enum(['en', 'he']);
 export type Language = z.infer<typeof languageSchema>;
 

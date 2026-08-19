@@ -15,40 +15,35 @@ describe('shifts', () => {
     createdUserIds.length = 0;
   });
 
-  // Accepting an invite creates the account but, per the real onboarding flow, does
-  // not by itself grant a session — a parent must separately complete passkey
-  // registration. That requires an actual browser/authenticator ceremony this file
-  // has no need to simulate (it's exercised directly in auth.test.ts via
-  // FakeWebauthnVerifier), so a session is created directly here — up to 10 at
-  // once, for the concurrency test below — exactly as the real registration/login
-  // endpoints do internally, bypassing only the ceremony, not the session mechanism.
+  // Directly adds a parent (admin-set password) rather than going through the
+  // invite-link flow — a session is created here directly rather than via
+  // real login, so up to 10 can be set up quickly for the concurrency test
+  // below, exactly as the real login endpoint does internally.
   async function addParent(teamId: string, adminToken: string) {
-    const inviteResponse = await app.inject({
+    const addResponse = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/invites`,
+      url: `/teams/${teamId}/members/parents`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { phone: `+1555160${Math.floor(Math.random() * 900000 + 100000)}` },
+      payload: {
+        name: 'Parent',
+        phone: `+1555160${Math.floor(Math.random() * 900000 + 100000)}`,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
     });
-    const invite = inviteResponse.json();
-
-    const acceptResponse = await app.inject({
-      method: 'POST',
-      url: `/invites/${invite.code}/accept`,
-      payload: { name: 'Parent', language: 'en', players: [] },
-    });
-    const parentBody = acceptResponse.json();
-    createdUserIds.push(parentBody.user.id);
+    const parentBody = addResponse.json();
+    createdUserIds.push(parentBody.userId);
 
     const sessionToken = generateSessionToken();
     await app.prisma.session.create({
       data: {
-        userId: parentBody.user.id,
+        userId: parentBody.userId,
         tokenHash: hashSecret(sessionToken),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
 
-    return { userId: parentBody.user.id as string, sessionToken };
+    return { userId: parentBody.userId as string, sessionToken };
   }
 
   async function setUpTeamWithShift() {
@@ -59,6 +54,8 @@ describe('shifts', () => {
         teamName: 'U-12 Wildcats',
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone: `+1555170${Math.floor(Math.random() * 9000 + 1000)}`,
       },
     });
@@ -118,6 +115,8 @@ describe('shifts', () => {
         teamName: 'U-12 Wildcats',
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone: `+1555170${Math.floor(Math.random() * 9000 + 1000)}`,
       },
     });

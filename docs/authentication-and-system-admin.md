@@ -1,43 +1,72 @@
 # Password and System Administration
 
+Passkeys/WebAuthn were removed on 2026-08-19 in favor of password-only
+authentication for every role (see CLAUDE.md §8.2 decision 6 and §9.1's
+2026-08-19 revision notes). This document describes the current, password-only
+model. There is no separate "privileged assurance" step-up anymore — a
+password-authenticated session with the right role can perform team-admin or
+system-admin actions immediately, the same way it performs ordinary parent
+actions.
+
 ## Parent onboarding and login
 
-Current first-party clients create version-2 invitations. The team admin shares
-the opaque invite link and its separately displayed six-digit code. The parent
-opens the link, enters the code, supplies their name/player details, and chooses
-a password of at least 15 characters. Completion creates the user, credential,
-membership, players, audit/outbox entries, and password-assurance session in one
-transaction. Version-1 passkey invitations remain valid until their own expiry.
+Two ways for a parent to get an account:
 
-Returning parents log in with their normalized phone number or email and their
-password. Unknown, inactive, password-less, and wrong-password accounts receive
-the same error. Account and IP attempt counters bound online guessing.
+1. **Invite link.** The team admin (or a system admin) shares an opaque
+   invite link and its separately displayed six-digit code. The parent opens
+   the link, enters the code, supplies their name/player details, and chooses
+   a password of at least 15 characters. Completion creates the user,
+   credential, membership, players, and audit/outbox entries in one
+   transaction.
+2. **Direct creation.** A team admin or system admin creates the account
+   directly — name, contact, and a password they choose on the spot — with no
+   invite link/code round trip. Useful for handing someone their login in
+   person. See `POST /teams/:teamId/members/parents` (team admin, current
+   team only) and `POST /system/teams/:teamId/members` (system admin, any
+   team, parent or admin role).
 
-Existing-account invitations never replace a password. After code verification,
-the browser preserves only the short-lived invite grant in session storage,
-sends the parent through normal login, and attaches the membership only when the
-authenticated account's normalized identifier matches the invitation.
+Returning users log in with their normalized phone number or email and their
+password. Unknown, inactive, password-less, and wrong-password accounts
+receive the same error. Account and IP attempt counters bound online
+guessing.
+
+Existing-account invitations never replace a password. After code
+verification, the browser preserves only the short-lived invite grant in
+session storage, sends the parent through normal login, and attaches the
+membership only when the authenticated account's normalized identifier
+matches the invitation.
 
 Re-inviting a contact whose account was previously deactivated (e.g. a removed
-parent) never routes into the existing-account path — login is impossible for a
-deactivated account, so it would be an unreachable dead end. Instead, completing
-password onboarding for that contact reactivates the matching account in place
-(fresh credential, fresh membership, `invite_accepted_for_recovery` audit entry)
-rather than creating a colliding duplicate or blocking the parent out entirely.
+parent) never routes into the existing-account path — login is impossible for
+a deactivated account, so it would be an unreachable dead end. Instead,
+completing password onboarding for that contact reactivates the matching
+account in place (fresh credential, fresh membership,
+`invite_accepted_for_recovery` audit entry) rather than creating a colliding
+duplicate or blocking the parent out entirely.
 
-## Password recovery
+## Admin-set passwords
+
+Team admins can reset a password for any existing member of their team
+(`POST /teams/:teamId/members/:userId/set-password`); system admins can do the
+same for any user, any team (`POST /system/users/:userId/set-password`).
+Both revoke every other active session for that user and record an audit
+entry (`password_set_by_admin`), same as a self-service reset. This is the
+practical stand-in for "forgot password" while no recovery email/SMS provider
+is configured (see below) — an admin resets it directly instead of the user
+waiting on an email that may never be configured to send.
+
+## Self-service password recovery
 
 `POST /auth/password/forgot` (identifier only) and `POST /auth/password/reset`
-(token + new password) sit behind `PASSWORD_AUTH_ENABLED` like the rest of
-password auth, and additionally require a configured
+(token + new password) additionally require a configured
 `PasswordRecoveryProvider` (`app.passwordRecoveryProvider.isConfigured`) — with
 none configured, `forgot` still returns its generic response but sends nothing
-and creates no token.
+and creates no token. This path is optional; admin-set passwords (above) work
+regardless of whether a provider is configured.
 
 `forgot` always returns the same generic response regardless of whether the
-identifier matches an account, matches an account with no password credential
-(legacy passkey-only), or matches nothing at all — the response body is never
-an enumeration oracle. Request _volume_ is bounded instead (there's no
+identifier matches an account or matches nothing at all — the response body is
+never an enumeration oracle. Request _volume_ is bounded instead (there's no
 per-account "failure" to count when every response looks the same):
 `PASSWORD_RESET_MAX_REQUESTS_PER_ACCOUNT_PER_HOUR` (default 5) and
 `_PER_IP_PER_HOUR` (default 20), tracked in the same table password-login
@@ -57,31 +86,28 @@ headroom to raise memory cost (Argon2's main defense against custom
 ASIC/GPU cracking) without a perceptible login-latency cost. See
 `apps/api/src/lib/passwords.ts` for the measurements this was based on.
 
-## Session assurance
-
-Each session records `password`, `passkey`, or the narrowly scoped initial
-`bootstrap` method plus its authentication time. Parent routes accept password
-sessions. Contact-bearing lists, team-admin mutations, audit logs, and all
-system-admin routes require recent strong assurance.
-
-A password session with an existing passkey cannot register another one and
-thereby upgrade itself — it must reauthenticate via that passkey first. A
-password session with _no_ passkey yet (e.g. a parent promoted to team-admin
-after onboarding with only a password) may self-service register exactly one
-first passkey from Settings, which immediately grants privileged assurance on
-that same session; every registration after that first one again requires
-passkey-authenticated assurance, same as any other passkey user.
-
 ## System administrators
 
 `User.systemRole` is independent from `TeamMember.role`. A system administrator
-can see paginated teams, team members, users, and global audit events and can
-grant/revoke global administrators or promote/demote team members. They do not
-implicitly join teams and cannot use normal team endpoints without a real
-membership. Database locks prevent concurrent removal of the final team or
-system administrator.
+can:
 
-Bootstrap the first role only after the target active user has a passkey:
+- See paginated teams, team members, users, and global audit events.
+- Grant/revoke global administrator access, or promote/demote a team member's
+  role, on any team.
+- Create a new team and its founding admin directly (`POST /system/teams`) —
+  unlike the public self-serve `POST /teams`, this does not log the system
+  admin in as that admin; they keep their own session.
+- Add a parent or admin directly to any existing team
+  (`POST /system/teams/:teamId/members`), and manage that team's players
+  (`POST`/`PATCH`/`DELETE /teams/:teamId/players[/:id]` — team admins have the
+  same player-management access on their own team).
+- Set/reset any user's password (`POST /system/users/:id/set-password`).
+
+They do not implicitly join teams and cannot use normal team endpoints
+without a real membership. Database locks prevent concurrent removal of the
+final team or system administrator.
+
+Bootstrap the first role only after the target active user has a password set:
 
 ```sh
 pnpm system-admin:grant <user-id-or-normalized-phone-or-email>
@@ -89,15 +115,14 @@ pnpm system-admin:grant <user-id-or-normalized-phone-or-email>
 
 ## Rollout
 
-Both surfaces default off:
+`SYSTEM_ADMIN_ENABLED` defaults off:
 
 ```env
-PASSWORD_AUTH_ENABLED=false
 SYSTEM_ADMIN_ENABLED=false
-PRIVILEGED_ASSURANCE_MAX_AGE_MINUTES=15
 ```
 
-Apply the migration, configure a verified recovery delivery provider, enable
-password authentication in staging, bootstrap the first system administrator,
-then enable the system console. Disabling either flag leaves legacy passkey
-invitations and ordinary team behavior intact.
+Password authentication is always on — there is no equivalent flag for it
+anymore, since it's the only login method. Configure a verified recovery
+provider (optional; see "Self-service password recovery" above), bootstrap
+the first system administrator, then enable the system console. Disabling the
+flag leaves ordinary team behavior intact; only `/system/*` routes 404.

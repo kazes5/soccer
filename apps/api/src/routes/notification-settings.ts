@@ -7,7 +7,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAuditLog } from '../lib/audit';
-import { requireAuth, requirePrivilegedAssurance, requireTeamRole } from '../lib/authorization';
+import { requireAuth, requireTeamRole } from '../lib/authorization';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 
@@ -43,7 +43,6 @@ export default async function notificationSettingsRoutes(app: FastifyInstance) {
     const body = teamNotificationSettingsRequestSchema.parse(request.body);
     const currentUser = requireAuth(request);
     await requireTeamRole(app.prisma, currentUser.id, params.teamId, ['admin']);
-    requirePrivilegedAssurance(currentUser);
 
     const settings = await app.prisma.$transaction(async (tx) => {
       // Read immediately before the write, inside this transaction — see

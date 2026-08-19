@@ -21,8 +21,8 @@ status and sequencing.
   collection points, schedules, session management, and coordination settings
   for team admins.
 - [Password and System Administration](./authentication-and-system-admin.md) -
-  split-code onboarding, password/passkey assurance, feature flags, and the
-  global administrator console.
+  split-code onboarding, admin-set passwords, password-only authentication,
+  feature flags, and the global administrator console.
 - [Operations Runbook](./operations-runbook.md) - failed scheduled jobs,
   claim disputes, removed users, notification failures, incident response,
   backup/restore, and pilot support.

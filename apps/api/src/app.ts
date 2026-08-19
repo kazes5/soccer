@@ -6,7 +6,6 @@ import { env } from './env';
 import { Prisma } from '../generated/prisma/client';
 import { assertCsrfSafe } from './lib/cookies';
 import { HttpError } from './lib/errors';
-import { SimpleWebauthnVerifier, type WebauthnVerifier } from './lib/webauthn';
 import {
   DisabledPasswordRecoveryProvider,
   type PasswordRecoveryProvider,
@@ -36,10 +35,8 @@ import systemRoutes from './routes/system';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    webauthnVerifier: WebauthnVerifier;
     sseHeartbeatIntervalMs: number;
     passwordRecoveryProvider: PasswordRecoveryProvider;
-    passwordAuthEnabled: boolean;
     systemAdminEnabled: boolean;
   }
 }
@@ -47,14 +44,10 @@ declare module 'fastify' {
 const DEFAULT_SSE_HEARTBEAT_INTERVAL_MS = 25_000;
 
 export interface BuildAppOptions {
-  /** Overrides the default (`@simplewebauthn/server`-backed) verifier — used in tests, since a
-   *  real WebAuthn ceremony needs actual browser/authenticator crypto Vitest can't produce. */
-  webauthnVerifier?: WebauthnVerifier;
   /** Overrides the notification stream's heartbeat/fallback-poll interval — used in tests so
    *  they don't have to wait out the real 25s interval to observe fallback-poll delivery. */
   sseHeartbeatIntervalMs?: number;
   passwordRecoveryProvider?: PasswordRecoveryProvider;
-  passwordAuthEnabled?: boolean;
   systemAdminEnabled?: boolean;
 }
 
@@ -67,13 +60,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     trustProxy: env.TRUST_PROXY,
   });
 
-  app.decorate('webauthnVerifier', options.webauthnVerifier ?? new SimpleWebauthnVerifier());
   app.decorate(
     'sseHeartbeatIntervalMs',
     options.sseHeartbeatIntervalMs ?? DEFAULT_SSE_HEARTBEAT_INTERVAL_MS,
   );
   app.decorate('systemAdminEnabled', options.systemAdminEnabled ?? env.SYSTEM_ADMIN_ENABLED);
-  app.decorate('passwordAuthEnabled', options.passwordAuthEnabled ?? env.PASSWORD_AUTH_ENABLED);
   app.decorate(
     'passwordRecoveryProvider',
     options.passwordRecoveryProvider ?? new DisabledPasswordRecoveryProvider(),

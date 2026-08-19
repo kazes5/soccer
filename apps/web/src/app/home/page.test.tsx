@@ -181,6 +181,7 @@ describe('HomePage', () => {
       id: 'invite-1',
       teamId: 'team-1',
       code: 'CR3SvwmKtwJp',
+      onboardingCode: '123456',
       phone: '+15550002222',
       email: null,
       status: 'pending',

@@ -22,6 +22,8 @@ describe('team member management', () => {
         teamName: 'U-12 Wildcats',
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone: `+1555125${Math.floor(Math.random() * 9000 + 1000)}`,
       },
     });
@@ -31,32 +33,30 @@ describe('team member management', () => {
     const adminToken = teamBody.sessionToken as string;
     const teamId = teamBody.team.id as string;
 
-    const inviteResponse = await app.inject({
+    const addResponse = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/invites`,
+      url: `/teams/${teamId}/members/parents`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { phone: `+1555126${Math.floor(Math.random() * 9000 + 1000)}` },
+      payload: {
+        name: 'Parent Two',
+        phone: `+1555126${Math.floor(Math.random() * 9000 + 1000)}`,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
     });
-    const invite = inviteResponse.json();
-
-    const acceptResponse = await app.inject({
-      method: 'POST',
-      url: `/invites/${invite.code}/accept`,
-      payload: { name: 'Parent Two', language: 'en', players: [] },
-    });
-    const parentBody = acceptResponse.json();
-    createdUserIds.push(parentBody.user.id);
+    const parentBody = addResponse.json();
+    createdUserIds.push(parentBody.userId);
 
     const parentToken = generateSessionToken();
     await app.prisma.session.create({
       data: {
-        userId: parentBody.user.id,
+        userId: parentBody.userId,
         tokenHash: hashSecret(parentToken),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
 
-    return { adminToken, parentToken, teamId, parentUserId: parentBody.user.id as string };
+    return { adminToken, parentToken, teamId, parentUserId: parentBody.userId as string };
   }
 
   it('lets an admin list team members', async () => {
@@ -338,6 +338,295 @@ describe('team member management', () => {
       shiftId,
       reason: 'member_removed',
       byUserName: 'Parent Two',
+    });
+  });
+
+  describe('POST /teams/:teamId/members/parents', () => {
+    it('creates a parent with players, and records an audit log entry and broadcast', async () => {
+      const { adminToken, teamId } = await setUpTeamWithParent();
+      const phone = `+1555127${Math.floor(Math.random() * 9000 + 1000)}`;
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'Directly Added Parent',
+          phone,
+          password: 'Cedar-River!Otter-52',
+          passwordConfirmation: 'Cedar-River!Otter-52',
+          players: [{ name: 'Directly Added Player', age: 9 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body).toMatchObject({ name: 'Directly Added Parent', phone, role: 'parent' });
+      createdUserIds.push(body.userId);
+
+      expect(
+        await app.prisma.teamMember.count({
+          where: { teamId, userId: body.userId, role: 'parent' },
+        }),
+      ).toBe(1);
+      expect(
+        await app.prisma.player.count({
+          where: {
+            teamId,
+            name: 'Directly Added Player',
+            parents: { some: { userId: body.userId } },
+          },
+        }),
+      ).toBe(1);
+
+      const auditEntries = await app.prisma.auditLog.findMany({
+        where: { teamId, actionType: 'member_added_directly', targetId: body.userId },
+      });
+      expect(auditEntries).toHaveLength(1);
+
+      const outboxEvents = await app.prisma.outboxEvent.findMany({
+        where: {
+          teamId,
+          eventType: 'member_added_directly',
+          payload: { path: ['userId'], equals: body.userId },
+        },
+      });
+      expect(outboxEvents).toHaveLength(1);
+      expect(outboxEvents[0]?.payload).toMatchObject({
+        userId: body.userId,
+        userName: 'Directly Added Parent',
+      });
+
+      const login = await app.inject({
+        method: 'POST',
+        url: '/auth/password/login',
+        payload: { identifier: phone, password: 'Cedar-River!Otter-52' },
+      });
+      expect(login.statusCode).toBe(200);
+    });
+
+    it('rejects a non-admin caller', async () => {
+      const { teamId, parentToken } = await setUpTeamWithParent();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${parentToken}` },
+        payload: {
+          name: 'Someone',
+          phone: `+1555128${Math.floor(Math.random() * 9000 + 1000)}`,
+          password: 'Cedar-River!Otter-52',
+          passwordConfirmation: 'Cedar-River!Otter-52',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('rejects a phone/email already active on the team', async () => {
+      const { adminToken, teamId } = await setUpTeamWithParent();
+      const phone = `+1555129${Math.floor(Math.random() * 9000 + 1000)}`;
+      const first = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'First',
+          phone,
+          password: 'Cedar-River!Otter-52',
+          passwordConfirmation: 'Cedar-River!Otter-52',
+        },
+      });
+      createdUserIds.push(first.json().userId);
+
+      const duplicate = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'Second',
+          phone,
+          password: 'Cedar-River!Otter-52',
+          passwordConfirmation: 'Cedar-River!Otter-52',
+        },
+      });
+
+      expect(duplicate.statusCode).toBe(409);
+    });
+
+    it('reactivates a previously-removed user with the same phone instead of erroring', async () => {
+      const { adminToken, teamId } = await setUpTeamWithParent();
+      const phone = `+1555131${Math.floor(Math.random() * 9000 + 1000)}`;
+
+      const first = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'Original Name',
+          phone,
+          password: 'Cedar-River!Otter-52',
+          passwordConfirmation: 'Cedar-River!Otter-52',
+        },
+      });
+      const firstUserId = first.json().userId as string;
+      createdUserIds.push(firstUserId);
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/teams/${teamId}/members/${firstUserId}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(removed.statusCode).toBe(204);
+
+      const reactivated = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'Rejoined Name',
+          phone,
+          password: 'Willow-Harbor!Finch-81',
+          passwordConfirmation: 'Willow-Harbor!Finch-81',
+        },
+      });
+
+      expect(reactivated.statusCode).toBe(201);
+      const body = reactivated.json();
+      expect(body.userId).toBe(firstUserId);
+      expect(body.name).toBe('Rejoined Name');
+
+      const user = await app.prisma.user.findUniqueOrThrow({ where: { id: firstUserId } });
+      expect(user.isActive).toBe(true);
+      expect(user.name).toBe('Rejoined Name');
+
+      expect(
+        await app.prisma.teamMember.count({
+          where: { teamId, userId: firstUserId, role: 'parent' },
+        }),
+      ).toBe(1);
+
+      const login = await app.inject({
+        method: 'POST',
+        url: '/auth/password/login',
+        payload: { identifier: phone, password: 'Willow-Harbor!Finch-81' },
+      });
+      expect(login.statusCode).toBe(200);
+
+      const staleLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/password/login',
+        payload: { identifier: phone, password: 'Cedar-River!Otter-52' },
+      });
+      expect(staleLogin.statusCode).toBe(401);
+    });
+
+    it('rejects an unacceptable password', async () => {
+      const { adminToken, teamId } = await setUpTeamWithParent();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/parents`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          name: 'Someone',
+          phone: `+1555130${Math.floor(Math.random() * 9000 + 1000)}`,
+          password: 'too-short-1',
+          passwordConfirmation: 'too-short-1',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
+  describe('POST /teams/:teamId/members/:userId/set-password', () => {
+    it("resets a member's password, revokes their other sessions, and records an audit entry", async () => {
+      const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
+      const otherSessionToken = generateSessionToken();
+      await app.prisma.session.create({
+        data: {
+          userId: parentUserId,
+          tokenHash: hashSecret(otherSessionToken),
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/${parentUserId}/set-password`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          password: 'Willow-Harbor!Finch-81',
+          passwordConfirmation: 'Willow-Harbor!Finch-81',
+        },
+      });
+
+      expect(response.statusCode).toBe(204);
+
+      const revoked = await app.prisma.session.findFirst({
+        where: { tokenHash: hashSecret(otherSessionToken) },
+      });
+      expect(revoked?.revokedAt).not.toBeNull();
+
+      const auditEntries = await app.prisma.auditLog.findMany({
+        where: { actionType: 'password_set_by_admin', targetId: parentUserId },
+      });
+      expect(auditEntries).toHaveLength(1);
+
+      const user = await app.prisma.user.findUniqueOrThrow({ where: { id: parentUserId } });
+      const login = await app.inject({
+        method: 'POST',
+        url: '/auth/password/login',
+        payload: { identifier: user.phone!, password: 'Willow-Harbor!Finch-81' },
+      });
+      expect(login.statusCode).toBe(200);
+    });
+
+    it('rejects a non-admin caller', async () => {
+      const { teamId, parentToken, parentUserId } = await setUpTeamWithParent();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/${parentUserId}/set-password`,
+        headers: { authorization: `Bearer ${parentToken}` },
+        payload: {
+          password: 'Willow-Harbor!Finch-81',
+          passwordConfirmation: 'Willow-Harbor!Finch-81',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('404s for a user not on this team', async () => {
+      const { adminToken, teamId } = await setUpTeamWithParent();
+      const other = await setUpTeamWithParent();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/${other.parentUserId}/set-password`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          password: 'Willow-Harbor!Finch-81',
+          passwordConfirmation: 'Willow-Harbor!Finch-81',
+        },
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('rejects a mismatched password confirmation', async () => {
+      const { adminToken, teamId, parentUserId } = await setUpTeamWithParent();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/members/${parentUserId}/set-password`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { password: 'Willow-Harbor!Finch-81', passwordConfirmation: 'different' },
+      });
+
+      expect(response.statusCode).toBe(400);
     });
   });
 });

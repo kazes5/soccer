@@ -19,19 +19,17 @@ test('login page is fully operable via keyboard alone', async ({ page }) => {
 
   await page.keyboard.press('Tab'); // -> password field
   await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+  await page.keyboard.type('irrelevant-password-value');
 
   await page.keyboard.press('Tab'); // -> "Log in" submit button
   await expect(page.getByRole('button', { name: 'Log in' })).toBeFocused();
 
-  await page.keyboard.press('Tab'); // -> "Continue with passkey" button
-  const passkeyButton = page.getByRole('button', { name: 'Continue with passkey' });
-  await expect(passkeyButton).toBeFocused();
-
   await page.keyboard.press('Enter');
 
-  // The identifier isn't a registered account, so the server returns its
-  // standard not-registered message before any WebAuthn ceremony starts —
-  // proving both keyboard activation and the resulting request/response
-  // round-trip actually worked, without depending on seeded data.
-  await expect(page.getByText("You haven't been added to a team yet.")).toBeVisible();
+  // The identifier isn't a registered account, so the server returns the
+  // same generic failure it would for a wrong password (enumeration
+  // resistance — see apps/api/src/routes/auth.ts) — proving both keyboard
+  // activation and the resulting request/response round-trip actually
+  // worked, without depending on seeded data.
+  await expect(page.getByText('Invalid username or password.')).toBeVisible();
 });

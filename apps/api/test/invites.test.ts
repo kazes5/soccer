@@ -11,6 +11,8 @@ async function createTeamWithAdmin(app: FastifyInstance, adminPhone: string) {
       teamName: 'U-12 Wildcats',
       season: 'Fall 2026',
       adminName: 'Dana Cohen',
+      adminPassword: 'Cedar-River!Otter-52',
+      adminPasswordConfirmation: 'Cedar-River!Otter-52',
       adminPhone,
     },
   });

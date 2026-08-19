@@ -17,32 +17,30 @@ describe('swap requests', () => {
   });
 
   async function addParent(teamId: string, adminToken: string, name = 'Parent') {
-    const inviteResponse = await app.inject({
+    const addResponse = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/invites`,
+      url: `/teams/${teamId}/members/parents`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { phone: `+1555161${Math.floor(Math.random() * 900000 + 100000)}` },
+      payload: {
+        name,
+        phone: `+1555161${Math.floor(Math.random() * 900000 + 100000)}`,
+        password: 'Cedar-River!Otter-52',
+        passwordConfirmation: 'Cedar-River!Otter-52',
+      },
     });
-    const invite = inviteResponse.json();
-
-    const acceptResponse = await app.inject({
-      method: 'POST',
-      url: `/invites/${invite.code}/accept`,
-      payload: { name, language: 'en', players: [] },
-    });
-    const parentBody = acceptResponse.json();
-    createdUserIds.push(parentBody.user.id);
+    const parentBody = addResponse.json();
+    createdUserIds.push(parentBody.userId);
 
     const sessionToken = generateSessionToken();
     await app.prisma.session.create({
       data: {
-        userId: parentBody.user.id,
+        userId: parentBody.userId,
         tokenHash: hashSecret(sessionToken),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
 
-    return { userId: parentBody.user.id as string, sessionToken };
+    return { userId: parentBody.userId as string, sessionToken };
   }
 
   async function setUpTeamWithClaimedShift() {
@@ -53,6 +51,8 @@ describe('swap requests', () => {
         teamName: 'U-12 Wildcats',
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone: `+1555171${Math.floor(Math.random() * 9000 + 1000)}`,
       },
     });

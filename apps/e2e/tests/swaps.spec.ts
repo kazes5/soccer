@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { acceptInvite } from '../fixtures/scenarios';
+import { loginAsSeededUser } from '../fixtures/scenarios';
 
 /**
  * The mutual-consent swap flow (CLAUDE.md §3.4): Parent A holds a shift,
  * Parent B requests it, and A explicitly accepts before it reassigns — never
  * a direct override. Two real, independently authenticated browser contexts
  * (Playwright, not two tabs of the same session) stand in for the two
- * parents so each side's requests carry its own session/passkey, exactly
- * like two different phones. Runs on the Hebrew team using two invite slots
- * (hebrew-parent-3/4-demo) no other spec touches.
+ * parents so each side's requests carry its own session, exactly like two
+ * different phones. Runs on the Hebrew team using two seeded parents
+ * (מיכל פרץ, רון מזרחי) no other spec touches.
  *
  * The holder claims the *second-to-last* open shift, not the first: a swap
  * request's expiry is capped at its session's start time (see
@@ -27,10 +27,11 @@ test('a parent requests a swap and the holder accepts it', async ({ browser, bas
   const requesterName = 'רון מזרחי';
 
   try {
-    await acceptInvite(holderPage, baseURL, {
+    await loginAsSeededUser(holderPage, baseURL, {
       locale: 'he',
-      inviteCode: 'hebrew-parent-3-demo',
+      phone: '+972504567890',
       teamName: 'נבחרת אריות U-12',
+      parentName: holderName,
     });
     const holderNav = holderPage.getByRole('navigation', { name: /ניווט ראשי/i });
     await holderNav.getByRole('link', { name: /^לוח זמנים$/i }).click();
@@ -40,10 +41,11 @@ test('a parent requests a swap and the holder accepts it', async ({ browser, bas
     await holderClaimButtons.nth((await holderClaimButtons.count()) - 2).click();
     await expect(holderPage.getByText('שלכם').first()).toBeVisible();
 
-    await acceptInvite(requesterPage, baseURL, {
+    await loginAsSeededUser(requesterPage, baseURL, {
       locale: 'he',
-      inviteCode: 'hebrew-parent-4-demo',
+      phone: '+972505678901',
       teamName: 'נבחרת אריות U-12',
+      parentName: requesterName,
     });
     const requesterNav = requesterPage.getByRole('navigation', { name: /ניווט ראשי/i });
     await requesterNav.getByRole('link', { name: /^לוח זמנים$/i }).click();

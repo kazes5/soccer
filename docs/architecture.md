@@ -34,7 +34,6 @@ flowchart LR
     Redis --> Worker[Notification worker process]
     Worker --> Prisma
     API --> Audit[Audit log in PostgreSQL]
-    API -.-> Provider[WebAuthn verifier interface]
 ```
 
 ### Applications and packages
@@ -67,18 +66,20 @@ for unrelated registrable domains.
 
 Fastify registers the following route modules in `apps/api/src/app.ts`:
 
-| Module             | Main responsibilities                                                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Health             | Liveness and database readiness checks                                                                                                           |
-| Teams              | Team bootstrap and basic team lookup                                                                                                             |
-| Auth               | Passkey login (identifier-first) and registration (for an already-authenticated user), session inspection, logout                                |
-| Invites            | Admin invite creation, preview, atomic acceptance, and the invite-scoped passkey registration a brand-new parent completes right after accepting |
-| Members            | Team member list, role changes, and removal with last-admin protection                                                                           |
-| Push subscriptions | Browser push subscription registration/removal; delivery is not yet implemented                                                                  |
-| Collection points  | Team collection-point CRUD                                                                                                                       |
-| Schedule templates | RRULE parsing, horizon generation, and session/shift creation                                                                                    |
-| Sessions           | Schedule listing, admin session updates/cancellation, point player assignments                                                                   |
-| Shifts             | Version-gated claim and release                                                                                                                  |
+| Module             | Main responsibilities                                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health             | Liveness and database readiness checks                                                                                                                                                              |
+| Teams              | Team bootstrap and basic team lookup                                                                                                                                                                |
+| Auth               | Password login (identifier-first, phone or email), password change/forgot/reset, session inspection, logout — the only authentication method, for every role                                        |
+| Invites            | Admin invite creation, preview, code verification, and password-onboarding completion (or attaching an already-authenticated existing account)                                                      |
+| Members            | Team member list, role changes, removal with last-admin protection, admin-direct-add-parent with a chosen password, and admin-set password for an existing member                                   |
+| Players            | Player list (any team member) and create/edit/delete (team admin on their own team, system admin on any team)                                                                                       |
+| System             | Global `system_admin` console: cross-team overview, team/member/user listings, global audit log, system-role grant/revoke, direct team creation, direct member add, and password reset for any user |
+| Push subscriptions | Browser push subscription registration/removal; delivery is not yet implemented                                                                                                                     |
+| Collection points  | Team collection-point CRUD                                                                                                                                                                          |
+| Schedule templates | RRULE parsing, horizon generation, and session/shift creation                                                                                                                                       |
+| Sessions           | Schedule listing, admin session updates/cancellation, point player assignments                                                                                                                      |
+| Shifts             | Version-gated claim and release                                                                                                                                                                     |
 
 All route inputs are validated with Zod. Team-scoped routes authorize the current
 user through `requireTeamRole` before reading or mutating team data.
@@ -91,7 +92,7 @@ The Prisma schema in `apps/api/prisma/schema.prisma` is the system of record.
 User
   -> TeamMember -> Team
   -> PlayerParent -> Player -> Team
-  -> Session / Passkey / WebauthnChallenge / PushSubscription
+  -> Session / PasswordCredential / PushSubscription
 
 Team
   -> CollectionPoint
@@ -150,22 +151,20 @@ an older request winning after a release-and-reclaim cycle.
 
 ## Security and operational controls
 
-- Login and registration use WebAuthn passkeys, not a password or an SMS/email
-  one-time code — no external delivery vendor is required.
-- A brand-new parent's first passkey registration is scoped to their specific
-  invite code (not a bare user ID) and bounded to a short window after
-  acceptance, so a captured invite link can't be used to attach a credential
-  to the account indefinitely.
+- Login is password-only (Argon2id-hashed), for every role — no passkey/
+  WebAuthn support and no separate step-up assurance level for admin/
+  system-admin actions; a password-authenticated session with the right role
+  is sufficient on its own (see `docs/authentication-and-system-admin.md`).
+  Passkeys/WebAuthn were removed entirely on 2026-08-19.
+- A new parent's password is either self-chosen during split link/code invite
+  onboarding, or set directly by an admin/system admin when creating the
+  account or resetting it later.
 - Browser sessions use an httpOnly cookie plus double-submit CSRF protection.
 - Authorization is checked at the team boundary and admin-only commands are
   explicit.
 - Removing a team's last admin is rejected.
 - Invite acceptance, membership changes, team creation, schedule changes, and
   shift claim/release write audit records.
-- The real WebAuthn ceremony (`@simplewebauthn/server`) sits behind an
-  injectable `WebauthnVerifier` interface, the same pattern used for any
-  external provider — tests substitute a fake verifier since a real ceremony
-  needs actual browser/authenticator crypto.
 
 ## Planned architecture
 

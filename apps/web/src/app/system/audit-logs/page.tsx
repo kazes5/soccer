@@ -25,7 +25,7 @@ export default function SystemAuditLogsPage() {
     void api
       .me()
       .then((me) => {
-        if (me.systemRole !== 'system_admin' || me.authMethod !== 'passkey') {
+        if (me.systemRole !== 'system_admin') {
           router.replace('/home');
           return;
         }

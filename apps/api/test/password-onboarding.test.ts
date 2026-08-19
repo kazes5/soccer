@@ -7,7 +7,7 @@ import { normalizeEmail, normalizePhone } from '../src/lib/identifiers';
 const PASSWORD = 'Maple-Train!Cloud-47';
 
 describe('password authentication and invitation onboarding', () => {
-  const app = buildApp({ passwordAuthEnabled: true });
+  const app = buildApp();
   const createdTeamIds: string[] = [];
   const createdUserIds: string[] = [];
   const loginIdentifierHashes: string[] = [];
@@ -33,6 +33,8 @@ describe('password authentication and invitation onboarding', () => {
         season: 'Fall 2026',
         adminName: 'Admin Parent',
         adminEmail: `admin-${suffix}@example.com`,
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
       },
     });
     expect(response.statusCode).toBe(201);
@@ -53,7 +55,7 @@ describe('password authentication and invitation onboarding', () => {
   ) {
     const response = await app.inject({
       method: 'POST',
-      url: `/teams/${teamId}/password-invites`,
+      url: `/teams/${teamId}/invites`,
       headers: { authorization: `Bearer ${adminToken}` },
       payload: contact,
     });
@@ -93,13 +95,13 @@ describe('password authentication and invitation onboarding', () => {
 
     const neither = await app.inject({
       method: 'POST',
-      url: `/teams/${team.id}/password-invites`,
+      url: `/teams/${team.id}/invites`,
       headers: { authorization: `Bearer ${sessionToken}` },
       payload: {},
     });
     const both = await app.inject({
       method: 'POST',
-      url: `/teams/${team.id}/password-invites`,
+      url: `/teams/${team.id}/invites`,
       headers: { authorization: `Bearer ${sessionToken}` },
       payload: { phone: '+15559000001', email: 'both@example.com' },
     });
@@ -117,7 +119,6 @@ describe('password authentication and invitation onboarding', () => {
     const persistedInvite = await app.prisma.invite.findUniqueOrThrow({
       where: { id: invite.id },
     });
-    expect(persistedInvite.codeVersion).toBe(2);
     expect(persistedInvite.code).toBe(hashSecret(invite.code));
     expect(persistedInvite.code).not.toBe(invite.code);
     expect(persistedInvite.onboardingCodeHash).not.toBe(invite.onboardingCode);
@@ -136,7 +137,7 @@ describe('password authentication and invitation onboarding', () => {
     const verified = await verifyPasswordInvite(invite.code, invite.onboardingCode);
 
     expect(preview.statusCode).toBe(200);
-    expect(preview.json()).toMatchObject({ status: 'pending', requiresCode: true });
+    expect(preview.json()).toMatchObject({ status: 'pending' });
     expect(wrongLink.statusCode).toBe(400);
     expect(wrongLink.json()).toEqual({ message: 'This invitation or code is invalid or expired.' });
     expect(wrongCode.statusCode).toBe(400);
@@ -170,9 +171,8 @@ describe('password authentication and invitation onboarding', () => {
     expect(successes).toHaveLength(1);
     expect(rejections).toHaveLength(1);
     expect([400, 409]).toContain(rejections[0]?.statusCode);
-    const successfulBody = successes[0]!.json() as { user: { id: string }; authMethod: string };
+    const successfulBody = successes[0]!.json() as { user: { id: string } };
     createdUserIds.push(successfulBody.user.id);
-    expect(successfulBody.authMethod).toBe('password');
     expect(String(successes[0]!.headers['set-cookie'])).toContain('session=');
 
     const persistedInvite = await app.prisma.invite.findUniqueOrThrow({
@@ -233,7 +233,6 @@ describe('password authentication and invitation onboarding', () => {
     expect(String(login.headers['set-cookie'])).toContain('session=');
     expect(login.json()).toMatchObject({
       user: { id: userId, email },
-      authMethod: 'password',
       teamMemberships: [{ teamId: team.id, role: 'parent' }],
     });
   });
@@ -263,7 +262,6 @@ describe('password authentication and invitation onboarding', () => {
     expect(login.statusCode).toBe(200);
     expect(login.json()).toMatchObject({
       user: { id: userId, phone },
-      authMethod: 'password',
       teamMemberships: [{ teamId: team.id, role: 'parent' }],
     });
   });

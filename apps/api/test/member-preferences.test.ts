@@ -21,6 +21,8 @@ describe('member notification preferences', () => {
         teamName: 'U-12 Wildcats',
         season: 'Fall 2026',
         adminName: 'Dana Cohen',
+        adminPassword: 'Cedar-River!Otter-52',
+        adminPasswordConfirmation: 'Cedar-River!Otter-52',
         adminPhone: `+1555160${Math.floor(Math.random() * 9000 + 1000)}`,
       },
     });

@@ -16,12 +16,6 @@ enum SystemRole {
   system_admin
 }
 
-enum AuthMethod {
-  bootstrap
-  password
-  passkey
-}
-
 enum Language {
   en
   he
@@ -31,11 +25,6 @@ enum NotificationChannel {
   push
   sms
   email
-}
-
-enum WebauthnChallengeType {
-  registration
-  authentication
 }
 
 enum InviteStatus {
@@ -139,11 +128,9 @@ model User {
   playerLinks                PlayerParent[]
   sentInvites                Invite[]                     @relation("InvitesCreated")
   acceptedInvites            Invite[]                     @relation("InvitesAccepted")
-  passkeys                   Passkey[]
   passwordCredential         PasswordCredential?
   passwordResetTokens        PasswordResetToken[]
   passwordLoginAttempts      PasswordLoginAttempt[]
-  webauthnChallenges         WebauthnChallenge[]
   sessions                   Session[]
   notificationPrefs          NotificationPreference[]
   auditLogEntries            AuditLog[]                   @relation("AuditActor")
@@ -233,8 +220,7 @@ model Invite {
   id                    String       @id @default(uuid())
   teamId                String       @map("team_id")
   code                  String       @unique
-  codeVersion           Int          @default(1) @map("code_version")
-  onboardingCodeHash    String?      @map("onboarding_code_hash")
+  onboardingCodeHash    String       @map("onboarding_code_hash")
   failedCodeAttempts    Int          @default(0) @map("failed_code_attempts")
   lastFailedCodeAt      DateTime?    @map("last_failed_code_at")
   verificationTokenHash String?      @map("verification_token_hash")
@@ -254,24 +240,6 @@ model Invite {
 
   @@index([teamId])
   @@map("invites")
-}
-
-model Passkey {
-  id           String   @id @default(uuid())
-  userId       String   @map("user_id")
-  credentialId String   @unique @map("credential_id")
-  publicKey    Bytes    @map("public_key")
-  counter      Int
-  transports   String[]
-  deviceType   String   @map("device_type")
-  backedUp     Boolean  @map("backed_up")
-  createdAt    DateTime @default(now()) @map("created_at")
-  lastUsedAt   DateTime @default(now()) @map("last_used_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("passkeys")
 }
 
 model PasswordCredential {
@@ -313,33 +281,14 @@ model PasswordLoginAttempt {
   @@map("password_login_attempts")
 }
 
-model WebauthnChallenge {
-  id         String                @id @default(uuid())
-  userId     String                @map("user_id")
-  type       WebauthnChallengeType
-  challenge  String
-  requestIp  String?               @map("request_ip")
-  expiresAt  DateTime              @map("expires_at")
-  consumedAt DateTime?             @map("consumed_at")
-  createdAt  DateTime              @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([requestIp, createdAt])
-  @@map("webauthn_challenges")
-}
-
 model Session {
-  id              String     @id @default(uuid())
-  userId          String     @map("user_id")
-  tokenHash       String     @unique @map("token_hash")
-  expiresAt       DateTime   @map("expires_at")
-  revokedAt       DateTime?  @map("revoked_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  lastUsedAt      DateTime   @default(now()) @map("last_used_at")
-  authMethod      AuthMethod @default(bootstrap) @map("auth_method")
-  authenticatedAt DateTime   @default(now()) @map("authenticated_at")
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

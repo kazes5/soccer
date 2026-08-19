@@ -25,24 +25,25 @@ pnpm db:seed
 ```
 
 The seed is intended for local development. It creates a sample `U-12 Wildcats`
-team, one admin, five parents, two players, two collection points, and a
-recurring schedule. It also creates a Hebrew demo team with the same shape
-(one admin, five parents, two players), Hebrew collection-point names, and a
-recurring schedule for RTL testing. Every seeded user gets a long-lived,
-seed-only invite so it can register a real passkey (see the tables below) —
-useful for manually testing behavior that needs several distinct logged-in
-users at once, such as live cross-tab notification delivery.
+team, one admin, seven parents, two players, two collection points, and a
+recurring schedule. It also creates a Hebrew demo team with the same shape,
+Hebrew collection-point names, and a recurring schedule for RTL testing. Every
+seeded user (except one, reserved for testing the system console's "must have
+a password" safeguard) is given the same fixed demo password directly — see
+the table below — so you can log in as several distinct users at once without
+any onboarding step, useful for manually testing behavior like live cross-tab
+notification delivery.
 
 ## Configuration
 
 The root `.env` configures Docker services. Application settings live in the
 app-specific files:
 
-| File                  | Key settings                                                                                                  |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `.env`                | `POSTGRES_*` and `REDIS_PORT` used by Docker Compose                                                          |
-| `apps/api/.env`       | `DATABASE_URL`, `REDIS_URL`, `PORT`, session/invite limits, WebAuthn RP settings, `WEB_ORIGIN`, `TRUST_PROXY` |
-| `apps/web/.env.local` | `NEXT_PUBLIC_API_URL`                                                                                         |
+| File                  | Key settings                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `.env`                | `POSTGRES_*` and `REDIS_PORT` used by Docker Compose                                    |
+| `apps/api/.env`       | `DATABASE_URL`, `REDIS_URL`, `PORT`, session/invite limits, `WEB_ORIGIN`, `TRUST_PROXY` |
+| `apps/web/.env.local` | `NEXT_PUBLIC_API_URL`                                                                   |
 
 The default local addresses are:
 
@@ -57,11 +58,11 @@ Keep real credentials in ignored `.env` files. Commit only the example files.
 `TRUST_PROXY` should remain `false` locally and should only be enabled behind a
 real reverse proxy that sets `X-Forwarded-For`.
 
-Password onboarding and the global console are staged features and default to
-off. Set `PASSWORD_AUTH_ENABLED=true` only after configuring a verified
-recovery provider; set `SYSTEM_ADMIN_ENABLED=true` after bootstrapping the first
-active passkey user with `pnpm system-admin:grant <identifier>`. See
-[Password and System Administration](./authentication-and-system-admin.md).
+Password authentication is always on — there's no flag for it. The global
+system console is a staged feature and defaults off; set
+`SYSTEM_ADMIN_ENABLED=true` after bootstrapping the first active user (who
+must already have a password set) with `pnpm system-admin:grant <identifier>`.
+See [Password and System Administration](./authentication-and-system-admin.md).
 
 ## Run the applications
 
@@ -91,55 +92,46 @@ only when you intentionally want to discard local database and Redis data.
 
 ## Local login and demo data
 
-Login and registration use WebAuthn passkeys, which are bound to a real device
-credential and can't be pre-seeded into the database. The seeded demo teams have
-data to look at (schedule, players, collection points), but none of the accounts
-have a registered passkey initially.
+Every seeded account logs in directly with a fixed demo password:
+`Soccer-Carpool-Demo-2026!` (see `DEMO_PASSWORD` in `apps/api/prisma/seed.ts`).
+No onboarding step needed — just log in at `/login` with the phone/email below
+and that password.
 
-| Demo user        | Role   | Phone           | Credential status                       |
-| ---------------- | ------ | --------------- | --------------------------------------- |
-| English admin    | Admin  | `+15550000001`  | No password; passkey must be registered |
-| English parent 1 | Parent | `+15550000002`  | No password; passkey must be registered |
-| English parent 2 | Parent | `+15550000003`  | No password; passkey must be registered |
-| English parent 3 | Parent | `+15550000004`  | No password; passkey must be registered |
-| English parent 4 | Parent | `+15550000005`  | No password; passkey must be registered |
-| English parent 5 | Parent | `+15550000006`  | No password; passkey must be registered |
-| Hebrew admin     | Admin  | `+972501234567` | No password; passkey must be registered |
-| Hebrew parent 1  | Parent | `+972502345678` | No password; passkey must be registered |
-| Hebrew parent 2  | Parent | `+972503456789` | No password; passkey must be registered |
-| Hebrew parent 3  | Parent | `+972504567890` | No password; passkey must be registered |
-| Hebrew parent 4  | Parent | `+972505678901` | No password; passkey must be registered |
-| Hebrew parent 5  | Parent | `+972506789012` | No password; passkey must be registered |
+| Demo user        | Role   | Phone            |
+| ---------------- | ------ | ---------------- |
+| English admin    | Admin  | `+15550000001`   |
+| English parent 1 | Parent | `+15550000002`   |
+| English parent 2 | Parent | `+15550000003`   |
+| English parent 3 | Parent | `+15550000004`   |
+| English parent 4 | Parent | `+15550000005`   |
+| English parent 5 | Parent | `+15550000006`   |
+| English parent 6 | Parent | `+15550000007`\* |
+| English parent 7 | Parent | `+15550000008`   |
+| Hebrew admin     | Admin  | `+972501234567`  |
+| Hebrew parent 1  | Parent | `+972502345678`  |
+| Hebrew parent 2  | Parent | `+972503456789`  |
+| Hebrew parent 3  | Parent | `+972504567890`  |
+| Hebrew parent 4  | Parent | `+972505678901`  |
+| Hebrew parent 5  | Parent | `+972506789012`  |
 
-To click through the logged-in app yourself, either create a new team at
-`/teams/new` or open one of the demo invite links below. Each invite prompts
-you to register a real passkey on your device immediately afterward, using
-your platform's built-in authenticator (Face ID, Touch ID, Windows Hello) or a
-security key:
+\* English parent 6 (Maya Golan) is deliberately given no password — she's
+reserved for exercising the system console's "target must have a password
+set" grant safeguard.
 
-| User             | Invite URL                                           |
-| ---------------- | ---------------------------------------------------- |
-| English admin    | `http://localhost:3000/invite/english-admin-demo`    |
-| English parent 1 | `http://localhost:3000/invite/english-parent-1-demo` |
-| English parent 2 | `http://localhost:3000/invite/english-parent-2-demo` |
-| English parent 3 | `http://localhost:3000/invite/english-parent-3-demo` |
-| English parent 4 | `http://localhost:3000/invite/english-parent-4-demo` |
-| English parent 5 | `http://localhost:3000/invite/english-parent-5-demo` |
-| Hebrew admin     | `http://localhost:3000/invite/hebrew-admin-demo`     |
-| Hebrew parent 1  | `http://localhost:3000/invite/hebrew-parent-1-demo`  |
-| Hebrew parent 2  | `http://localhost:3000/invite/hebrew-parent-2-demo`  |
-| Hebrew parent 3  | `http://localhost:3000/invite/hebrew-parent-3-demo`  |
-| Hebrew parent 4  | `http://localhost:3000/invite/hebrew-parent-4-demo`  |
-| Hebrew parent 5  | `http://localhost:3000/invite/hebrew-parent-5-demo`  |
+To try the invite-link onboarding flow itself (rather than logging in as an
+already-seeded user), each demo team also has one not-yet-onboarded invite,
+using a fixed onboarding code for local testing:
 
-These seed-only invites use a far-future expiry and will not expire during local
-testing. Re-running `pnpm db:seed` resets them to `pending`, so you can repeat
-passkey onboarding. Use a separate browser profile or device for each user when
-testing multiple accounts — e.g. to watch a live notification/SSE update
-delivered to one logged-in user right after another user makes a change. There
-is no vendor to configure; the real WebAuthn ceremony (`@simplewebauthn/server`)
-runs against `WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME` in `apps/api/.env`, defaulted
-for local development against `localhost`.
+| Team    | Invite URL                                             | Code     |
+| ------- | ------------------------------------------------------ | -------- |
+| English | `http://localhost:3000/invite/english-new-parent-demo` | `000000` |
+| Hebrew  | `http://localhost:3000/invite/hebrew-new-parent-demo`  | `000000` |
+
+These seed-only invites use a far-future expiry and will not expire during
+local testing. Re-running `pnpm db:seed` resets them to `pending`. Use a
+separate browser profile or device for each user when testing multiple
+accounts at once — e.g. to watch a live notification/SSE update delivered to
+one logged-in user right after another user makes a change.
 
 ## Database changes
 
@@ -190,10 +182,6 @@ interferes with a `pnpm dev` you already have running. See
   health checks to pass.
 - Web requests fail with CORS errors: make `WEB_ORIGIN` exactly match the web
   origin, including scheme and port.
-- The browser's passkey prompt never appears: confirm the browser supports
-  WebAuthn and that `WEBAUTHN_RP_ID` matches the hostname you're actually
-  browsing on (`localhost` by default) — a mismatch fails the ceremony
-  silently in some browsers.
 - Session mutations return `403`: use the web client or send the `x-csrf-token`
   matching the `soccer_csrf` cookie.
 - Prisma client errors after schema changes: run `pnpm db:generate` again.

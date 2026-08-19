@@ -120,7 +120,7 @@ export default function HomePage() {
     ...(activeMembership ? [swapsNavItem(activeMembership.teamId, t)] : []),
     settingsNavItem(t),
     ...(activeMembership?.role === 'admin' ? adminNavItems(activeMembership.teamId, t) : []),
-    ...(session.systemRole === 'system_admin' && session.authMethod === 'passkey'
+    ...(session.systemRole === 'system_admin'
       ? [{ href: '/system', label: t('system.title'), icon: <ShieldCheck className="size-full" /> }]
       : []),
   ];

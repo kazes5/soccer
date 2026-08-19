@@ -20,35 +20,53 @@ prompt; with two or more, the switcher lists only those joined teams.
 ## Admin onboarding
 
 1. Open `/teams/new`.
-2. Enter the team name, season, and first admin details. The current web form
-   creates the team in the `Asia/Jerusalem` timezone.
-3. Submit the form. The new admin is signed in and immediately prompted to
-   register a passkey on this device (Face ID, Touch ID, Windows Hello, or a
-   security key), then taken to the team workspace.
-4. On `/home`, use the invite form to create an invitation for a parent by
-   phone.
-5. Copy the generated invite link and send it to the parent through the team's
-   chosen communication channel.
+2. Enter the team name, season, first admin details, and a password (15
+   characters or more). The current web form creates the team in the
+   `Asia/Jerusalem` timezone.
+3. Submit the form. The new admin is signed in immediately and taken straight
+   to the team workspace — no separate credential-setup step.
+4. On `/home` or `/admin/members`, either create an invitation link for a
+   parent (they choose their own password when they accept it) or add the
+   parent directly and choose their password yourself on the spot — see
+   "Adding a parent directly" below.
+5. If using an invite link, copy it and send it to the parent through the
+   team's chosen communication channel.
 
 Invite links are time-limited and can only be accepted once. The acceptance flow
 does not require the parent to already have an account.
 
+### Adding a parent directly
+
+From `/admin/members`, the "Add a parent directly" form creates a parent's
+account immediately — name, phone or email, and a password you choose for
+them — with no invite link or code involved. Useful for handing someone their
+login in person rather than sending a link. The same admin page also has a
+"Set password" action next to every existing member, for resetting a parent's
+password if they're locked out.
+
 ## Parent onboarding
 
-1. Open the invite link at `/invite/[code]`.
-2. Confirm the team preview.
-3. Enter the requested parent details and any linked players.
-4. Submit the form to join the team.
-5. Register a passkey on this device when prompted — this happens
-   automatically right after joining and completes onboarding in one sitting;
-   there's no separate login step for a first-time parent.
+A parent joins either through an invite link (choosing their own password) or
+because a team admin added them directly and gave them a password (see
+"Adding a parent directly" above) — in the latter case, skip straight to
+"Returning" below.
 
-After passkey setup succeeds, the user lands directly in the joined team's
-workspace. An existing user can accept another team's invite and keep their
-existing account. The team switcher appears after that second membership is
-created and contains only joined teams. Returning on a device that already has
-a registered passkey uses `/login` (enter the phone or email on file, then
-complete the passkey prompt) instead of the invite flow.
+1. Open the invite link at `/invite/[code]`.
+2. Confirm the team preview, then enter the six-digit code the admin shared
+   separately from the link.
+3. Enter your name, any linked players, and choose a password (15 characters
+   or more).
+4. Submit the form to join the team and sign in — one step, no separate login
+   afterward.
+
+The user lands directly in the joined team's workspace. An existing user can
+accept another team's invite and keep their existing account — the invite
+flow detects a matching existing account and offers to log in and attach the
+membership instead of creating a duplicate. The team switcher appears after
+that second membership is created and contains only joined teams.
+
+**Returning:** use `/login` — enter the phone number or email on file and
+your password.
 
 ## Schedule and shifts
 

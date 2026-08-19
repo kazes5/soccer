@@ -1,7 +1,5 @@
 'use client';
 
-import { WebAuthnError, browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import type { CurrentUserResponse } from '@soccer/contracts';
 import { Calendar, Home } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -72,13 +70,6 @@ export default function AccountSettingsPage() {
         <h1 className="text-xl font-semibold tracking-tight">{t('settingsAccount.title')}</h1>
 
         <PasswordChangeSection />
-
-        <PasskeySection
-          authMethod={session.authMethod}
-          onUpgraded={() =>
-            setSession((current) => (current ? { ...current, authMethod: 'passkey' } : current))
-          }
-        />
       </div>
     </AppShell>
   );
@@ -108,21 +99,14 @@ function PasswordChangeSection() {
       setNewPasswordConfirmation('');
       showToast(t('settingsAccount.passwordChanged'), 'success');
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        setError(t('settingsAccount.passwordAuthUnavailable'));
-      } else {
-        setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
-      }
+      setError(err instanceof ApiError ? err.message : t('common.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-4 border-b border-surface-border pb-6"
-    >
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-ink">
         {t('settingsAccount.passwordSectionTitle')}
       </h2>
@@ -167,75 +151,5 @@ function PasswordChangeSection() {
           : t('settingsAccount.changePasswordButton')}
       </button>
     </form>
-  );
-}
-
-/**
- * Lets a password-only session self-service its first passkey — without
- * this, a parent promoted to team-admin has no way to satisfy
- * requirePrivilegedAssurance and is locked out of admin tools. Hidden once
- * the session already carries passkey assurance (nothing to add here; use
- * "Continue with passkey" at login to add another device instead).
- */
-function PasskeySection({
-  authMethod,
-  onUpgraded,
-}: {
-  authMethod: 'bootstrap' | 'password' | 'passkey' | undefined;
-  onUpgraded: () => void;
-}) {
-  const { t } = useLocale();
-  const { showToast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (authMethod !== 'password') return null;
-
-  async function handleAddPasskey() {
-    setError(null);
-    if (!browserSupportsWebAuthn()) {
-      setError(t('settingsSecurity.passkeyNotSupported'));
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const { challengeId, options } = await api.getPasskeyRegisterOptions();
-      const response = await startRegistration({
-        optionsJSON: options as PublicKeyCredentialCreationOptionsJSON,
-      });
-      await api.verifyPasskeyRegister({ challengeId, response });
-      showToast(t('settingsSecurity.passkeyAdded'), 'success');
-      onUpgraded();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else if (err instanceof WebAuthnError) {
-        setError(t('settingsSecurity.passkeyCancelled'));
-      } else {
-        setError(t('common.somethingWentWrong'));
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="text-sm font-semibold text-ink">
-        {t('settingsSecurity.sectionTitle')}
-      </legend>
-      <p className="text-sm text-ink-muted">{t('settingsSecurity.passkeyDescription')}</p>
-      <button
-        type="button"
-        disabled={isSubmitting}
-        onClick={handleAddPasskey}
-        className={`${buttonClassName} self-start`}
-      >
-        {isSubmitting
-          ? t('settingsSecurity.addingPasskey')
-          : t('settingsSecurity.addPasskeyButton')}
-      </button>
-      {error && <FormError>{error}</FormError>}
-    </fieldset>
   );
 }

@@ -6,6 +6,7 @@ import {
   Calendar,
   Copy,
   Home,
+  KeyRound,
   Search,
   ShieldCheck,
   ShieldMinus,
@@ -25,6 +26,7 @@ import {
 import { useLocale } from '@/components/locale-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
+import { Dialog } from '@/components/ui/dialog';
 import { IconButton } from '@/components/ui/icon-button';
 import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
@@ -163,6 +165,19 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [isMutating, setIsMutating] = useState(false);
 
+  const [addParentName, setAddParentName] = useState('');
+  const [addParentContact, setAddParentContact] = useState('');
+  const [addParentPassword, setAddParentPassword] = useState('');
+  const [addParentPasswordConfirmation, setAddParentPasswordConfirmation] = useState('');
+  const [addParentError, setAddParentError] = useState<string | null>(null);
+  const [isAddingParent, setIsAddingParent] = useState(false);
+
+  const [passwordTarget, setPasswordTarget] = useState<TeamMemberSummary | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState('');
+  const [setPasswordError, setSetPasswordError] = useState<string | null>(null);
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+
   const fetchMembers = useCallback(() => api.listTeamMembers(teamId), [teamId]);
 
   useEffect(() => {
@@ -240,6 +255,55 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
       showToast(t('adminMembers.inviteCopied'), 'success');
     } catch {
       showToast(t('adminMembers.inviteCopyFailed'), 'error');
+    }
+  }
+
+  async function handleAddParent(event: FormEvent) {
+    event.preventDefault();
+    setAddParentError(null);
+    setIsAddingParent(true);
+    try {
+      const contact = addParentContact.trim();
+      const added = await api.addParent(teamId, {
+        name: addParentName,
+        language: locale,
+        password: addParentPassword,
+        passwordConfirmation: addParentPasswordConfirmation,
+        ...(contact.includes('@') ? { email: contact } : { phone: contact }),
+      });
+      setMembers((current) => (current ? [...current, added] : [added]));
+      setAddParentName('');
+      setAddParentContact('');
+      setAddParentPassword('');
+      setAddParentPasswordConfirmation('');
+      showToast(t('adminMembers.addParentSuccess', { name: added.name }), 'success');
+    } catch (error) {
+      setAddParentError(error instanceof ApiError ? error.message : t('common.somethingWentWrong'));
+    } finally {
+      setIsAddingParent(false);
+    }
+  }
+
+  async function handleSetPassword(event: FormEvent) {
+    event.preventDefault();
+    if (!passwordTarget) return;
+    setSetPasswordError(null);
+    setIsSettingPassword(true);
+    try {
+      await api.setMemberPassword(teamId, passwordTarget.userId, {
+        password: newPassword,
+        passwordConfirmation: newPasswordConfirmation,
+      });
+      showToast(t('adminMembers.setPasswordSuccess', { name: passwordTarget.name }), 'success');
+      setPasswordTarget(null);
+      setNewPassword('');
+      setNewPasswordConfirmation('');
+    } catch (error) {
+      setSetPasswordError(
+        error instanceof ApiError ? error.message : t('common.somethingWentWrong'),
+      );
+    } finally {
+      setIsSettingPassword(false);
     }
   }
 
@@ -371,6 +435,73 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
         </form>
       </section>
 
+      <section aria-labelledby="add-parent-title" className="flex flex-col gap-3">
+        <h2 id="add-parent-title" className="text-lg font-semibold">
+          {t('adminMembers.addParentSectionTitle')}
+        </h2>
+        <form
+          onSubmit={handleAddParent}
+          className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface p-4 shadow-raised"
+        >
+          <Field label={t('adminMembers.addParentNameLabel')}>
+            <input
+              required
+              value={addParentName}
+              onChange={(event) => setAddParentName(event.target.value)}
+              className={inputClassName}
+              placeholder="Avi Levi"
+            />
+          </Field>
+          <Field label={t('adminMembers.addParentContactLabel')}>
+            <input
+              required
+              type="text"
+              autoComplete="off"
+              value={addParentContact}
+              onChange={(event) => setAddParentContact(event.target.value)}
+              className={inputClassName}
+              placeholder={t('adminMembers.inviteContactPlaceholder')}
+              dir="ltr"
+            />
+          </Field>
+          <Field label={t('adminMembers.addParentPasswordLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={addParentPassword}
+              onChange={(event) => setAddParentPassword(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          <Field label={t('adminMembers.addParentPasswordConfirmationLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={addParentPasswordConfirmation}
+              onChange={(event) => setAddParentPasswordConfirmation(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          {addParentError && <FormError>{addParentError}</FormError>}
+          <button
+            type="submit"
+            disabled={isAddingParent}
+            className={`${buttonClassName} self-start gap-2`}
+          >
+            <UserPlus className="size-4" aria-hidden="true" />
+            {isAddingParent
+              ? t('adminMembers.addParentSubmitting')
+              : t('adminMembers.addParentSubmit')}
+          </button>
+        </form>
+      </section>
+
       <section aria-labelledby="team-members-title" className="flex flex-col gap-4">
         <h2 id="team-members-title" className="text-lg font-semibold">
           {t('adminMembers.membersSectionTitle', { count: members.length })}
@@ -490,6 +621,14 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
                       <Trash2 className="size-4" aria-hidden="true" />
                       {t('adminMembers.remove')}
                     </button>
+                    <button
+                      type="button"
+                      className={`${secondaryButtonClassName} gap-2`}
+                      onClick={() => setPasswordTarget(member)}
+                    >
+                      <KeyRound className="size-4" aria-hidden="true" />
+                      {t('adminMembers.setPassword')}
+                    </button>
                   </div>
                 </DataListItem>
               );
@@ -513,6 +652,54 @@ function MembersWorkspace({ teamId, currentUserId }: { teamId: string; currentUs
           if (!isMutating) setPendingAction(null);
         }}
       />
+
+      <Dialog
+        open={passwordTarget !== null}
+        onClose={() => {
+          if (!isSettingPassword) {
+            setPasswordTarget(null);
+            setSetPasswordError(null);
+            setNewPassword('');
+            setNewPasswordConfirmation('');
+          }
+        }}
+        closeDisabled={isSettingPassword}
+        title={t('adminMembers.setPasswordTitle', { name: passwordTarget?.name ?? '' })}
+        closeLabel={t('common.close')}
+      >
+        <form onSubmit={handleSetPassword} className="flex flex-col gap-3">
+          <Field label={t('adminMembers.setPasswordNewLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          <Field label={t('adminMembers.setPasswordConfirmLabel')}>
+            <input
+              required
+              type="password"
+              minLength={15}
+              maxLength={128}
+              autoComplete="new-password"
+              value={newPasswordConfirmation}
+              onChange={(event) => setNewPasswordConfirmation(event.target.value)}
+              className={inputClassName}
+            />
+          </Field>
+          {setPasswordError && <FormError>{setPasswordError}</FormError>}
+          <button type="submit" disabled={isSettingPassword} className={buttonClassName}>
+            {isSettingPassword
+              ? t('adminMembers.setPasswordSubmitting')
+              : t('adminMembers.setPasswordSubmit')}
+          </button>
+        </form>
+      </Dialog>
     </div>
   );
 }

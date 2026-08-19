@@ -10,17 +10,25 @@ This is separate from the "staging" decision in [PLAN.md](../PLAN.md) (the
 local Docker Compose stack used for manual verification throughout Stage 2–3).
 This document covers a real, internet-reachable deployment.
 
+**2026-08-19 note:** Passkeys/WebAuthn were removed after this deployment was
+first documented (see CLAUDE.md §9.1's revision note) — password is now the
+only login method, for every role. The narrative sections below (post-deploy
+verification, production seed data) are left as a historical record of what
+actually happened at the time and still mention passkeys; don't follow those
+passkey-specific steps literally for a fresh deployment. The env var table
+has been updated to the current, password-only reality.
+
 ## Topology
 
 Five Railway resources in one project (`dazzling-prosperity`):
 
-| Resource         | Type                     | Public domain?                        |
-| ---------------- | ------------------------ | ------------------------------------- |
-| `Postgres`       | Railway-managed plugin   | No (internal only)                    |
-| `Redis`          | Railway-managed plugin   | No (internal only)                    |
-| `@soccer/api`    | GitHub-connected service | Yes — the API and passkey/CORS origin |
-| `@soccer/worker` | GitHub-connected service | No — background job consumer only     |
-| `@soccer/web`    | GitHub-connected service | Yes — the app parents/admins use      |
+| Resource         | Type                     | Public domain?                    |
+| ---------------- | ------------------------ | --------------------------------- |
+| `Postgres`       | Railway-managed plugin   | No (internal only)                |
+| `Redis`          | Railway-managed plugin   | No (internal only)                |
+| `@soccer/api`    | GitHub-connected service | Yes — the API and CORS origin     |
+| `@soccer/worker` | GitHub-connected service | No — background job consumer only |
+| `@soccer/web`    | GitHub-connected service | Yes — the app parents/admins use  |
 
 `apps/api` runs as **two** separate Railway services (`api` and `worker`)
 from the same source and the same build, differing only in start command —
@@ -82,16 +90,22 @@ for the same reason.
 
 Environment variables:
 
-| Variable                | Value                                                                     | Why                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`              | `production`                                                              |                                                                                                                                                                        |
-| `PORT`                  | `8080`                                                                    | Matches the generated domain's target port.                                                                                                                            |
-| `DATABASE_URL`          | `postgresql://postgres:<password>@postgres.railway.internal:5432/railway` | See "Reference variables vs. literal values" below.                                                                                                                    |
-| `REDIS_URL`             | `redis://default:<password>@redis.railway.internal:6379`                  | Same.                                                                                                                                                                  |
-| `PASSWORD_AUTH_ENABLED` | `true`                                                                    | Enables the password login flow (see [Password and System Administration](./authentication-and-system-admin.md)); defaults to `false`.                                 |
-| `TRUST_PROXY`           | `true`                                                                    | Railway terminates TLS and proxies requests; without this, per-IP rate limiting would see every user as the proxy's IP (see `PLAN.md`'s note on this exact bug class). |
-| `WEBAUTHN_RP_ID`        | `soccerweb-production.up.railway.app`                                     | Must be the exact hostname (no scheme/port) serving the web app — passkeys are origin-bound.                                                                           |
-| `WEB_ORIGIN`            | `https://soccerweb-production.up.railway.app`                             | CORS: must exactly match the web app's origin.                                                                                                                         |
+| Variable       | Value                                                                     | Why                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`     | `production`                                                              |                                                                                                                                                                        |
+| `PORT`         | `8080`                                                                    | Matches the generated domain's target port.                                                                                                                            |
+| `DATABASE_URL` | `postgresql://postgres:<password>@postgres.railway.internal:5432/railway` | See "Reference variables vs. literal values" below.                                                                                                                    |
+| `REDIS_URL`    | `redis://default:<password>@redis.railway.internal:6379`                  | Same.                                                                                                                                                                  |
+| `TRUST_PROXY`  | `true`                                                                    | Railway terminates TLS and proxies requests; without this, per-IP rate limiting would see every user as the proxy's IP (see `PLAN.md`'s note on this exact bug class). |
+| `WEB_ORIGIN`   | `https://soccerweb-production.up.railway.app`                             | CORS: must exactly match the web app's origin.                                                                                                                         |
+
+Password authentication is unconditional as of 2026-08-19 (no flag). Login
+was previously gated behind `PASSWORD_AUTH_ENABLED=true` here, and origin
+binding behind `WEBAUTHN_RP_ID` — both rows are removed since passkeys no
+longer exist and password login can't be disabled. `SYSTEM_ADMIN_ENABLED` is
+a separate, still-unset rollout flag for the `/system/*` console (see
+[Password and System Administration](./authentication-and-system-admin.md)) —
+not set in this table because it was never enabled during this deployment.
 
 ### `@soccer/worker`
 

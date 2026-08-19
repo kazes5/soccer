@@ -12,7 +12,7 @@ several teams, you may be an admin on one team and a parent on another.
 - Create a new team at `/teams/new`. The person who creates the team becomes its
   first admin.
 - Return to an existing account at `/login` with the phone number or email on
-  file and a registered passkey.
+  file and your password.
 - Use the team switcher before making changes. Admin navigation is shown only
   when the selected team is one you administer.
 - Use the **EN/עב** control to switch between English/LTR and Hebrew/RTL. The
@@ -25,7 +25,7 @@ they appear in the mobile navigation.
 
 For a new team, use this order:
 
-1. Create the team and register a passkey.
+1. Create the team and choose a password.
 2. Add collection points.
 3. Create a recurring schedule template.
 4. Review the generated sessions and assign players to each trip.
@@ -38,15 +38,14 @@ schedule template must use at least one collection point.
 ## Create a team
 
 1. Open `/teams/new`.
-2. Enter the team name, season, your name, and your phone number.
+2. Enter the team name, season, your name, your phone number, and a password
+   (15 characters or more).
 3. Select **Create team**.
-4. Follow the browser prompt to register a passkey with Face ID, Touch ID,
-   Windows Hello, or a security key.
 
-After passkey registration, you are signed in and taken to the team workspace.
-The current web form creates the team in the `Asia/Jerusalem` timezone. That
-timezone controls how session dates and times are interpreted, including
-daylight-saving transitions.
+You are signed in immediately and taken to the team workspace — no separate
+credential-setup step. The current web form creates the team in the
+`Asia/Jerusalem` timezone. That timezone controls how session dates and
+times are interpreted, including daylight-saving transitions.
 
 ## Switch between teams
 
@@ -57,19 +56,39 @@ an admin.
 
 ## Invite a parent
 
+There are two ways to add a parent — pick whichever fits the situation.
+
+**Send an invite link** (the parent chooses their own password):
+
 1. Open **Manage team** and, if the switcher is visible, select the correct team.
 2. Enter the parent's phone number or email address.
 3. Select **Create invite**.
-4. Copy the generated `/invite/[code]` link and send it to the parent through a
-   trusted communication channel.
+4. Copy the generated `/invite/[code]` link and the separately-shown six-digit
+   code, and send both to the parent through a trusted communication channel.
 
 The link is time-limited and can be accepted only once. The parent uses it to
-confirm the team, enter their details and linked players, and register a
-passkey. The team does not appear in that parent's workspace until the invite
-is accepted. If a link expires or has already been used, create a new
-invitation.
+confirm the team, enter the code, enter their details and linked players, and
+choose their own password. The team does not appear in that parent's
+workspace until the invite is accepted. If a link expires or has already been
+used, create a new invitation.
 
 The phone-only invite form on **Home** remains available as a shortcut.
+
+**Add a parent directly** (you choose their password):
+
+1. Open **Manage team**, select the correct team if the switcher is visible,
+   and find "Add a parent directly".
+2. Enter the parent's name, phone number or email, and a password (15
+   characters or more).
+3. Select **Add parent**.
+
+Their account exists immediately and they can log in right away with the
+password you set — no link to send, no code to relay. Useful when you're
+handing someone their login in person.
+
+**Resetting a parent's password:** every row in the member list has a "Set
+password" action for exactly this — no need to remove and re-invite someone
+just because they're locked out.
 
 ## Manage team members and roles
 
@@ -263,8 +282,8 @@ action and the `/swaps` page).
 
 - Keep invitation links private. Anyone with a valid unused link can open the
   acceptance flow for its intended contact.
-- Do not share a passkey. Register it only on a device or security key you
-  control.
+- Do not share your password, and change it (Settings → Account) if you
+  suspect it's been seen by anyone else.
 - Select the log-out control on Home when using a shared device.
 - Important admin changes are recorded by the server in an append-only audit
   log, although the web app does not yet include an audit-log viewer.
@@ -284,13 +303,15 @@ action and the `/swaps` page).
 - **Session controls are missing:** cancelled and past sessions are read-only.
 - **An invitation no longer works:** it expired or was already accepted. Create
   a new invitation.
-- **Passkey setup or login fails:** use a current version of Chrome, Safari,
-  Edge, or Firefox and confirm that the device supports passkeys.
+- **A parent can't log in:** confirm they're using the exact phone number or
+  email on file, and reset their password from **Manage team** if needed.
 
 ## Current limitations
 
-- The web app can display the roster and manage members, but cannot add or edit
-  players after onboarding.
+- The API supports creating, editing, and deleting a player directly (not just
+  during onboarding), for a team admin on their own team and a system admin on
+  any team, but the web app has no screen for it yet — players can currently
+  only be added through invite/direct-add onboarding.
 - The team-creation form uses `Asia/Jerusalem`; changing the team timezone is
   not yet available in the web UI.
 - Schedule templates cannot be deleted, and bulk editing of existing future

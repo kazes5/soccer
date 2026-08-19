@@ -415,27 +415,28 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 ### 4.1 Login Restricted to Allowed Users
 
 **Requirement: Invite-Only Access**
-- The app is closed-roster — no open self-signup. Someone can only log in if an Admin has added them to the team.
-- Parents authenticate with a password after invite-only onboarding. Passkeys remain the required assurance method for privileged team-admin and system-admin work.
+- The app is closed-roster — no open self-signup. Someone can only log in if an Admin (or System Admin) has added them to the team, whether via invite link or direct creation (see §4.2).
+- All accounts — parent, team-admin, and system-admin alike — authenticate with a password. There is no separate assurance method or step-up for privileged actions; the same login grants both ordinary and administrative access, gated purely by role.
 - Login flow:
   1. User enters phone number or email.
-  2. Parent enters the password they selected during invitation onboarding.
-  3. Admins use a passkey when entering privileged tools; password assurance remains sufficient for ordinary parent actions.
-  4. Unknown, inactive, password-less, and wrong-password accounts receive the same response.
-- Unrecognized users cannot create an account. A new invitation supplies a high-entropy link plus a separately shared numeric code; after both are verified, the parent selects their password.
+  2. User enters their password (self-chosen during onboarding, or set for them by an admin/system admin — see §4.2).
+  3. Unknown, inactive, password-less, and wrong-password accounts receive the same response.
+- A new parent can join either of two ways: (a) an admin-generated invitation supplies a high-entropy link plus a separately shared numeric code, after which the parent selects their own password; or (b) an admin/system admin creates the account directly and chooses the password themselves (see §4.2) — useful when handing someone their login in person rather than sending a link.
 
 **Acceptance Criteria:**
 - Login form accepts phone or email
 - Unrecognized input rejected with clear message (not a generic error)
-- The browser's native passkey prompt appears only on the explicitly selected passkey path
 - No public roster or user directory (privacy)
+
+**2026-08-19 revision note:** Passkeys/WebAuthn have been removed entirely in favor of password-only authentication for every role, and the "privileged assurance" step-up (passkey re-verification for admin/system-admin actions) is gone — a password-authenticated session with the right role is now sufficient on its own. This reverses the 2026-08-10 and 2026-08-15-era decisions described in §8.2 decision 6 and §9.1 below; see those sections' own revision notes for the full reasoning. This was an explicit, deliberate product decision to simplify the MVP, not a security regression discovered in review.
 
 ---
 
 ### 4.2 Admin-Only User Management
 
 **Requirement: Admin Controls**
-- Only Admins can add a new parent/user to the team (generates invite link/code).
+- Only Admins can add a new parent/user to the team, either by generating an invite link/code or by creating the account directly with a password of their own choosing (see the 2026-08-19 revision note below).
+- Admins can also set (reset) a password for an existing parent on their team at any time — the practical stand-in for self-service "forgot password" while no recovery email/SMS provider is configured, and a general lever for a parent who's simply locked out.
 - Only Admins can remove a user (revokes login access immediately).
 - When a user is removed:
   - Their login is disabled.
@@ -447,8 +448,10 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 **Acceptance Criteria:**
 - Admin-only "Manage Users" section in Settings
-- Add user: generates invite link + SMS/email option
+- Add user: generate an invite link + SMS/email option, or create the account directly with a chosen password
 - Remove user: confirmation dialog + immediate access revocation
+
+**2026-08-19 revision note:** Added a second onboarding path alongside the invite-link flow — an admin can create a parent's account directly, choosing their password on the spot, no invite link/code round-trip needed. Also added admin-initiated password reset for any existing parent on the team. Both are additive; the invite-link flow (parent picks their own password) is unchanged. System admins have the equivalent capabilities across every team, plus team creation itself — see `docs/authentication-and-system-admin.md`.
 - Removed user still appears in historical audit/shift records
 - Removed user cannot log in (auth rejected)
 - Audit log captures add/remove events
@@ -483,8 +486,10 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | View full schedule | ✅ | ✅ |
 | View personal shift history | ✅ | ✅ |
 | View fairness / load stats | ✅ (own only) | ✅ (team-wide) |
-| Add new users (invite) | ❌ | ✅ |
+| Add new users (invite, or direct creation with a chosen password) | ❌ | ✅ |
+| Set/reset an existing parent's password | ❌ | ✅ |
 | Remove users | ❌ | ✅ |
+| Manage players (create/edit/delete) | ❌ | ✅ |
 | Promote/demote admins | ❌ | ✅ |
 | Edit schedule template | ❌ | ✅ |
 | Edit individual sessions (date/time/location/cancel) | ❌ | ✅ |
@@ -619,7 +624,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 **Cache:** Redis (optional, for schedule/shift caching)
 **Push Notifications:** FCM (Android) + APNs (iOS)
 **AI Integration:** Claude API (Anthropic)
-**Authentication:** WebAuthn passkeys, identifier-first (phone/email lookup, then a device passkey ceremony) — see §8.2 decision 6 and §9.1
+**Authentication:** Password-only, identifier-first (phone/email lookup, then password verification) — see §8.2 decision 6 and §9.1
 **Version Control:** Git (GitHub, GitLab, or Bitbucket)
 
 ### 8.2 Open Questions Resolution
@@ -631,11 +636,13 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | 3 | Escalation timing? | **X hours before the scheduled practice start time.** Default X=2 (configurable by admin). Example: practice at 6 PM → escalation at 4 PM. |
 | 4 | Non-driving parents? | **Not supported in v1.** All users are drivers; no observer-only role. |
 | 5 | Multi-team scope? | **Yes — support multi-team households.** Parent account can belong to multiple teams; team switcher in home screen. |
-| 6 | Login method? | **WebAuthn passkeys** (revised from the original Phone OTP decision — see 2026-08-10 note below). No password to forget, no SMS/email vendor dependency to procure or pay for. |
+| 6 | Login method? | **Password**, for every role (revised from WebAuthn passkeys — see 2026-08-19 note below; passkeys themselves had revised the original Phone OTP decision — see 2026-08-10 note below). |
 | 7 | Audit log retention? | **Indefinite, with end-of-season archival option.** Admins can export logs by season; system retains raw data long-term. |
 | 8 | AI chat provider? | **Claude API (Anthropic)** — permission-scoped, reliable, integrates cleanly with team/shift/user context. |
 
-**2026-08-10 revision note:** Decision 6 originally chose Phone OTP (SMS). It was replaced with WebAuthn passkeys to remove the SMS vendor dependency Stage 0 had left open (no OTP provider had been procured — `ConsoleOtpProvider` just logged codes) and because the closed-roster invite already establishes identity, making a second "prove you own this phone" step redundant. The invite code itself (single-use, admin-issued) is now the proof of identity at registration time; phone/email remain contact fields, not verified login credentials. See §9.1 for the mechanics and §4.1 for the revised login flow.
+**2026-08-10 revision note:** Decision 6 originally chose Phone OTP (SMS). It was replaced with WebAuthn passkeys to remove the SMS vendor dependency Stage 0 had left open (no OTP provider had been procured — `ConsoleOtpProvider` just logged codes) and because the closed-roster invite already establishes identity, making a second "prove you own this phone" step redundant. The invite code itself (single-use, admin-issued) is now the proof of identity at registration time; phone/email remain contact fields, not verified login credentials.
+
+**2026-08-19 revision note:** Decision 6 changed again, from WebAuthn passkeys to password-only, for every role including team-admin and system-admin — passkeys are removed entirely. This was an explicit product request to simplify the MVP: passkey-only privileged assurance meant a team-admin or system-admin action always needed a fresh device-bound ceremony, which added friction with no corresponding requirement driving it (unlike the OTP→passkey change above, which closed a real vendor-dependency gap). The trade-off is accepted knowingly — a password is phishable and reusable in a way a passkey isn't — appropriate for this MVP's threat model (a small, invite-only roster) but worth revisiting before any future scale-up. See §9.1 for the mechanics and §4.1 for the revised login flow.
 
 ---
 
@@ -643,14 +650,13 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 ### 9.1 Authentication
 
-- Password login is the default parent flow: a normalized phone or email identifier plus an Argon2id-protected password selected during split link/code onboarding.
-- WebAuthn passkeys remain available and are mandatory for privileged team-admin and system-admin operations. Assurance is stored on the current session and is never inferred merely from passkey ownership.
-- A brand-new parent registers their first passkey immediately after accepting their invite — scoped to that specific invite code (not a bare user ID), bounded to a short window after acceptance, so a captured invite link can't be used to attach a rogue credential to the account indefinitely.
-- The very first team admin (who bootstraps via team creation, with no invite involved) registers a passkey the same way, immediately after the team is created, using their already-issued session rather than an invite code.
-- A password session cannot register a passkey or upgrade itself. Additional credentials require existing passkey assurance; the initial team bootstrap is the narrowly scoped exception.
-- Session tokens expire after 30 days of inactivity (unchanged from the original OTP-era design).
-- Force re-authentication for sensitive actions (admin user removal, schedule template changes).
-- Password recovery uses hashed, expiring, single-use tokens delivered only by a configured verified email/SMS provider. Recovery endpoints stay behind `PASSWORD_AUTH_ENABLED` until that provider is configured.
+- Password is the only login method, for every role: a normalized phone or email identifier plus an Argon2id-protected password. There is no passkey/WebAuthn support and no separate "privileged assurance" step-up — a password-authenticated session with the right role (team-admin or system-admin) can perform privileged actions immediately, the same way an ordinary parent session performs ordinary ones.
+- A new parent gets their password one of two ways: they choose it themselves during split link/code invite onboarding, or an admin/system admin sets it for them directly when creating their account or resetting it later (see §4.2).
+- The very first team admin chooses their password directly on the team-creation form; no separate credential-registration step follows.
+- Session tokens expire after 30 days of inactivity.
+- Password recovery uses hashed, expiring, single-use tokens delivered only by a configured verified email/SMS provider. Recovery endpoints stay behind `PASSWORD_AUTH_ENABLED` until that provider is configured; admin/system-admin-initiated password reset (§4.2) works regardless, since it doesn't depend on a recovery provider.
+
+**2026-08-19 revision note:** This section previously described WebAuthn passkeys as the mandatory assurance method for privileged team-admin/system-admin operations, with password login as the parent-only default. Passkeys are removed entirely — see §8.2 decision 6's revision note for the reasoning. `Session.authMethod` (`bootstrap`/`password`/`passkey`) and the whole "privileged assurance" freshness-window concept are gone from the schema and codebase; a session either exists (and is tied to a role) or it doesn't. The `Passkey` and `WebauthnChallenge` tables were dropped by migration.
 
 ### 9.2 Authorization
 
@@ -739,7 +745,6 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | **Escalation** | Urgent broadcast when a shift remains unclaimed X hours before practice, or when a parent flags "can't make it". |
 | **Audit Log** | Comprehensive record of all system actions (claims, swaps, admin changes, escalations, etc.). |
 | **Collection Point Assignment** | Mapping of players to a collection point for a given session and direction. |
-| **Passkey** | A WebAuthn credential bound to a specific device's built-in security (Face ID, Touch ID, Windows Hello, or a security key); used for login authentication instead of a password or SMS code. |
 
 ---
 
