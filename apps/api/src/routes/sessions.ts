@@ -13,7 +13,7 @@ import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
 import { syncRemindersForShifts } from '../lib/reminders';
-import { instantToWallClock, localDateTimeToInstant } from '../lib/timezone';
+import { instantToWallClock, isPastCalendarDay, localDateTimeToInstant } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const sessionParamsSchema = z.object({ teamId: z.string().uuid(), sessionId: z.string().uuid() });
@@ -29,11 +29,15 @@ const listQuerySchema = z.object({
 
 type SessionWithRelations = Awaited<ReturnType<typeof loadSession>>;
 
-/** A session becomes a read-only historical record once its start time has passed —
- * whether or not anything ever flipped its status to `completed` (nothing does yet;
- * see PLAN.md's Stage 3 note). Reused by every mutating session endpoint below. */
-function assertSessionNotPast(startsAt: Date, message: string) {
-  if (startsAt.getTime() <= Date.now()) {
+/** A session becomes a read-only historical record once its calendar day (in the
+ * team's own timezone) has ended — whether or not anything ever flipped its status
+ * to `completed` (nothing does yet; see PLAN.md's Stage 3 note). It stays fully
+ * actionable for its entire start-day even after its scheduled time passes, only
+ * going read-only once the next day begins. Reused by every mutating session
+ * endpoint below (and mirrored for shift claim/release/swap-request in
+ * shifts.ts/swap-requests.ts). */
+function assertSessionNotPast(startsAt: Date, teamTimeZone: string, message: string) {
+  if (isPastCalendarDay(startsAt, teamTimeZone)) {
     throw new HttpError(409, message);
   }
 }
@@ -129,8 +133,13 @@ export default async function sessionRoutes(app: FastifyInstance) {
     if (existing.status !== 'scheduled') {
       throw new HttpError(409, 'Only a scheduled, upcoming session can be edited.');
     }
+    const { timezone } = await app.prisma.team.findUniqueOrThrow({
+      where: { id: params.teamId },
+      select: { timezone: true },
+    });
     assertSessionNotPast(
       existing.startsAt,
+      timezone,
       'This session has already happened and can no longer be edited.',
     );
 
@@ -226,8 +235,13 @@ export default async function sessionRoutes(app: FastifyInstance) {
     if (existing.status === 'cancelled') {
       throw new HttpError(409, 'This session is already cancelled.');
     }
+    const { timezone } = await app.prisma.team.findUniqueOrThrow({
+      where: { id: params.teamId },
+      select: { timezone: true },
+    });
     assertSessionNotPast(
       existing.startsAt,
+      timezone,
       'This session has already happened and can no longer be cancelled.',
     );
 
@@ -304,7 +318,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
           direction: body.direction,
         },
       },
-      include: { session: true, point: true },
+      include: { session: { include: { team: { select: { timezone: true } } } }, point: true },
     });
     if (!assignment || assignment.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Session collection-point assignment not found.');
@@ -317,6 +331,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     }
     assertSessionNotPast(
       assignment.session.startsAt,
+      assignment.session.team.timezone,
       'This session has already happened and its player assignments can no longer be changed.',
     );
 

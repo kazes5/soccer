@@ -75,6 +75,11 @@ const parentOnlyUser = {
 // own session-fixture-based tests (see apps/api/test/support/dates.ts).
 const FUTURE_STARTS_AT = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 const PAST_STARTS_AT = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+// Earlier the same calendar day (in Asia/Jerusalem, the fixtures' timezone) —
+// a session stays actionable all day even after its start time passes, only
+// going read-only once the next day begins. See apps/web/src/lib/timezone.ts's
+// isPastCalendarDay.
+const TODAY_EARLIER_STARTS_AT = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
 const emptyPlayers: PlayerListResponse = { players: [] };
 const emptyRoster: TeamRosterResponse = { members: [] };
@@ -197,6 +202,30 @@ describe('SchedulePage', () => {
 
     await waitFor(() => expect(api.claimShift).toHaveBeenCalledWith('team-1', 'shift-1'));
     expect(await screen.findByText('You')).toBeInTheDocument();
+  });
+
+  it('hides claim/release/request-swap actions for a session from a past calendar day', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(
+      buildSessions({ shiftStatus: 'open', startsAt: PAST_STARTS_AT }),
+    );
+
+    renderWithProviders(<SchedulePage />);
+
+    await screen.findByText('Drop-off · Oak St');
+    expect(screen.queryByRole('button', { name: /^claim$/i })).not.toBeInTheDocument();
+  });
+
+  it('still shows the claim action for a session scheduled earlier today', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(
+      buildSessions({ shiftStatus: 'open', startsAt: TODAY_EARLIER_STARTS_AT }),
+    );
+
+    renderWithProviders(<SchedulePage />);
+
+    await screen.findByText('Drop-off · Oak St');
+    expect(screen.getByRole('button', { name: /^claim$/i })).toBeInTheDocument();
   });
 
   it('highlights the deep-linked shift from a notification', async () => {

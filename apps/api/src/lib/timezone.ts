@@ -59,6 +59,20 @@ export function localDateTimeToInstant(date: string, time: string, timeZone: str
   return dt.toJSDate();
 }
 
+/**
+ * True if `instant`'s calendar date in `timeZone` is strictly before today's —
+ * i.e. it happened on an earlier day, not merely earlier today. A session
+ * stays actionable for its entire calendar day even after its scheduled
+ * start time passes, and only becomes read-only once the next day begins.
+ */
+export function isPastCalendarDay(
+  instant: Date,
+  timeZone: string,
+  now: Date = new Date(),
+): boolean {
+  return instantToWallClock(instant, timeZone).date < instantToWallClock(now, timeZone).date;
+}
+
 function minutesSinceMidnight(time: string): number {
   const [hours = 0, minutes = 0] = time.split(':').map(Number);
   return hours * 60 + minutes;

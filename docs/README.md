@@ -13,6 +13,8 @@ status and sequencing.
   coverage gaps.
 - [Installation](./installation.md) - local prerequisites, environment setup,
   database lifecycle, and development startup.
+- [Deployment](./deployment.md) - the Railway deployment topology, per-service
+  configuration, and the platform incident hit during setup.
 - [User Guide](./user-guide.md) - the currently supported web flows for admins
   and parents, plus planned user-facing capabilities.
 - [Admin User Guide](./admin-user-guide.md) - team setup, invitations,

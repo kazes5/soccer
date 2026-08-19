@@ -7,6 +7,7 @@ import { HttpError } from '../lib/errors';
 import { recordOutboxEvent } from '../lib/outbox';
 import { enqueueOutboxEventBestEffort, enqueueScheduledTaskBestEffort } from '../lib/queues';
 import { syncShiftReminders } from '../lib/reminders';
+import { isPastCalendarDay } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 const shiftParamsSchema = z.object({ teamId: z.string().uuid(), shiftId: z.string().uuid() });
@@ -87,13 +88,16 @@ export default async function shiftRoutes(app: FastifyInstance) {
 
     const shift = await app.prisma.shift.findUnique({
       where: { id: params.shiftId },
-      include: { session: true },
+      include: { session: { include: { team: { select: { timezone: true } } } } },
     });
     if (!shift || shift.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Shift not found.');
     }
     if (shift.session.status !== 'scheduled') {
       throw new HttpError(409, 'This session is no longer scheduled.');
+    }
+    if (isPastCalendarDay(shift.session.startsAt, shift.session.team.timezone)) {
+      throw new HttpError(409, 'This session has already happened and can no longer be claimed.');
     }
 
     const updated = await app.prisma.$transaction(async (tx) => {
@@ -170,13 +174,16 @@ export default async function shiftRoutes(app: FastifyInstance) {
 
     const shift = await app.prisma.shift.findUnique({
       where: { id: params.shiftId },
-      include: { session: true },
+      include: { session: { include: { team: { select: { timezone: true } } } } },
     });
     if (!shift || shift.session.teamId !== params.teamId) {
       throw new HttpError(404, 'Shift not found.');
     }
     if (shift.session.status !== 'scheduled') {
       throw new HttpError(409, 'This session is no longer scheduled.');
+    }
+    if (isPastCalendarDay(shift.session.startsAt, shift.session.team.timezone)) {
+      throw new HttpError(409, 'This session has already happened and can no longer be released.');
     }
 
     const updated = await app.prisma.$transaction(async (tx) => {
