@@ -96,6 +96,27 @@ describe('LoginForm', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
   });
 
+  it('hides the identifier field and defaults it to "admin" when next=/system', async () => {
+    searchParams = new URLSearchParams({ next: '/system' });
+    vi.mocked(api.passwordLogin).mockResolvedValue(session);
+
+    renderWithProviders(<LoginForm />);
+
+    expect(screen.queryByPlaceholderText('+15551234567')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'Cedar-River!Otter-52' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^log in$/i }));
+
+    await waitFor(() =>
+      expect(api.passwordLogin).toHaveBeenCalledWith({
+        identifier: 'admin',
+        password: 'Cedar-River!Otter-52',
+      }),
+    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/system'));
+  });
+
   it('shows the server error message on invalid credentials', async () => {
     const { ApiError } = await import('@/lib/api');
     vi.mocked(api.passwordLogin).mockRejectedValue(
