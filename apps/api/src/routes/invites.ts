@@ -289,11 +289,12 @@ export default async function inviteRoutes(app: FastifyInstance) {
       return { user, team, eventId: event.id };
     });
     enqueueOutboxEventBestEffort(app.outboxQueue, result.eventId);
-    setSessionCookies(reply, sessionToken, sessionExpiresAt);
+    const csrfToken = setSessionCookies(reply, sessionToken, sessionExpiresAt);
     reply.status(201);
     return authSessionResponseSchema.parse({
       sessionToken,
       expiresAt: sessionExpiresAt.toISOString(),
+      csrfToken,
       user: {
         id: result.user.id,
         name: result.user.name,

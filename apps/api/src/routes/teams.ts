@@ -71,7 +71,7 @@ export default async function teamRoutes(app: FastifyInstance) {
       },
     );
 
-    setSessionCookies(reply, sessionToken, sessionExpiresAt);
+    const csrfToken = setSessionCookies(reply, sessionToken, sessionExpiresAt);
 
     reply.status(201);
     return createTeamResponseSchema.parse({
@@ -90,6 +90,7 @@ export default async function teamRoutes(app: FastifyInstance) {
       },
       sessionToken,
       sessionExpiresAt: sessionExpiresAt.toISOString(),
+      csrfToken,
     });
   });
 

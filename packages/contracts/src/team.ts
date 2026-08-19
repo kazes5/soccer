@@ -32,10 +32,13 @@ export const createTeamRequestSchema = z
   });
 export type CreateTeamRequest = z.input<typeof createTeamRequestSchema>;
 
+// csrfToken: see auth.ts's authSessionResponseSchema doc — same reasoning,
+// this also establishes a new session via setSessionCookies.
 export const createTeamResponseSchema = z.object({
   team: teamSummarySchema,
   admin: userSummarySchema,
   sessionToken: z.string(),
   sessionExpiresAt: z.string().datetime(),
+  csrfToken: z.string(),
 });
 export type CreateTeamResponse = z.infer<typeof createTeamResponseSchema>;
