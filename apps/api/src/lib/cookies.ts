@@ -9,10 +9,23 @@ export const CSRF_COOKIE_NAME = 'soccer_csrf';
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function baseCookieOptions() {
+  const secure = env.NODE_ENV === 'production';
   return {
     path: '/',
-    sameSite: 'lax' as const,
-    secure: env.NODE_ENV === 'production',
+    // The web and API deployments live on different Railway-generated
+    // domains (soccerweb-production.up.railway.app vs
+    // soccerapi-production.up.railway.app) — genuinely cross-site from the
+    // browser's perspective, not just cross-origin. A `Lax` cookie is never
+    // attached to a cross-site fetch()/XHR call (only to a top-level link
+    // navigation), so the session cookie set here would never make it back
+    // on the client's very next `/auth/me` call: login would appear to
+    // succeed but every follow-up request would 401. `None` is required for
+    // that cross-site fetch to carry the cookie, and the spec requires
+    // `Secure` alongside it — which production already sets. Same-origin
+    // localhost dev (only the port differs) stays `Lax`, since `None`
+    // requires `Secure`, and dev has no TLS.
+    sameSite: secure ? ('none' as const) : ('lax' as const),
+    secure,
   };
 }
 
