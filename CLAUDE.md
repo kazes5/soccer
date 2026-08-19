@@ -430,6 +430,8 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 
 **2026-08-19 revision note:** Passkeys/WebAuthn have been removed entirely in favor of password-only authentication for every role, and the "privileged assurance" step-up (passkey re-verification for admin/system-admin actions) is gone — a password-authenticated session with the right role is now sufficient on its own. This reverses the 2026-08-10 and 2026-08-15-era decisions described in §8.2 decision 6 and §9.1 below; see those sections' own revision notes for the full reasoning. This was an explicit, deliberate product decision to simplify the MVP, not a security regression discovered in review.
 
+**2026-08-19/20 revision note:** One narrow, explicit exception to "closed-roster, no self-signup" was added for the MVP pilot only: a hardcoded super-admin account (fixed identifier and password, provisioned by `pnpm --filter @soccer/api run system-admin:bootstrap-super-admin`) that always exists once the script has been run against a database, bypassing both the normal identifier-format expectation and the password-length policy for that one account. This is a deliberate, temporary shortcut to guarantee system-admin access during the pilot without an invite/onboarding round trip — see `docs/authentication-and-system-admin.md`'s "Exceptional hardcoded super-admin account" section for the mechanics, and revisit (rotate or remove it) before scaling past pilot.
+
 ---
 
 ### 4.2 Admin-Only User Management
@@ -654,9 +656,12 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 - A new parent gets their password one of two ways: they choose it themselves during split link/code invite onboarding, or an admin/system admin sets it for them directly when creating their account or resetting it later (see §4.2).
 - The very first team admin chooses their password directly on the team-creation form; no separate credential-registration step follows.
 - Session tokens expire after 30 days of inactivity.
-- Password recovery uses hashed, expiring, single-use tokens delivered only by a configured verified email/SMS provider. Recovery endpoints stay behind `PASSWORD_AUTH_ENABLED` until that provider is configured; admin/system-admin-initiated password reset (§4.2) works regardless, since it doesn't depend on a recovery provider.
+- Password recovery uses hashed, expiring, single-use tokens delivered only by a configured verified email/SMS provider. `forgot-password` is a no-op (enumeration-safe: same response either way) whenever no real provider is configured — gated on `app.passwordRecoveryProvider.isConfigured`, not a separate env flag; admin/system-admin-initiated password reset (§4.2) works regardless, since it doesn't depend on a recovery provider.
+- Session cookies (`soccer_session`, httpOnly) and their CSRF pair (`soccer_csrf`, readable, double-submitted) use `SameSite=None; Secure` in production and `SameSite=Lax` in development — see the 2026-08-20 revision note below for why, and for why the CSRF token also travels in the JSON body of every session-establishing/reading response (login, team creation, invite acceptance, `/auth/me`), not only the cookie.
 
 **2026-08-19 revision note:** This section previously described WebAuthn passkeys as the mandatory assurance method for privileged team-admin/system-admin operations, with password login as the parent-only default. Passkeys are removed entirely — see §8.2 decision 6's revision note for the reasoning. `Session.authMethod` (`bootstrap`/`password`/`passkey`) and the whole "privileged assurance" freshness-window concept are gone from the schema and codebase; a session either exists (and is tied to a role) or it doesn't. The `Passkey` and `WebauthnChallenge` tables were dropped by migration.
+
+**2026-08-20 revision note:** Deploying to Railway (separate generated domains for the web app and the API — see `docs/deployment.md`) surfaced two real cross-origin bugs neither local dev nor CI ever exercised, since local dev's web/API share a host (only the port differs) and cookies aren't port-scoped. First: `SameSite=Lax` cookies are never attached to a cross-site `fetch()`/XHR call (only to a top-level link navigation), so login appeared to succeed but the immediate next request always 401'd — fixed by switching to `SameSite=None` (which requires, and production already sets, `Secure`) whenever the deployment is genuinely cross-site. Second, once that unblocked real usage: `document.cookie` is strictly same-origin, so the web page's JS could never read the CSRF cookie the API's domain had set, and every mutating request (e.g. a system admin resetting a parent's password) failed CSRF validation — fixed by having the server echo the CSRF token in the relevant JSON response bodies instead, which the frontend can read regardless of origin, and caching it there client-side rather than reading the cookie at all. Both are pure infrastructure/session-plumbing fixes with no change to the authentication or authorization model described above.
 
 ### 9.2 Authorization
 
@@ -720,6 +725,7 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 - Notifications preferences (SMS, email, push) in addition to push-only.
 - Fairness-based recommendations ("You've done 3 pickups, 1 drop-off; consider a drop-off this week?").
 - Team messaging (in-app discussion board for session-specific logistics).
+- Per-team accent color: an admin picks a color to replace the default brand accent across that team's UI. Planned 2026-08-20 — see PLAN.md's "Team Color Theming" planning section for the design (a `Team.primaryColor` field, applied as a CSS custom property at the team-scoped layout root). Scoped to non-semantic "brand" elements only (buttons, header accent, links) — the fixed status colors (green="mine", red="open"/urgent, gray="covered", CLAUDE.md §3.8) are never affected by a team's color choice, to preserve the color-blind-friendly, consistent-across-teams status vocabulary.
 
 **v1.2**
 - Player attendance tracking (who actually showed up / no-show record).
