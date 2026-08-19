@@ -60,6 +60,7 @@ describe('CreateTeamPage', () => {
       },
       sessionToken: 'token-abc',
       sessionExpiresAt: '2026-09-01T00:00:00.000Z',
+      csrfToken: 'csrf-abc',
     });
 
     renderWithProviders(<CreateTeamPage />);

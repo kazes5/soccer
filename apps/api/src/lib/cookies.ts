@@ -33,18 +33,29 @@ export function generateCsrfToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/** Sets the httpOnly session cookie and a readable CSRF cookie for the same session lifetime. */
-export function setSessionCookies(reply: FastifyReply, token: string, expiresAt: Date): void {
+/**
+ * Sets the httpOnly session cookie and a readable CSRF cookie for the same
+ * session lifetime, and returns the CSRF token so the caller can also hand
+ * it back in the JSON response body. The web and API are on different
+ * Railway domains (see baseCookieOptions above), so `document.cookie` on
+ * the web page can never see a cookie set by the API — cookie reads are
+ * strictly same-origin, unrelated to SameSite. The response body is the
+ * only channel the frontend actually has for this value; see
+ * apps/web/src/lib/api.ts's cached-from-response-body token handling.
+ */
+export function setSessionCookies(reply: FastifyReply, token: string, expiresAt: Date): string {
   reply.setCookie(SESSION_COOKIE_NAME, token, {
     ...baseCookieOptions(),
     httpOnly: true,
     expires: expiresAt,
   });
-  reply.setCookie(CSRF_COOKIE_NAME, generateCsrfToken(), {
+  const csrfToken = generateCsrfToken();
+  reply.setCookie(CSRF_COOKIE_NAME, csrfToken, {
     ...baseCookieOptions(),
     httpOnly: false,
     expires: expiresAt,
   });
+  return csrfToken;
 }
 
 export function clearSessionCookies(reply: FastifyReply): void {

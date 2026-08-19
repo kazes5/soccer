@@ -33,6 +33,7 @@ const preview = {
 const authSessionResponse = {
   sessionToken: 'token-abc',
   expiresAt: '2026-09-01T00:00:00.000Z',
+  csrfToken: 'csrf-abc',
   user: {
     id: 'user-2',
     name: 'Avi Levi',

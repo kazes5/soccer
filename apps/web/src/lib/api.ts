@@ -119,11 +119,24 @@ export class ApiError extends Error {
 
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
 
-/** Session auth rides on the httpOnly `soccer_session` cookie; this reads its readable CSRF pair. */
-function readCsrfCookie(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const match = document.cookie.match(/(?:^|;\s*)soccer_csrf=([^;]+)/);
-  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+/**
+ * Session auth rides on the httpOnly `soccer_session` cookie, double-
+ * submitted against a readable `soccer_csrf` cookie server-side — but the
+ * web and API deployments are on different domains, so this page's
+ * `document.cookie` can never see a cookie the API set (cookie reads are
+ * strictly same-origin, unrelated to SameSite/credentials). The server
+ * duplicates the CSRF token in the JSON body of every endpoint that
+ * establishes or reads a session (login, team creation, invite acceptance,
+ * `/auth/me`) specifically so this cache can be populated from there
+ * instead — see each response schema's `csrfToken` field.
+ */
+let cachedCsrfToken: string | undefined;
+
+function rememberCsrfToken(data: unknown): void {
+  if (typeof data !== 'object' || data === null) return;
+  if ('csrfToken' in data && typeof data.csrfToken === 'string') {
+    cachedCsrfToken = data.csrfToken;
+  }
 }
 
 function auditLogQuery(options?: Partial<AuditLogListQuery>): string {
@@ -146,7 +159,7 @@ async function request<TResponse>(
   path: string,
   { method = 'GET', body, responseSchema }: RequestOptions<TResponse>,
 ): Promise<TResponse> {
-  const csrfToken = MUTATING_METHODS.has(method) ? readCsrfCookie() : undefined;
+  const csrfToken = MUTATING_METHODS.has(method) ? cachedCsrfToken : undefined;
 
   const response = await fetch(`${env.NEXT_PUBLIC_API_URL}${path}`, {
     method,
@@ -173,6 +186,7 @@ async function request<TResponse>(
     );
   }
 
+  rememberCsrfToken(data);
   return responseSchema.parse(data);
 }
 

@@ -38,6 +38,11 @@ describe('cookie-based sessions and CSRF', () => {
     expect(sessionCookie?.httpOnly).toBe(true);
     expect(csrfCookie?.httpOnly).toBeFalsy();
     expect(csrfCookie?.value).toBeTruthy();
+    // The web and API deployments are on different domains in production,
+    // so the browser page's document.cookie can never see this cookie
+    // (cookie reads are strictly same-origin) — the response body is the
+    // only channel the frontend actually has, hence this duplicate.
+    expect(body.csrfToken).toBe(csrfCookie?.value);
     // NODE_ENV=test here, matching local/CI dev where web and API share a
     // host (only the port differs) — `Lax` is correct. Production sets
     // `None` instead, since its web/API deployments are genuinely
@@ -76,6 +81,10 @@ describe('cookie-based sessions and CSRF', () => {
 
     const sessionToken = getCookie(loginResponse, 'soccer_session')!;
     const csrfToken = getCookie(loginResponse, 'soccer_csrf')!;
+    // The frontend can't actually read this cookie cross-origin in
+    // production (see cookies.ts's setSessionCookies doc) — the response
+    // body is the real channel, so it must match the cookie exactly.
+    expect(loginResponse.json().csrfToken).toBe(csrfToken);
     const cookieHeader = `soccer_session=${sessionToken}; soccer_csrf=${csrfToken}`;
     return { cookieHeader, csrfToken, teamId: teamBody.team.id };
   }
@@ -156,6 +165,10 @@ describe('cookie-based sessions and CSRF', () => {
     });
     expect(me.statusCode).toBe(200);
     expect(me.json().user).toMatchObject({ name: 'Dana Cohen', phone: '+15551240010' });
+    // Same cross-origin reasoning as the login response body above — /auth/me
+    // is how the frontend recovers the CSRF token after a page reload, since
+    // it can't read the cookie itself.
+    expect(me.json().csrfToken).toBe(csrfToken);
 
     const logout = await app.inject({
       method: 'POST',

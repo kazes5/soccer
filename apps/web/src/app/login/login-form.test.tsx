@@ -25,6 +25,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 const session = {
   sessionToken: 'token-abc',
   expiresAt: '2026-09-01T00:00:00.000Z',
+  csrfToken: 'csrf-abc',
   user: {
     id: 'user-1',
     name: 'Avi Levi',

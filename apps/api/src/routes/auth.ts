@@ -9,7 +9,12 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { env } from '../env';
 import { requireAuth } from '../lib/authorization';
-import { clearSessionCookies, resolveSessionToken, setSessionCookies } from '../lib/cookies';
+import {
+  clearSessionCookies,
+  CSRF_COOKIE_NAME,
+  resolveSessionToken,
+  setSessionCookies,
+} from '../lib/cookies';
 import { generateSessionToken, hashSecret } from '../lib/crypto';
 import { HttpError } from '../lib/errors';
 import { normalizeLoginIdentifier } from '../lib/identifiers';
@@ -87,13 +92,14 @@ export default async function authRoutes(app: FastifyInstance) {
         expiresAt: sessionExpiresAt,
       },
     });
-    setSessionCookies(reply, token, sessionExpiresAt);
+    const csrfToken = setSessionCookies(reply, token, sessionExpiresAt);
     return authSessionResponseSchema.parse({
       sessionToken: token,
       expiresAt: sessionExpiresAt.toISOString(),
       user: toUserSummary(user),
       teamMemberships: toMemberships(user.teamMemberships),
       systemRole: app.systemAdminEnabled ? user.systemRole : null,
+      csrfToken,
     });
   });
 
@@ -287,6 +293,7 @@ export default async function authRoutes(app: FastifyInstance) {
         timezone: membership.team.timezone,
       })),
       systemRole: app.systemAdminEnabled ? user.systemRole : null,
+      csrfToken: request.cookies[CSRF_COOKIE_NAME],
     });
   });
 }
