@@ -18,7 +18,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:load": "tsx prisma/seed-load.ts",
-    "system-admin:grant": "tsx src/scripts/grant-system-admin.ts"
+    "system-admin:grant": "tsx src/scripts/grant-system-admin.ts",
+    "system-admin:bootstrap-super-admin": "tsx src/scripts/bootstrap-super-admin.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
