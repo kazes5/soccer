@@ -12,7 +12,10 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLocale();
-  const [identifier, setIdentifier] = useState(searchParams.get('phone') ?? '');
+  const isSystemLogin = searchParams.get('next') === '/system';
+  const [identifier, setIdentifier] = useState(
+    searchParams.get('phone') ?? (isSystemLogin ? 'admin' : ''),
+  );
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,23 +41,26 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="flex flex-col gap-4">
-      <Field label={t('login.identifierLabel')}>
-        <input
-          required
-          type="text"
-          autoFocus
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          className={inputClassName}
-          placeholder="+15551234567"
-          dir="ltr"
-          autoComplete="username"
-        />
-      </Field>
+      {!isSystemLogin && (
+        <Field label={t('login.identifierLabel')}>
+          <input
+            required
+            type="text"
+            autoFocus
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            className={inputClassName}
+            placeholder="+15551234567"
+            dir="ltr"
+            autoComplete="username"
+          />
+        </Field>
+      )}
       <Field label={t('login.passwordLabel')}>
         <input
           required
           type="password"
+          autoFocus={isSystemLogin}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={inputClassName}
@@ -65,9 +71,11 @@ export default function LoginForm() {
       <button type="submit" disabled={isSubmitting} className={buttonClassName}>
         {isSubmitting ? t('login.authenticating') : t('common.logIn')}
       </button>
-      <Link href="/forgot-password" className="text-center text-sm text-ink-muted underline">
-        {t('login.forgotPassword')}
-      </Link>
+      {!isSystemLogin && (
+        <Link href="/forgot-password" className="text-center text-sm text-ink-muted underline">
+          {t('login.forgotPassword')}
+        </Link>
+      )}
     </form>
   );
 }
