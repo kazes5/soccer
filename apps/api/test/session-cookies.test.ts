@@ -38,6 +38,13 @@ describe('cookie-based sessions and CSRF', () => {
     expect(sessionCookie?.httpOnly).toBe(true);
     expect(csrfCookie?.httpOnly).toBeFalsy();
     expect(csrfCookie?.value).toBeTruthy();
+    // NODE_ENV=test here, matching local/CI dev where web and API share a
+    // host (only the port differs) — `Lax` is correct. Production sets
+    // `None` instead, since its web/API deployments are genuinely
+    // cross-site (see cookies.ts's baseCookieOptions comment); that branch
+    // isn't covered here for the same reason `secure` isn't either — both
+    // are a direct, one-line function of NODE_ENV, not independent logic.
+    expect(sessionCookie?.sameSite).toBe('Lax');
   });
 
   async function loginWithCookies(phone: string) {
