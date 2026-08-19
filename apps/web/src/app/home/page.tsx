@@ -130,6 +130,7 @@ export default function HomePage() {
       brand={t('common.appName')}
       navItems={navItems}
       isSingleTeamParent={isSingleTeamParent}
+      accentColor={activeMembership?.primaryColor}
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 p-6">
         <div>
@@ -462,7 +463,7 @@ function HomeWorkspace({
             {remainingOpenCount > 0 && (
               <Link
                 href={`/schedule?team=${encodeURIComponent(teamId)}`}
-                className="text-sm font-medium text-status-mine-on hover:underline"
+                className="text-sm font-medium text-brand-on hover:underline"
               >
                 {t('home.helpNeededMore', { count: remainingOpenCount })}
               </Link>
@@ -499,7 +500,7 @@ function HomeWorkspace({
               {remainingPendingSwapsCount > 0 && (
                 <Link
                   href={`/swaps?team=${encodeURIComponent(teamId)}`}
-                  className="text-sm font-medium text-status-mine-on hover:underline"
+                  className="text-sm font-medium text-brand-on hover:underline"
                 >
                   {t('home.pendingSwapsMore', { count: remainingPendingSwapsCount })}
                 </Link>

@@ -74,8 +74,12 @@ export default async function notificationRoutes(app: FastifyInstance) {
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
 
-    return notificationListResponseSchema.parse({
-      notifications: page.map((row) => ({
+    // Per-row safeParse, same as the SSE stream's `sendRow` — a row this
+    // build's contract can't represent (e.g. a newer eventType from a
+    // rolling deploy) must not 500 the whole list for every other row the
+    // user has, it should just be dropped from this page.
+    const notifications = page.flatMap((row) => {
+      const parsed = notificationSchema.safeParse({
         id: row.id,
         teamId: row.teamId,
         eventType: row.eventType,
@@ -85,7 +89,19 @@ export default async function notificationRoutes(app: FastifyInstance) {
         readAt: row.readAt?.toISOString() ?? null,
         dismissedAt: row.dismissedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
-      })),
+      });
+      if (!parsed.success) {
+        app.log.error(
+          { err: parsed.error, notificationId: row.id },
+          'Skipping a notification row the list endpoint could not validate.',
+        );
+        return [];
+      }
+      return [parsed.data];
+    });
+
+    return notificationListResponseSchema.parse({
+      notifications,
       nextCursor: hasMore ? (page.at(-1)?.id ?? null) : null,
       unreadCount,
     });

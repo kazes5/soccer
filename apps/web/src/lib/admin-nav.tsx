@@ -5,6 +5,7 @@ import {
   History,
   Inbox,
   MapPin,
+  Paintbrush,
   Repeat,
   Settings,
   Users,
@@ -61,7 +62,12 @@ export function adminNavItems(
   teamId: string,
   t: Translate,
   activePage?:
-    'members' | 'collection-points' | 'schedule-templates' | 'notification-settings' | 'audit-logs',
+    | 'members'
+    | 'collection-points'
+    | 'schedule-templates'
+    | 'notification-settings'
+    | 'audit-logs'
+    | 'team-settings',
 ): ShellNavItem[] {
   return [
     {
@@ -93,6 +99,12 @@ export function adminNavItems(
       label: t('adminAuditLogs.title'),
       icon: <History className="size-full" />,
       active: activePage === 'audit-logs',
+    },
+    {
+      href: `/admin/team-settings?team=${encodeURIComponent(teamId)}`,
+      label: t('adminTeamSettings.title'),
+      icon: <Paintbrush className="size-full" />,
+      active: activePage === 'team-settings',
     },
   ];
 }

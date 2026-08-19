@@ -60,6 +60,7 @@ const adminUser = {
       teamName: 'U-12 Wildcats',
       role: 'admin' as const,
       timezone: 'Asia/Jerusalem',
+      primaryColor: null,
     },
   ],
 };
@@ -72,6 +73,7 @@ const parentOnlyUser = {
       teamName: 'U-12 Wildcats',
       role: 'parent' as const,
       timezone: 'Asia/Jerusalem',
+      primaryColor: null,
     },
   ],
 };

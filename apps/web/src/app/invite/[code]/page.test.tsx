@@ -47,6 +47,7 @@ const authSessionResponse = {
       teamName: 'U-12 Wildcats',
       role: 'parent' as const,
       timezone: 'Asia/Jerusalem',
+      primaryColor: null,
     },
   ],
 };

@@ -37,6 +37,7 @@ export function entityKeyFor(eventType: string, payload: Record<string, unknown>
     case 'member_promoted':
     case 'member_demoted':
     case 'member_removed':
+    case 'member_added_directly':
     case 'invite_accepted':
       return typeof payload.userId === 'string' ? `member:${payload.userId}` : null;
     case 'swap_requested':

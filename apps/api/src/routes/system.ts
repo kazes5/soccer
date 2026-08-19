@@ -361,7 +361,13 @@ export default async function systemRoutes(app: FastifyInstance) {
 
     reply.status(201);
     return systemCreateTeamResponseSchema.parse({
-      team: { id: team.id, name: team.name, season: team.season, timezone: team.timezone },
+      team: {
+        id: team.id,
+        name: team.name,
+        season: team.season,
+        timezone: team.timezone,
+        primaryColor: team.primaryColor,
+      },
       admin: {
         id: admin.id,
         name: admin.name,

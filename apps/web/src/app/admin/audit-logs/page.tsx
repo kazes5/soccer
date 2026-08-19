@@ -126,6 +126,8 @@ export default function AdminAuditLogsPage() {
   const firstAdminMembership = adminMemberships[0];
   if (!firstAdminMembership) return null;
   const navTeamId = activeTeamId ?? firstAdminMembership.teamId;
+  const activeAdminMembership =
+    adminMemberships.find((m) => m.teamId === navTeamId) ?? firstAdminMembership;
   const navItems: ShellNavItem[] = [
     { href: '/home', label: t('nav.home'), icon: <Home className="size-full" /> },
     { href: '/schedule', label: t('nav.schedule'), icon: <Calendar className="size-full" /> },
@@ -136,7 +138,11 @@ export default function AdminAuditLogsPage() {
   ];
 
   return (
-    <AppShell brand={t('common.appName')} navItems={navItems}>
+    <AppShell
+      brand={t('common.appName')}
+      navItems={navItems}
+      accentColor={activeAdminMembership.primaryColor}
+    >
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{t('adminAuditLogs.title')}</h1>

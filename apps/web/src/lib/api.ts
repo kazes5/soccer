@@ -58,12 +58,14 @@ import {
   type TeamNotificationSettings,
   type TeamNotificationSettingsRequest,
   type TeamRosterResponse,
+  type TeamSummary,
   type UnreadNotificationCountResponse,
   type UpdateMemberNotificationPreferencesRequest,
   type UpdateScheduleTemplateRequest,
   type UpdateScheduleTemplateResponse,
   type UpdateSessionPointPlayersRequest,
   type UpdateSessionRequest,
+  type UpdateTeamAccentColorRequest,
   addParentResponseSchema,
   auditLogListResponseSchema,
   authSessionResponseSchema,
@@ -98,6 +100,7 @@ import {
   teamNotificationSettingsSchema,
   teamMemberListResponseSchema,
   teamRosterResponseSchema,
+  teamSummarySchema,
   unreadNotificationCountResponseSchema,
   updateScheduleTemplateResponseSchema,
   updateMemberRoleResponseSchema,
@@ -196,6 +199,13 @@ export const api = {
       method: 'POST',
       body,
       responseSchema: createTeamResponseSchema,
+    }),
+
+  updateTeamAccentColor: (teamId: string, body: UpdateTeamAccentColorRequest) =>
+    request<TeamSummary>(`/teams/${encodeURIComponent(teamId)}/accent-color`, {
+      method: 'PATCH',
+      body,
+      responseSchema: teamSummarySchema,
     }),
 
   passwordLogin: (body: PasswordLoginRequest) =>

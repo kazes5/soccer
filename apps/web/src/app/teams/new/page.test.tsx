@@ -50,6 +50,7 @@ describe('CreateTeamPage', () => {
         name: 'U-12 Wildcats',
         season: 'Fall 2026',
         timezone: 'Asia/Jerusalem',
+        primaryColor: null,
       },
       admin: {
         id: 'user-1',

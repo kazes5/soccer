@@ -75,6 +75,38 @@ describe('notifications', () => {
     expect(body.nextCursor).toBeNull();
   });
 
+  it('skips a notification row with an eventType this build cannot validate, instead of failing the whole list', async () => {
+    // Regression test: a row whose eventType isn't in the shared contract's
+    // enum (e.g. a rolling deploy serving an older web bundle, or — as
+    // really happened — a server-emitted eventType the schema had never
+    // included) must not 500 the entire list for every other, perfectly
+    // valid row a user has. See notification.ts's doc comment on
+    // `member_added_directly` for the real incident this covers.
+    const { adminToken, teamId } = await setUpTeam();
+    await seedNotifications(teamId, 1);
+    const badEvent = await app.prisma.outboxEvent.create({
+      data: {
+        teamId,
+        eventType: 'not_a_real_event_type',
+        category: 'admin_changes',
+        recipientScope: 'team_broadcast',
+        payload: {},
+      },
+    });
+    await processOutboxEvent(app.prisma, badEvent.id);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/notifications`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.notifications).toHaveLength(1);
+    expect(body.notifications[0].payload.index).toBe(0);
+  });
+
   it('paginates with a cursor', async () => {
     const { adminToken, teamId } = await setUpTeam();
     await seedNotifications(teamId, 3);

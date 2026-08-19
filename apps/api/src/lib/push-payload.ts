@@ -170,6 +170,15 @@ export function buildPushPayload(
         url: null,
       };
 
+    case 'member_added_directly':
+      return {
+        title: translate(locale, 'push.memberAddedDirectly.title'),
+        body: translate(locale, 'push.memberAddedDirectly.body', {
+          userName: asString(payload, 'userName'),
+        }),
+        url: null,
+      };
+
     case 'invite_accepted':
       return {
         title: translate(locale, 'push.inviteAccepted.title'),

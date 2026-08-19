@@ -308,6 +308,7 @@ export default async function inviteRoutes(app: FastifyInstance) {
           teamName: result.team.name,
           role: 'parent',
           timezone: result.team.timezone,
+          primaryColor: result.team.primaryColor,
         },
       ],
       systemRole: null,

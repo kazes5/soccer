@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { languageSchema, teamRoleSchema } from './enums';
+import { languageSchema, teamAccentColorSchema, teamRoleSchema } from './enums';
 
 export const userSummarySchema = z.object({
   id: z.string().uuid(),
@@ -15,5 +15,6 @@ export const teamMembershipSchema = z.object({
   teamName: z.string(),
   role: teamRoleSchema,
   timezone: z.string(),
+  primaryColor: teamAccentColorSchema.nullable(),
 });
 export type TeamMembership = z.infer<typeof teamMembershipSchema>;

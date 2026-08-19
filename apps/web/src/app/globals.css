@@ -19,6 +19,21 @@
   --color-status-mine-on: #146239;
   --color-status-mine-contrast: #ffffff;
 
+  /* Per-team brand accent — primary buttons, the active bottom-nav tab, links,
+     a success toast. Deliberately a *separate* token from --color-status-mine
+     above, even though the default values are identical: status-mine always
+     means "this shift is mine" (CLAUDE.md §3.8) and must never vary by team,
+     while --color-brand-* is safe to override per team (see
+     TeamBrandStyle.tsx) precisely because nothing here carries shift-status
+     meaning. Defaults match status-mine's green so a team with no chosen
+     color renders pixel-identical to before this feature; see
+     packages/ui-tokens/src/brand.ts for the full curated palette a team can
+     pick from instead. */
+  --color-brand: #1f7a4d;
+  --color-brand-subtle: #e6f3ec;
+  --color-brand-on: #146239;
+  --color-brand-contrast: #ffffff;
+
   /* open / urgent — coral. Darkened from #e1493b (2026-08-16): that value
      paired with white text/icons (status-open-contrast, e.g. danger
      buttons, error toasts) only reached a 4.02:1 contrast ratio, short of
@@ -59,6 +74,11 @@
     --color-status-mine-on: #7bd6ac;
     --color-status-mine-contrast: #062013;
 
+    --color-brand: #3fb586;
+    --color-brand-subtle: #113523;
+    --color-brand-on: #7bd6ac;
+    --color-brand-contrast: #062013;
+
     --color-status-open: #f17164;
     --color-status-open-subtle: #3a1913;
     --color-status-open-on: #ffab9f;
@@ -88,6 +108,11 @@
   --color-status-mine-subtle: var(--color-status-mine-subtle);
   --color-status-mine-on: var(--color-status-mine-on);
   --color-status-mine-contrast: var(--color-status-mine-contrast);
+
+  --color-brand: var(--color-brand);
+  --color-brand-subtle: var(--color-brand-subtle);
+  --color-brand-on: var(--color-brand-on);
+  --color-brand-contrast: var(--color-brand-contrast);
 
   --color-status-open: var(--color-status-open);
   --color-status-open-subtle: var(--color-status-open-subtle);

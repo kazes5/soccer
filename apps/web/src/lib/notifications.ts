@@ -158,6 +158,14 @@ export function describeNotification(
         href: null,
       };
 
+    case 'member_added_directly':
+      return {
+        text: t('notifications.event.memberAddedDirectly', {
+          userName: asString(payload, 'userName'),
+        }),
+        href: null,
+      };
+
     case 'invite_accepted':
       return {
         text: t('notifications.event.inviteAccepted', { userName: asString(payload, 'userName') }),

@@ -9,6 +9,21 @@ export type SystemRole = z.infer<typeof systemRoleSchema>;
 export const languageSchema = z.enum(['en', 'he']);
 export type Language = z.infer<typeof languageSchema>;
 
+// Matches @soccer/ui-tokens's BrandColorKey — a curated palette, not
+// free-text/arbitrary hex (see brand.ts's doc comment for why).
+export const teamAccentColorSchema = z.enum([
+  'green',
+  'blue',
+  'indigo',
+  'purple',
+  'fuchsia',
+  'slate',
+  'red',
+  'orange',
+  'yellow',
+]);
+export type TeamAccentColor = z.infer<typeof teamAccentColorSchema>;
+
 export const collectionPointTypeSchema = z.enum(['pickup', 'dropoff', 'both']);
 export type CollectionPointType = z.infer<typeof collectionPointTypeSchema>;
 
