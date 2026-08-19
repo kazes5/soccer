@@ -113,6 +113,45 @@ Bootstrap the first role only after the target active user has a password set:
 pnpm system-admin:grant <user-id-or-normalized-phone-or-email>
 ```
 
+### Exceptional hardcoded super-admin account (MVP pilot only)
+
+**2026-08-19/20 addition:** alongside the operator-driven bootstrap above, an
+explicit product decision added a second, exceptional bootstrap path: a
+hardcoded super-admin account with a fixed identifier (`admin`) and password,
+provisioned by `apps/api/src/scripts/bootstrap-super-admin.ts`
+(`pnpm --filter @soccer/api run system-admin:bootstrap-super-admin`). It's
+idempotent (safe to rerun) and deliberately bypasses two normal invariants:
+
+- The login identifier isn't a real phone or email. Login only requires a
+  non-empty string (`passwordLoginRequestSchema` has no format check), and
+  `normalizeLoginIdentifier`'s phone-fallback path reduces a digit-less
+  string to an empty-string `normalizedPhone` — so a user row seeded with
+  `normalizedPhone: ''` is reachable by logging in with the literal
+  identifier `admin`.
+- The password is shorter than `MIN_PASSWORD_LENGTH` (15). `hashPassword()`
+  has no length check of its own — `assertAcceptablePassword` is what
+  normally enforces the policy, and this script calls `hashPassword`
+  directly instead, on purpose.
+
+This is a deliberate, temporary MVP-pilot shortcut — a known-credential
+super-admin login that always exists once the script has been run against a
+given database, so there's guaranteed system-admin access without going
+through the invite/password-onboarding flow. It is **not** meant to survive
+past the pilot; revisit (rotate the credential, or remove the account and the
+script) before scaling. Running it against production requires a way to
+reach the production database directly (see `docs/deployment.md`'s
+"Bootstrapping the super-admin account in production" note) — there is no
+HTTP endpoint that performs this, by design.
+
+When `/login` is reached via `?next=/system` (the same redirect target
+`/system` itself uses for an unauthenticated visitor), the login page shows a
+simplified "Welcome back, Roy" screen — a heading plus a single password
+field, identifier defaulted to `admin` under the hood — instead of the
+ordinary identifier+password form, since this exceptional account is the
+only way into `/system` and asking for its identifier every time added
+nothing. Fully localized (EN/HE) and RTL-correct; see
+`apps/web/src/app/login/page.tsx` and `login-form.tsx`.
+
 ## Rollout
 
 `SYSTEM_ADMIN_ENABLED` defaults off:

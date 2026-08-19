@@ -90,22 +90,20 @@ for the same reason.
 
 Environment variables:
 
-| Variable       | Value                                                                     | Why                                                                                                                                                                    |
-| -------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`     | `production`                                                              |                                                                                                                                                                        |
-| `PORT`         | `8080`                                                                    | Matches the generated domain's target port.                                                                                                                            |
-| `DATABASE_URL` | `postgresql://postgres:<password>@postgres.railway.internal:5432/railway` | See "Reference variables vs. literal values" below.                                                                                                                    |
-| `REDIS_URL`    | `redis://default:<password>@redis.railway.internal:6379`                  | Same.                                                                                                                                                                  |
-| `TRUST_PROXY`  | `true`                                                                    | Railway terminates TLS and proxies requests; without this, per-IP rate limiting would see every user as the proxy's IP (see `PLAN.md`'s note on this exact bug class). |
-| `WEB_ORIGIN`   | `https://soccerweb-production.up.railway.app`                             | CORS: must exactly match the web app's origin.                                                                                                                         |
+| Variable               | Value                                                                     | Why                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`             | `production`                                                              |                                                                                                                                                                        |
+| `PORT`                 | `8080`                                                                    | Matches the generated domain's target port.                                                                                                                            |
+| `DATABASE_URL`         | `postgresql://postgres:<password>@postgres.railway.internal:5432/railway` | See "Reference variables vs. literal values" below.                                                                                                                    |
+| `REDIS_URL`            | `redis://default:<password>@redis.railway.internal:6379`                  | Same.                                                                                                                                                                  |
+| `TRUST_PROXY`          | `true`                                                                    | Railway terminates TLS and proxies requests; without this, per-IP rate limiting would see every user as the proxy's IP (see `PLAN.md`'s note on this exact bug class). |
+| `WEB_ORIGIN`           | `https://soccerweb-production.up.railway.app`                             | CORS: must exactly match the web app's origin.                                                                                                                         |
+| `SYSTEM_ADMIN_ENABLED` | `true`                                                                    | Enabled 2026-08-19 (was off at initial deploy) so `/system/*` is reachable — needed once the hardcoded super-admin account (below) made using the console practical.   |
 
 Password authentication is unconditional as of 2026-08-19 (no flag). Login
 was previously gated behind `PASSWORD_AUTH_ENABLED=true` here, and origin
 binding behind `WEBAUTHN_RP_ID` — both rows are removed since passkeys no
-longer exist and password login can't be disabled. `SYSTEM_ADMIN_ENABLED` is
-a separate, still-unset rollout flag for the `/system/*` console (see
-[Password and System Administration](./authentication-and-system-admin.md)) —
-not set in this table because it was never enabled during this deployment.
+longer exist and password login can't be disabled.
 
 ### `@soccer/worker`
 
@@ -269,16 +267,90 @@ task(s)` and `Listening for outbox events and scheduled tasks...` (see
 - Data is actually reachable through the live API, not just present in the
   database: `curl https://<api-domain>/invites/<a-real-invite-code>` returns
   the seeded team rather than a 404.
-- Register a passkey against the real deployed domain and confirm login —
-  `WEBAUTHN_RP_ID` mismatches fail silently in some browsers (see
-  [Installation](./installation.md)'s troubleshooting section for the local
-  equivalent of this check).
+- Log in with a real password against the real deployed domain, then confirm
+  a mutating action actually works (e.g. claim a shift, or — as a system
+  admin — reset a user's password), not just that login itself succeeds.
+  Login alone isn't sufficient evidence: see "Post-launch incidents" below
+  for two real, cross-origin-only bugs (a `SameSite` cookie issue and a CSRF
+  token delivery issue) that each let login _appear_ to work while the
+  session was actually broken one layer down. Neither reproduces locally,
+  since local dev's web and API share a host (only the port differs).
 
 **Confirmed as of this deployment:** all five resources (`Postgres`,
 `Redis`, `api`, `worker`, `web`) reported `Online`/`ACTIVE`; `/health` and
 `/ready` both returned `200`; the worker's deploy log showed the real
 startup/listening lines above; and `GET /invites/english-admin-demo`
 returned the seeded "U-12 Wildcats" team.
+
+## Post-launch incidents: cross-origin session and CSRF (2026-08-19/20)
+
+The password-auth migration (replacing passkeys, see CLAUDE.md §9.1) was
+deployed and passed every check in "Post-deploy verification" above — but
+the checklist at the time only confirmed the API/web services were up and
+serving data, not that a real login actually produced a _working_ session.
+Two real bugs surfaced only once someone tried to use the live site as a
+browser would, both invisible in local dev and in the `apps/e2e` suite
+(which also runs web and API on the same host, differing only by port):
+
+1. **Session cookie never reached the API on the next request.** The
+   session cookie was `SameSite=Lax`. `soccerweb-production.up.railway.app`
+   and `soccerapi-production.up.railway.app` are different domains —
+   genuinely cross-site, not just cross-origin — and a `Lax` cookie is only
+   attached to a cross-site _top-level navigation_ (following a link), never
+   to a `fetch()`/XHR call. Login returned `200` and set the cookie, but the
+   client's very next call (`/auth/me`) never carried it back, 401'd, and
+   the app bounced to `/login`. Fixed by using `SameSite=None` (which
+   requires — and production already sets — `Secure`) whenever the
+   deployment is genuinely cross-site; local dev (same host, only the port
+   differs) is unaffected and stays `Lax`. See
+   `apps/api/src/lib/cookies.ts`.
+2. **CSRF token was never actually readable by the frontend.** Once login
+   itself worked, every mutating request (e.g. a system admin resetting a
+   parent's password) failed with "Missing or invalid CSRF token." The
+   frontend read the token via `document.cookie` — but that cookie is set by
+   the _API's_ domain, and `document.cookie` is strictly same-origin, so a
+   page served from the _web_ domain could never see it, regardless of
+   `SameSite`. Fixed by having the server echo the token in the JSON
+   response body of every endpoint that establishes or reads a session
+   (login, team creation, invite acceptance, `/auth/me`) — a channel the
+   frontend genuinely can read cross-origin — and caching it there
+   client-side instead. See `apps/web/src/lib/api.ts` and
+   `packages/contracts/src/auth.ts`.
+
+Both were found by reproducing the reported symptom in a real browser
+against the live production URLs (not by more automated tests, though
+regression tests were added for both afterward), diagnosed, fixed, and
+redeployed the same way as any other change (branch → PR → CI → merge →
+Railway auto-deploy), then reverified live. Neither required a schema
+change or touched the authentication/authorization model itself — both are
+pure session/cookie-delivery plumbing bugs specific to running web and API
+on different domains.
+
+### Bootstrapping the super-admin account in production
+
+The exceptional hardcoded super-admin account (see
+[Password and System Administration](./authentication-and-system-admin.md)'s
+"Exceptional hardcoded super-admin account" section) is provisioned by a
+script that needs direct database access — there is no HTTP endpoint for it,
+by design. Attempting the documented temporary-public-networking approach
+(Postgres → Settings → Networking → Add Public Access, then run the script
+locally with `DATABASE_URL` pointed at `DATABASE_PUBLIC_URL`) hit an
+unresolved Railway platform issue on 2026-08-19/20: the generated TCP proxy
+domain came back empty (only a port, no host) even after deleting and
+re-adding it — a repeat of the same class of platform flakiness as the
+"Known issue hit during setup" section above, not a configuration mistake.
+
+**What actually worked:** the Postgres service's own **Console** tab (a
+`psql` shell reachable over Railway's internal network, no public exposure
+needed at all). The two `INSERT` statements this needs — one for the `users`
+row, one for the matching `password_credentials` row with a pre-computed
+Argon2id hash — mirror exactly what
+`apps/api/src/scripts/bootstrap-super-admin.ts` does, just issued as raw SQL
+instead of run as a Node script, and are idempotent (`ON CONFLICT ... DO
+UPDATE`) the same way. If public networking works normally next time,
+running the script directly (as documented in the auth doc) is simpler and
+preferred; the Console/raw-SQL path is the documented fallback when it
+doesn't.
 
 ## Production seed data (temporary, for pilot testing)
 

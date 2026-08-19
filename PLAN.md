@@ -6,11 +6,11 @@ Build a responsive, bilingual web application first for the high-frequency coord
 
 ## Current Status (read this first)
 
-**Active stage: Stage 8 — Native Mobile Application. Stages 0-6 (Product Foundation through Verification/Security/Performance) are complete or blocked only on non-code items (a real device for VoiceOver/NVDA/TalkBack checks, a real pilot with real users, a recovery-email/SMS provider). At the user's explicit request on 2026-08-18, Stage 8 was started ahead of Stage 7 (Post-MVP Web Expansion), which remains unstarted and deliberately deferred — see the 2026-08-18 revision note on Stage 8's own heading. Stage 8 Checkpoints 1 (Expo scaffold + shared-package wiring) and 2 (native locale/RTL provider) are done; see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below for the full ten-checkpoint breakdown and what's done versus still open.**
+**Active stage: Stage 8 — Native Mobile Application. Stages 0-6 (Product Foundation through Verification/Security/Performance) are complete or blocked only on non-code items (a real device for VoiceOver/NVDA/TalkBack checks, a real pilot with real users, a recovery-email/SMS provider). At the user's explicit request on 2026-08-18, Stage 8 was started ahead of Stage 7 (Post-MVP Web Expansion), which remains unstarted and deliberately deferred — see the 2026-08-18 revision note on Stage 8's own heading. Stage 8 Checkpoints 1 (Expo scaffold + shared-package wiring) and 2 (native locale/RTL provider) are done; see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below for the full ten-checkpoint breakdown and what's done versus still open. Stage 8 itself did not progress further in the 2026-08-19/20 session described below — that work was entirely password-auth production hardening, out of band from the mobile track; see the "Production Deployment" section near the end of this file for the full account.**
 
 **2026-08-19 out-of-band change:** At explicit user request, passkeys/WebAuthn were removed entirely across the whole stack (backend routes/lib/schema/migration, contracts, web frontend, i18n, and the seed script) in favor of password-only authentication for every role — parent, team-admin, and system-admin alike — with no separate "privileged assurance" step-up. Two new capabilities were added: admin/system-admin can create a parent (or, for system admins, an admin) account directly with a password of their own choosing, alongside the existing invite-link flow; and admin/system-admin can reset any existing user's password. System admins additionally gained direct team creation, direct add-member-to-any-team, and team player management (create/edit/delete — team admins got the same for their own team, a natural extension since no player-CRUD endpoint existed before at all). This was not part of the Stage 8 mobile work and did not block it — see CLAUDE.md's 2026-08-19 revision notes (§4.1, §4.2, §8.2 decision 6, §9.1) and `docs/authentication-and-system-admin.md` for the full design, and the note below for implementation status. Every historical mention of "passkey" elsewhere in this plan (mostly Stage 5's completion log) is a record of what was built at the time and is intentionally left as-is rather than rewritten.
 
-**Status of the 2026-08-19 auth rewrite:** Backend (schema/migration/routes/lib), `@soccer/contracts`, web frontend, and `@soccer/i18n` are done, typecheck clean, and fully covered by the existing automated suites — `apps/api` (291 tests, 36 files) and `apps/web` (203 tests, 30 files) both pass in full after the change, including new/rewritten tests for every new capability. **Not done / left open:** `apps/e2e`'s Playwright suite still drives the old passkey ceremony in several specs (`golden-path`, `admin-management`, `system-console`, `keyboard-navigation`, `offline`, `swaps`) and its `fixtures/webauthn.ts` helper — these need a rewrite to the password flow and a real run against a live browser to verify, which wasn't done here (no live-browser Playwright run was performed in this session). Production Railway env vars need updating to drop `PASSWORD_AUTH_ENABLED`/`WEBAUTHN_RP_ID` (see `docs/deployment.md`'s 2026-08-19 note) before the next deploy — the currently-deployed code predates this change, so production is unaffected until redeployed.
+**Status of the 2026-08-19 auth rewrite — now fully closed out (2026-08-20):** Backend (schema/migration/routes/lib), `@soccer/contracts`, web frontend, and `@soccer/i18n` were done and fully covered by automated tests as of 2026-08-19. Everything flagged as "not done" at that time is now done too: `apps/e2e`'s Playwright suite was fully rewritten off the passkey ceremony onto the password flow (`fixtures/webauthn.ts` deleted), a code review of the whole migration found and fixed two real backend bugs (inactive-user reactivation on re-add, and duplicated add-member logic between the team-admin and system-admin routes, consolidated into `apps/api/src/lib/direct-member.ts`) plus a React Strict Mode bug on the system console, and the suite was run for real against a live browser — first locally (15/15 passing), then against the actual redeployed Railway production app, which is where the two real cross-origin production bugs below were actually found. Production Railway env vars were updated (`PASSWORD_AUTH_ENABLED`/`WEBAUTHN_RP_ID` dropped, `SYSTEM_ADMIN_ENABLED` turned on) and the code deployed. See "Production Deployment" near the end of this file for the full account, including the two cross-origin bugs (session cookie `SameSite`, CSRF token delivery) found only by actually using the live site, the exceptional hardcoded super-admin account, and the new `/system` login welcome screen.
 
 | Stage | Status | One-line note |
 |---|---|---|
@@ -20,7 +20,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 | **3 — Schedule & Atomic Shift Core** | **Done (2026-08-11)** | All 7 checkpoints landed and tested: schema/recurrence/atomic claim-release/parent Schedule page, Home workspace, template-edit backend, `/admin/collection-points`, player-roster endpoint, the schedule-template wizard, and session management UI + `GET /teams/:teamId/roster`. Closed out with a full desktop/tablet/narrow-mobile EN+HE manual regression pass that caught and fixed one real bug (a `Tooltip` overflow causing horizontal scroll) — see the Stage 3 closing Progress note. "Bulk-edit all future sessions" remains confirmed-deferred to the backlog. |
 | 4 — Swap/Notification/Reminder/Escalation | Complete for MVP — Checkpoints 1-9 done (2026-08-11, 2026-08-12 ×7); Checkpoint 10 removed from MVP scope 2026-08-12 | Notification/event/recipient ADR recorded; `PracticeSession.startsAt` now stores real UTC instants converted through each team's IANA timezone, not pseudo-UTC wall time. Admin-configurable swap expiry/reminder offsets/escalation lead and team quiet hours, plus per-member overrides and per-category push opt-out, now exist as real settings (`/admin/notification-settings`, `/settings/notifications`). The transactional-outbox/BullMQ-worker foundation (durable `OutboxEvent`/`UserNotification`/`NotificationDelivery`/`ScheduledTask` models, a separate worker process, idempotent recipient fan-out, crash-safe startup reconciliation) is implemented and tested. All 5 team-changing route files now write outbox events on every mutation, fanning out to a real `/notifications` center with unread/dismiss state. As of Checkpoint 5, `/notifications` updates live via a team-scoped SSE stream (Redis pub/sub fast path + periodic fallback poll, Web Locks leader election across tabs) instead of only pull-refreshing, and notification deep links now scroll/highlight the right row on `/schedule` instead of just landing on the right team. As of Checkpoint 6, opted-in browser push actually delivers: VAPID + an injectable `WebPushProvider`, quiet-hours/collapse/throttle-aware delivery per ADR 0001, a service worker (suppressing the OS notification when a tab is already focused), and a Settings > Notifications subscribe/unsubscribe UI. As of Checkpoints 7-8, one-way shift swaps are fully live end to end: a `SwapRequest` lifecycle (pending/accepted/declined/expired/cancelled) with version-CAS acceptance, a database-enforced one-pending-request-per-shift constraint, scheduled-task-driven expiry capped at session start, and a new `/swaps` page (plus a real-time "Request swap" action on `/schedule` and a live pending-count widget on Home). As of Checkpoint 9, durable pre-shift reminders are fully live: one `ScheduledTask` per (shift, offset) pair, resynced on every assignee/session-time change, quiet-hours-deferred or suppressed at execution, and rendered with full session/point/player detail. Checkpoint 10 ("Emergency and closure" — `cannotMakeIt`, emergency-open shifts, auto-escalation) was removed from MVP scope at the product owner's explicit request; deferred to post-MVP (CLAUDE.md Roadmap v1.1). See the Checkpoint 1-9 and Checkpoint 10 scope-decision Progress notes below. |
 | **5 — Admin Ops & Reporting** | **Checklist complete 2026-08-16; Checkpoint 10 (rollout) and pilot-run exit criteria still open** | Admin member management is live at `/admin/members`: phone/email invites, current-member search/role filters, confirmation-gated promotion/demotion/removal, final-admin disabled controls, and serialized backend mutations that preserve the last-admin invariant under concurrency. Removal cleanup now reopens scheduled future shifts while preserving past attribution. The read-only audit-log viewer (`/admin/audit-logs`), parent password onboarding/login, and the isolated `system_admin` control plane (`/system/*`) are all built, tested, and merged — see the Stage 5 Detailed Execution Plan below (Checkpoints 2–9 done; Checkpoint 10's production-rollout gate is the only open item there). The personal stats view (Home's "My Stats" card) was found already complete. A new `/settings` hub + `/settings/account` page closes the privacy/account-controls item and wires up the previously-unused password-change endpoint. A manual EN/HE design and Hebrew-copy review pass found and fixed a real bug (phone-number inputs missing `dir="ltr"`, bidi-reordering under RTL) and one awkward Hebrew string. `docs/operations-runbook.md` closes the ops-runbook item. Two Exit Criteria remain open because they can only be confirmed by running a real pilot, not by more code. |
-| **6 — Verification/Security/Performance** | **Started 2026-08-16 (ongoing gate, not a one-time stage)** | Several checklist items were found already satisfied by existing work and just never checked off: domain-policy unit tests and the ten-concurrent-claims race test. A real Playwright E2E suite (`apps/e2e`) now covers the invite-to-claim journey (EN+HE, desktop and a `Pixel 5` mobile viewport), admin invite+promote, keyboard-only login, an axe accessibility scan (caught and fixed a real WCAG contrast bug), the swap-request lifecycle, broadcast notifications with a deep link, and the system console (caught and fixed a real seed-data bug and a missing notification-worker process in the E2E infra itself) — see the Stage 6 Playwright E2E Checkpoint 1-4 notes below. As of 2026-08-17: the Playwright checklist item, the security-checks item (RP ID/origin spoofing closed, see the WebAuthn Verification Checkpoint note), both remaining Verification Commands items (disposable-DB API integration tests via `pnpm run test:integration`, and `pnpm test` coverage thresholds for critical domain modules — see the Disposable Test DB & Coverage Thresholds Checkpoint note, which also caught and fixed a freshly-published high-severity dependency advisory), load testing (new `apps/load` package, `pnpm test:load` — see the Load Testing Checkpoint note, which found a real perf issue: schedule reads breach their provisional budget under concurrent load), offline/slow-network behavior (a genuinely unbuilt feature before this session, not just a missing test — new `useOnlineStatus`/`OfflineBanner` on Home and Schedule, see the Offline Behavior Checkpoint note), everything code-achievable in the accessibility item (RTL reading order, automated target sizing), and — as of the Final Checkpoint, after a correction found by code review — backup/rollback/worker-recovery/swap-expiry-recovery are all fully checked off. All four were rehearsed for real against a disposable database on the shared `docker compose` Postgres/Redis, which is this project's own standing definition of "staging" (Stage 1, 2026-08-10) — an earlier draft of this note incorrectly claimed no such environment existed, contradicting that decision; corrected (see the Final Checkpoint note). Found and fixed a real bug in the backup runbook and a real methodology lesson about Redis-vs-Postgres scheduling state along the way. What remains genuinely open — VoiceOver/NVDA/TalkBack (needs a real device), agreed load-test budgets (needs a product/ops conversation), and Stage 5's Checkpoint 10/pilot exit criteria (needs a provider procured and real users) — is blocked on something outside this agent's reach, not on more code or on infrastructure that turned out to already exist; see the Final Checkpoint note's honesty pass for the full breakdown. |
+| **6 — Verification/Security/Performance** | **Started 2026-08-16 (ongoing gate, not a one-time stage)** | Several checklist items were found already satisfied by existing work and just never checked off: domain-policy unit tests and the ten-concurrent-claims race test. A real Playwright E2E suite (`apps/e2e`) now covers the invite-to-claim journey (EN+HE, desktop and a `Pixel 5` mobile viewport), admin invite+promote, keyboard-only login, an axe accessibility scan (caught and fixed a real WCAG contrast bug), the swap-request lifecycle, broadcast notifications with a deep link, and the system console (caught and fixed a real seed-data bug and a missing notification-worker process in the E2E infra itself) — see the Stage 6 Playwright E2E Checkpoint 1-4 notes below. As of 2026-08-17: the Playwright checklist item, the security-checks item (RP ID/origin spoofing closed, see the WebAuthn Verification Checkpoint note), both remaining Verification Commands items (disposable-DB API integration tests via `pnpm run test:integration`, and `pnpm test` coverage thresholds for critical domain modules — see the Disposable Test DB & Coverage Thresholds Checkpoint note, which also caught and fixed a freshly-published high-severity dependency advisory), load testing (new `apps/load` package, `pnpm test:load` — see the Load Testing Checkpoint note, which found a real perf issue: schedule reads breach their provisional budget under concurrent load), offline/slow-network behavior (a genuinely unbuilt feature before this session, not just a missing test — new `useOnlineStatus`/`OfflineBanner` on Home and Schedule, see the Offline Behavior Checkpoint note), everything code-achievable in the accessibility item (RTL reading order, automated target sizing), and — as of the Final Checkpoint, after a correction found by code review — backup/rollback/worker-recovery/swap-expiry-recovery are all fully checked off. All four were rehearsed for real against a disposable database on the shared `docker compose` Postgres/Redis, which is this project's own standing definition of "staging" (Stage 1, 2026-08-10) — an earlier draft of this note incorrectly claimed no such environment existed, contradicting that decision; corrected (see the Final Checkpoint note). Found and fixed a real bug in the backup runbook and a real methodology lesson about Redis-vs-Postgres scheduling state along the way. What remains genuinely open — VoiceOver/NVDA/TalkBack (needs a real device), agreed load-test budgets (needs a product/ops conversation), and Stage 5's Checkpoint 10/pilot exit criteria (needs a provider procured and real users) — is blocked on something outside this agent's reach, not on more code or on infrastructure that turned out to already exist; see the Final Checkpoint note's honesty pass for the full breakdown. **As of 2026-08-20:** the one item that was code-achievable and still open — `apps/e2e` still driving the old passkey ceremony after the password-auth migration — is closed too; the whole suite was rewritten to the password flow and actually run against the live Railway production deployment (not just locally), which is how the two cross-origin production bugs described in "Production Deployment" near the end of this file were actually found. |
 | 7 — Post-MVP Web Expansion | Not started; deliberately deferred behind Stage 8 (2026-08-18 decision) | |
 | **8 — Native Mobile** | **Checkpoints 1-2 of 10 done (2026-08-18)** | Skipped ahead of Stage 7 at explicit user request — see the 2026-08-18 revision note at Stage 8's own heading below. `apps/mobile` now exists (Expo + Expo Router + Metro, monorepo-aware) with `@soccer/contracts`/`@soccer/i18n` wired unmodified and a new `@soccer/ui-tokens/native` module for RN `StyleSheet` consumption (Checkpoint 1), plus a native `LocaleProvider` (`AsyncStorage` persistence, `I18nManager` RTL flip + restart prompt) porting web's exact `{ locale, setLocale, t }` contract (Checkpoint 2) — see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below. |
 
@@ -876,6 +876,64 @@ Depends on a stable Web MVP pilot and prioritizes validated pilot needs.
 - [ ] Add optional multi-shift trade offers only after designing transactional reservation/acceptance semantics and conflict recovery.
 - [ ] Add Claude-powered web chat through the existing command/query layer: tool allowlists, server-side permission evaluation, explicit destructive-action confirmation, concise responses, transcript minimization, and `source: ai_chat` audit context.
 - [ ] Add AI evaluation fixtures in English and Hebrew for questions, valid actions, unsafe requests, ambiguous intents, stale state, and permission denial.
+- [ ] Add per-team accent color theming — see "Team Color Theming" below for the design. Planned 2026-08-20, not yet implemented.
+
+### Team Color Theming (planned 2026-08-20, not yet implemented)
+
+An admin picks a color for their team, replacing the default brand accent
+across that team's UI — requested by the user, explicitly deferred until
+after the production auth-hardening work in "Production Deployment" below
+was verified and deployed.
+
+**Scope:** non-semantic "brand" surfaces only — primary buttons, header/nav
+accent, links. The *status* colors CLAUDE.md §3.8 defines (green = "mine",
+red/orange = "open"/urgent, gray = "covered") stay fixed regardless of a
+team's chosen color, for two reasons that don't go away just because a team
+wants to look different: they're required to stay color-blind-friendly
+(icons/labels carry the real meaning, color is a reinforcing cue — changing
+the cue color per team doesn't break that on its own, but drifting it away
+from a value users learn once and expect everywhere would), and a
+consistent status vocabulary across every team is itself a usability
+property this app currently guarantees for anyone who's ever used it before
+(a multi-team parent, an admin who helps out other teams) — a per-team
+"open" color would quietly break that guarantee. Brand and status are
+already visually distinct in the current design (see `packages/ui-tokens`),
+so this scoping doesn't require new visual language, only wiring.
+
+**Design sketch, not yet built:**
+
+1. **Data model:** a `primaryColor` field on `Team` (nullable — unset means
+   "use the default brand color," so this is additive and every existing
+   team keeps working with zero migration-time backfill needed). Format:
+   likely a hex string, validated server-side against a small allow-list of
+   contrast-checked values rather than an arbitrary free-text color picker —
+   an admin-chosen color that happens to fail WCAG contrast against the
+   app's text/background would be a real accessibility regression, and this
+   app has already found and fixed one real contrast bug the hard way (see
+   the Stage 6 accessibility checkpoint below). The exact validation
+   approach (curated palette vs. contrast-checked arbitrary input) is an
+   open question for whoever picks this up, not decided here.
+2. **Delivery:** `packages/ui-tokens` already uses CSS custom properties for
+   at least one value (the focus ring — see e.g. `outline-[var(--color-focus-ring)]`
+   in existing components), which is precedent for the same mechanism here:
+   set a `--color-brand`-style custom property at the team-scoped layout
+   root once the active team is known (client-side, from the already-loaded
+   team/membership data — no new API round trip needed beyond exposing the
+   field on existing team-fetch responses), and have the relevant "brand"
+   utility classes reference that variable instead of a hardcoded token
+   value.
+3. **Admin UI:** a color picker (or curated swatch list, depending on the
+   validation approach chosen above) on the team's admin settings surface,
+   wired to a new `PATCH` on the existing team-update path.
+4. **Explicitly out of scope for this feature:** anything that touches the
+   status-color tokens, dark-mode-specific overrides beyond what the
+   existing token system already handles, and per-collection-point or
+   per-user color customization (this is team-level only, matching how
+   admins already control most shared team-facing settings).
+
+Not started. No code, schema, or contract changes exist yet for this — this
+section is planning only, recorded here so the design survives past this
+conversation.
 
 ## Stage 8: Native Mobile Application
 
@@ -1337,3 +1395,158 @@ Native E2E, device-based accessibility (VoiceOver/TalkBack), physical push-deliv
 - **Not run, honestly:** same category of gap as Checkpoint 1's note — no simulator/device to confirm the splash-screen-hold, the actual RTL layout mirroring, or the restart-Alert dialog render correctly on a real screen. What's verified here is the state machine (persistence, direction-flag calls, reload-vs-alert branching) via Jest, not the pixels.
 - **Blocker or risk:** None blocking Checkpoint 3. `expo-updates` is now a dependency without any `runtimeVersion`/update-channel configuration in `app.json` — fine for `reloadAsync()`'s dev-time behavior (falls through to the documented "not configured" failure path, which is exactly the branch the Alert prompt exists for), but real production RTL-restart behavior needs that configuration before release; tracked as Checkpoint 10 (release pipeline) scope, not a Checkpoint 2 gap.
 - **Next concrete action:** Stage 8 Checkpoint 3 — password auth and session storage (login screen, `expo-secure-store`-backed bearer-token session, team-switcher, invite-code acceptance flow).
+
+## Production Deployment: Password-Auth Rollout, Post-Launch Fixes, and Super-Admin Bootstrap (2026-08-19/20)
+
+Out of band from the Stage 8 mobile track above — this closes out everything
+the 2026-08-19 auth-rewrite status note (near the top of this file) had
+flagged as "not done," then goes further: real production deployment,
+two genuine cross-origin bugs found and fixed by actually using the live
+site, an exceptional hardcoded super-admin account, and a small UI addition.
+Not a numbered stage checkpoint since it doesn't belong to Stage 6, 7, or 8
+specifically — it's the production-hardening tail of the 2026-08-19 auth
+migration.
+
+- **Date:** 2026-08-19 to 2026-08-20
+- **Status:** Complete and verified live on production.
+- **Code review of the password-auth migration:** found and fixed two real
+  backend bugs and one frontend bug, beyond what the original migration
+  session had covered:
+  - Re-adding a previously-removed team member with the same phone/email
+    (via the team-admin or system-admin direct-add-member routes) hit the
+    global unique-constraint on `normalizedPhone`/`normalizedEmail` and
+    errored, instead of reactivating the existing (soft-deleted) account —
+    the same reactivation behavior the invite-onboarding path already had.
+    Fixed via a new shared helper, `apps/api/src/lib/direct-member.ts`
+    (`createOrReactivateTeamMember`), which also de-duplicated the
+    near-identical add-member logic that had been copy-pasted between
+    `apps/api/src/routes/members.ts` and `apps/api/src/routes/system.ts`.
+  - A React Strict Mode bug on `apps/web/src/app/system/teams/[teamId]/page.tsx`:
+    an `isMountedRef` that was only ever set to `false` (never reset to
+    `true`) left every post-mount `setState` permanently blocked after
+    Strict Mode's dev-only phantom mount→cleanup→mount cycle — the page
+    would spin on "Loading system data…" forever in dev.
+- **`apps/e2e` rewrite to password auth:** the whole suite (`golden-path`,
+  `admin-management`, `system-console`, `keyboard-navigation`, `offline`,
+  `swaps`, `notifications`, `accessibility`, `rtl-reading-order.mobile`) was
+  rewritten off the passkey/WebAuthn ceremony onto the real password flow;
+  `fixtures/webauthn.ts` deleted. Two infrastructure bugs specific to the
+  rewrite were found and fixed along the way, both by actually running the
+  suite rather than by inspection:
+  - `notifications.spec.ts` gave its own notification-wait assertion a
+    generous 30s timeout, but the suite's default per-test timeout is also
+    30s — leaving no room for the setup steps around it. Fixed with an
+    explicit `test.setTimeout(60_000)` on that one spec.
+  - Redis (BullMQ) is one shared instance across every local environment on
+    a machine — `apps/api/src/lib/queues.ts` only isolated queue keys by
+    `NODE_ENV=test` (vitest) vs. everything else, not by *which*
+    non-test environment. A developer's own long-running `pnpm dev` worker
+    (pointed at their regular dev database) was silently racing and
+    no-op'ing the e2e suite's own notification jobs — the job reported
+    success, but the row it was for didn't exist in that worker's database,
+    so nothing was ever delivered and every `notifications.spec.ts` run
+    hung until timeout with no visible error anywhere. Fixed by adding an
+    explicit `QUEUE_PREFIX` override (new `env.ts` var, defaulting to the
+    existing `NODE_ENV`-based logic when unset) and setting `QUEUE_PREFIX=e2e`
+    on both the e2e suite's API and worker processes — a distinct namespace
+    from both plain dev (`bull:`) and vitest (`test:`).
+  - Full suite green locally first (15/15), then run for real against the
+    live redeployed Railway production URLs via `E2E_TARGET_WEB_URL`/
+    `E2E_TARGET_API_URL` (`playwright.config.ts`'s remote-target mode) — this
+    is what actually found the two cross-origin bugs below; a passing local
+    run against same-host dev servers could never have caught either one.
+- **Exceptional hardcoded super-admin account:** at explicit user request, a
+  new idempotent operator script,
+  `apps/api/src/scripts/bootstrap-super-admin.ts`
+  (`pnpm --filter @soccer/api run system-admin:bootstrap-super-admin`),
+  provisions a `system_admin` account with a fixed identifier (`admin`) and
+  password, deliberately bypassing the normal identifier-format expectation
+  and the 15-character password-length policy for that one account — see
+  `docs/authentication-and-system-admin.md`'s "Exceptional hardcoded
+  super-admin account" section for the exact mechanics and CLAUDE.md §4.1's
+  2026-08-19/20 revision note for the product framing. Verified end to end
+  locally (login → `systemRole: "system_admin"` → `/system` reachable)
+  before touching production.
+  - Running the script against the production database required direct DB
+    access. The documented temporary-public-networking approach
+    (`docs/deployment.md`'s existing "Production seed data" procedure) hit
+    an unresolved Railway platform issue — the generated TCP proxy domain
+    came back empty even after deleting and re-adding it, a repeat of the
+    same class of platform flakiness `docs/deployment.md`'s "Known issue hit
+    during setup" section already documents. Worked around via the
+    Postgres service's own **Console** tab (`psql` over Railway's internal
+    network, no public exposure needed) — two idempotent `INSERT ... ON
+    CONFLICT` statements mirroring exactly what the script does, with a
+    locally pre-computed Argon2id hash for the password. Documented as the
+    fallback procedure in `docs/deployment.md`.
+  - Added a matching "Welcome back, Roy" simplified login screen: when
+    `/login` is reached via `?next=/system` (the same redirect target
+    `/system` already uses for an unauthenticated visitor), it shows only a
+    password field (identifier defaulted to `admin`) instead of the
+    ordinary identifier+password form — fully localized (EN/HE) and
+    RTL-correct via the existing `Field`/`useLocale()` patterns, no new RTL
+    handling needed. See `apps/web/src/app/login/page.tsx`/`login-form.tsx`.
+- **Two real cross-origin production bugs, found only by using the live
+  site (neither reproduces in local dev or `apps/e2e`'s local run, since
+  local web/API share a host and only differ by port):**
+  1. **Session cookie `SameSite=Lax` never reached the API cross-site.**
+     `soccerweb-production.up.railway.app` and
+     `soccerapi-production.up.railway.app` are different domains — a `Lax`
+     cookie is only attached to a cross-site top-level navigation, never a
+     `fetch()`/XHR call — so login appeared to succeed (`200`, cookie set)
+     but the client's immediate next request (`/auth/me`) never carried it,
+     401'd, and bounced back to `/login`. This is the actual reason the
+     password-auth migration's live-browser verification hadn't been done
+     yet as of the 2026-08-19 status note above — it was blocked on this
+     bug the whole time, discovered only once someone actually tried to log
+     in through a browser against the deployed site rather than via `curl`.
+     Fixed: `SameSite=None` (paired with the `Secure` production already
+     sets) whenever the deployment is genuinely cross-site; local dev stays
+     `Lax`. See `apps/api/src/lib/cookies.ts`.
+  2. **CSRF token was never actually readable by the frontend.** Once login
+     worked, every mutating request (reported by the user: setting a
+     parent's password as system admin) failed with "Missing or invalid
+     CSRF token." The frontend read the token via `document.cookie` — but
+     that cookie is set by the *API's* domain, and `document.cookie` is
+     strictly same-origin, so a page served from the *web* domain could
+     never see it at all, independent of `SameSite`. This had been true
+     since the CSRF mechanism was first built (Stage 2) but was invisible
+     until bug 1 above was fixed and login started actually working in
+     production. Fixed: the server now echoes the CSRF token in the JSON
+     response body of every endpoint that establishes or reads a session
+     (login, team creation, invite acceptance, `/auth/me`) — a channel the
+     frontend genuinely can read cross-origin — and the frontend caches it
+     from there instead of reading the cookie. See `apps/web/src/lib/api.ts`
+     and `packages/contracts/src/auth.ts`.
+  - See `docs/deployment.md`'s new "Post-launch incidents" section for the
+    full write-up, and CLAUDE.md §9.1's 2026-08-20 revision note.
+- **Deploy mechanics:** every change above shipped through the same
+  branch → PR → CI (`gh pr checks --watch`) → merge → local `main` pull →
+  Railway auto-redeploy (GitHub-connected services) → live-verify loop, one
+  PR per logical change (five PRs total: the migration + code-review fixes;
+  the bootstrap script; the `SameSite` fix; the welcome screen; the CSRF
+  fix) — no direct pushes to `main`, matching this project's existing
+  convention.
+- **Tests:** Regression tests added for every fix above — the reactivation
+  bug (`apps/api/test/members.test.ts`, `system.test.ts`), the `SameSite`
+  value (`apps/api/test/session-cookies.test.ts`), and the CSRF
+  body-delivery mechanism on both sides (`session-cookies.test.ts`'s new
+  body assertions, plus a new `apps/web/src/lib/api.test.ts` unit-testing
+  `request()`'s token-caching behavior directly via a mocked `fetch` — the
+  one piece of this that component tests mocking `api.*` wholesale can't
+  exercise). Full quality gate (`pnpm format:check && pnpm lint &&
+  pnpm typecheck && pnpm test && pnpm build`) green after every PR; the
+  local `apps/e2e` suite green (15/15) before each production deploy.
+- **Verified live, not just deployed:** every fix was reverified against
+  the actual production URLs after redeploying — `curl` for the API-level
+  behavior (cookie attributes, response bodies), and a real Chrome browser
+  session (via the `claude-in-chrome` MCP tools) for the end-to-end UX,
+  including actually setting a parent's password from the system console
+  and confirming the new password works via a follow-up login.
+- **Not done / left open:** the color-scheme/team-theming feature discussed
+  alongside this work was deliberately deferred until after this production
+  hardening landed — see Stage 7's new "Team Color Theming" planning
+  section above. No code exists for it yet.
+- **Next concrete action:** either resume Stage 8 (native mobile,
+  Checkpoint 3 — see above) or start implementing Team Color Theming, per
+  user direction; both are unstarted and independent of each other.
