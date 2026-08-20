@@ -4,6 +4,7 @@ import { focusRingClassName, type BrandColorKey } from '@soccer/ui-tokens';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import { ChatBubble } from '@/components/chat/chat-bubble';
 import { LanguageToggle } from '@/components/language-toggle';
 import { LogOutDialog, LogOutTrigger } from '@/components/log-out';
 import { useLocale } from '@/components/locale-provider';
@@ -43,6 +44,7 @@ export function AppShell({
   navItems,
   isSingleTeamParent = false,
   accentColor = null,
+  hideChatBubble = false,
   children,
 }: {
   brand: string;
@@ -52,6 +54,11 @@ export function AppShell({
    *  or `null` for the default brand color — omitted entirely on pages with no
    *  team context (e.g. the system console). */
   accentColor?: BrandColorKey | null;
+  /** Set on the system console's pages, which have no team context for the
+   *  chat bubble to operate against (it resolves its own team on mount —
+   *  see chat-bubble.tsx — so without this it would render on `/system/*`
+   *  too, uselessly). */
+  hideChatBubble?: boolean;
   children: ReactNode;
 }) {
   const { t } = useLocale();
@@ -116,6 +123,8 @@ export function AppShell({
         onConfirm={handleLogOut}
         onCancel={() => setConfirmingLogOut(false)}
       />
+
+      {!hideChatBubble && <ChatBubble />}
     </div>
   );
 }

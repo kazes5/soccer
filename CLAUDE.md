@@ -589,12 +589,12 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 ### 6.5 Model & Provider
 
 **Requirement: Technical Implementation**
-- Powered by Claude API (Anthropic).
-- Model: `claude-sonnet-4-6` or later.
-- Requests include full context: user ID, team ID, user's permission level, current schedule, shift list.
+- Powered by [OpenRouter](https://openrouter.ai) (an OpenAI-compatible chat-completions API proxying multiple model providers), not Anthropic directly — see the 2026-08-20 revision note below.
+- Model: `google/gemini-2.5-flash` by default, configurable via `OPENROUTER_MODEL`.
+- Requests include full context: user ID (from the authenticated session, never LLM-suppliable), team ID, the caller's role-scoped tool allowlist, and whatever schedule/shift data a tool call actually retrieves.
 - Temperature: 0.3 (low randomness for consistent, reliable actions).
 - Max tokens: ~500 per response (concise, mobile-friendly answers).
-- Fallback: if API is unavailable, chat shows "Assistant temporarily unavailable" and suggests using the manual UI.
+- Fallback: if `OPENROUTER_API_KEY` is unconfigured or the API is unavailable, chat shows "Assistant temporarily unavailable" and suggests using the manual UI.
 
 **Acceptance Criteria:**
 - Chat responds within 3 seconds
@@ -604,6 +604,8 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 - Confirmation required for destructive actions
 - Permission checks enforced; no privilege escalation
 - Graceful fallback if API down
+
+**2026-08-20 revision note:** Switched from Claude API (Anthropic) directly to OpenRouter, at explicit product request — PLAN.md's Stage 7 checklist records this as the accepted scope. OpenRouter's chat-completions endpoint is OpenAI-compatible (tool/function calling, SSE streaming), so the rest of this section's requirements (temperature, max tokens, context contents, fallback behavior) carry over unchanged; only the provider and model identifier changed. First shipped scope is parent-facing only (shift claim/release, swap request/accept/decline/cancel, and read-only schedule/stats Q&A) — admin actions are a follow-up. See `apps/api/src/lib/openrouter.ts`, `chat-actions.ts`, `chat-tools.ts`, `chat-dispatch.ts`, and PLAN.md's Stage 7 AI Chat checkpoint entry for the full implementation record, including how the confirmation-required mechanism in §6.4 is built (stateless, HMAC-signed tokens) even though no shipped tool needs it yet.
 
 ---
 

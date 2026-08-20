@@ -141,7 +141,7 @@ export default function SystemTeamPage() {
   }
 
   return (
-    <AppShell brand={t('common.appName')} navItems={systemNavItems(t)}>
+    <AppShell brand={t('common.appName')} navItems={systemNavItems(t)} hideChatBubble>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
         <Link href="/system" className="text-sm text-ink-muted underline">
           {t('system.back')}

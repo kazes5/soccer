@@ -9,6 +9,22 @@ export const auditLogActorSchema = z.object({
 });
 export type AuditLogActor = z.infer<typeof auditLogActorSchema>;
 
+/**
+ * CLAUDE.md §6.3: every AI-chat action logs the natural-language request, the
+ * translated (structured) action, and the outcome. `result` is stored
+ * explicitly rather than left implicit in `actionType` naming, so the audit
+ * UI can render success/failure without parsing action-type strings — chat
+ * actions are audited on both outcomes (an app-sourced action only ever logs
+ * on success; a failed chat tool call — permission denied, conflict, bad
+ * input — gets its own `result: 'failure'` row instead of vanishing).
+ */
+export const auditLogAiContextSchema = z.object({
+  transcript: z.string().max(2000),
+  translatedAction: z.string().max(500),
+  result: z.enum(['success', 'failure']),
+});
+export type AuditLogAiContext = z.infer<typeof auditLogAiContextSchema>;
+
 export const auditLogEntrySchema = z.object({
   id: z.string().uuid(),
   teamId: z.string().uuid(),
@@ -19,7 +35,7 @@ export const auditLogEntrySchema = z.object({
   beforeState: z.unknown().nullable(),
   afterState: z.unknown().nullable(),
   source: auditSourceSchema,
-  aiContext: z.unknown().nullable(),
+  aiContext: auditLogAiContextSchema.nullable(),
   createdAt: z.string().datetime(),
 });
 export type AuditLogEntry = z.infer<typeof auditLogEntrySchema>;

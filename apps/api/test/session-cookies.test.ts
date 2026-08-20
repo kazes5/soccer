@@ -186,4 +186,48 @@ describe('cookie-based sessions and CSRF', () => {
     });
     expect(meAfterLogout.statusCode).toBe(401);
   });
+
+  // Regression test for a production bug (2026-08-20, see
+  // docs/deployment.md's "Post-launch incidents" section): a stale
+  // `soccer_session` cookie from a revoked/expired session used to make
+  // `assertCsrfSafe` demand a CSRF header the frontend has no way to supply
+  // yet, permanently blocking login (and every other unauthenticated
+  // endpoint) from that browser with 403 "Missing or invalid CSRF token".
+  it('still allows login when the browser sends a stale, revoked session cookie and no CSRF header', async () => {
+    const phone = '+15551240011';
+    const { cookieHeader } = await loginWithCookies(phone);
+
+    // Revoke the session server-side without clearing the browser's cookie
+    // — exactly what a "log out other sessions" flow (e.g. a password
+    // change) or a natural expiry leaves behind.
+    await app.prisma.session.updateMany({
+      where: { user: { phone } },
+      data: { revokedAt: new Date() },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/password/login',
+      // The stale cookie rides along, as a real browser would send it, but
+      // there is deliberately no x-csrf-token header — the frontend has
+      // none cached yet on a fresh page load.
+      headers: { cookie: cookieHeader },
+      payload: { identifier: phone, password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('still rejects a genuinely authenticated mutation missing the CSRF header, even with the fix above', async () => {
+    const { cookieHeader, teamId } = await loginWithCookies('+15551240012');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/invites`,
+      headers: { cookie: cookieHeader },
+      payload: { phone: '+15551240013' },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
 });
