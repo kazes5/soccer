@@ -19,3 +19,4 @@ export * from './notification';
 export * from './swap';
 export * from './audit-log';
 export * from './system';
+export * from './chat';

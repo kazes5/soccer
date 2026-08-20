@@ -326,6 +326,41 @@ change or touched the authentication/authorization model itself — both are
 pure session/cookie-delivery plumbing bugs specific to running web and API
 on different domains.
 
+### Post-launch incident: stale session cookie permanently blocked login (2026-08-20)
+
+A third, separately-discovered bug in the same cross-origin session/CSRF
+area, reported by a real user (a screenshot of the login form rejecting a
+correct password with "Missing or invalid CSRF token") rather than found
+during deployment verification:
+
+`assertCsrfSafe` (`apps/api/src/lib/cookies.ts`) gated its CSRF check on
+whether a `soccer_session` cookie was merely _present_, not whether it was
+still _valid_. A browser holding a stale cookie — from a session later
+revoked (e.g. by a password change's "other sessions were signed out"
+effect), expired, or belonging to a deactivated user — still sent that
+cookie on every request. Since the frontend's CSRF token is only ever
+populated from a response body (see the incident above — it can't read the
+cookie cross-origin) and resets on every page load, a fresh page load with
+a stale cookie still present had no CSRF token to send yet. The result:
+`POST /auth/password/login` itself — which shouldn't need CSRF protection
+at all, since it doesn't act on an already-authenticated session — was
+rejected before its handler ever ran, and the affected browser could never
+log in again without manually clearing cookies. This affected any user or
+admin whose session was ever invalidated while their browser still held the
+cookie, not just one account.
+
+Fixed by checking `request.currentUser` (set by `plugins/auth.ts`'s
+`onRequest` hook, which runs before `assertCsrfSafe`'s) instead of raw
+cookie presence — CSRF protection exists to stop a forged request from
+riding on an _already-authenticated_ session, so if the session isn't
+actually valid there's nothing to protect, and gating on validity rather
+than presence is more correct, not merely a workaround. One-line change,
+no route-by-route allowlist needed. Regression tests added in
+`apps/api/test/session-cookies.test.ts` (a stale, revoked-but-still-sent
+cookie no longer blocks login; a genuinely authenticated mutation still
+correctly requires the CSRF header). See `apps/api/src/lib/cookies.ts`'s
+`assertCsrfSafe` doc comment for the full reasoning.
+
 ### Bootstrapping the super-admin account in production
 
 The exceptional hardcoded super-admin account (see

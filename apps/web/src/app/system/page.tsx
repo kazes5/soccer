@@ -158,7 +158,7 @@ export default function SystemPage() {
   }
 
   return (
-    <AppShell brand={t('common.appName')} navItems={systemNavItems(t, 'overview')}>
+    <AppShell brand={t('common.appName')} navItems={systemNavItems(t, 'overview')} hideChatBubble>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{t('system.title')}</h1>

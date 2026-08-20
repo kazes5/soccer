@@ -16,6 +16,7 @@ import queuesPlugin from './plugins/queues';
 import ssePlugin from './plugins/sse';
 import authRoutes from './routes/auth';
 import auditLogRoutes from './routes/audit-logs';
+import chatRoutes from './routes/chat';
 import collectionPointRoutes from './routes/collection-points';
 import coordinationSettingsRoutes from './routes/coordination-settings';
 import healthRoutes from './routes/health';
@@ -38,6 +39,16 @@ declare module 'fastify' {
     sseHeartbeatIntervalMs: number;
     passwordRecoveryProvider: PasswordRecoveryProvider;
     systemAdminEnabled: boolean;
+    /** `undefined` means the AI chat feature is unavailable (CLAUDE.md
+     *  §6.5), same graceful-unavailable convention as push's VAPID keys.
+     *  Instance-level (like systemAdminEnabled below), not read from `env`
+     *  directly at the call site, so tests can set a fake key without
+     *  mutating shared process env — see chat.test.ts. */
+    openRouterApiKey: string | undefined;
+    /** Signs chat-confirmation.ts's tokens — see its own doc comment.
+     *  Instance-level for the same test-isolation reason as
+     *  openRouterApiKey above. */
+    chatConfirmationSecret: string | undefined;
   }
 }
 
@@ -49,6 +60,8 @@ export interface BuildAppOptions {
   sseHeartbeatIntervalMs?: number;
   passwordRecoveryProvider?: PasswordRecoveryProvider;
   systemAdminEnabled?: boolean;
+  openRouterApiKey?: string;
+  chatConfirmationSecret?: string;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -68,6 +81,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate(
     'passwordRecoveryProvider',
     options.passwordRecoveryProvider ?? new DisabledPasswordRecoveryProvider(),
+  );
+  app.decorate('openRouterApiKey', options.openRouterApiKey ?? env.OPENROUTER_API_KEY);
+  app.decorate(
+    'chatConfirmationSecret',
+    options.chatConfirmationSecret ??
+      env.CHAT_CONFIRMATION_SECRET ??
+      options.openRouterApiKey ??
+      env.OPENROUTER_API_KEY,
   );
 
   app.register(cors, {
@@ -104,6 +125,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(notificationSettingsRoutes);
   app.register(memberPreferencesRoutes);
   app.register(notificationRoutes);
+  app.register(chatRoutes);
   app.register(systemRoutes);
 
   app.setErrorHandler((error, _request, reply) => {

@@ -1,3 +1,4 @@
+import type { AuditLogAiContext } from '@soccer/contracts';
 import type { AuditSource, Prisma, PrismaClient } from '../../generated/prisma/client';
 
 export interface RecordAuditLogInput {
@@ -9,6 +10,9 @@ export interface RecordAuditLogInput {
   beforeState?: Prisma.InputJsonValue;
   afterState?: Prisma.InputJsonValue;
   source?: AuditSource;
+  /** Required when `source: 'ai_chat'` — see CLAUDE.md §6.3. Left undefined
+   *  (not just omitted) for every `source: 'app'` call site today. */
+  aiContext?: AuditLogAiContext | null;
 }
 
 export function recordAuditLog(
@@ -25,6 +29,7 @@ export function recordAuditLog(
       beforeState: input.beforeState,
       afterState: input.afterState,
       source: input.source ?? 'app',
+      aiContext: input.aiContext ?? undefined,
     },
   });
 }

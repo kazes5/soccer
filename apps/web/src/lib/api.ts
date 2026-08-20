@@ -142,6 +142,13 @@ function rememberCsrfToken(data: unknown): void {
   }
 }
 
+/** Exposed for chat-stream.ts, which needs the same CSRF token attached to
+ *  its own POST but can't go through `request()` above — the response is a
+ *  streamed SSE body, not a single parsed JSON object. */
+export function getCsrfToken(): string | undefined {
+  return cachedCsrfToken;
+}
+
 function auditLogQuery(options?: Partial<AuditLogListQuery>): string {
   const query = new URLSearchParams();
   if (!options) return '';

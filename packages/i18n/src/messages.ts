@@ -549,6 +549,14 @@ export const en = {
   'swaps.statusExpired': 'Expired',
   'swaps.statusCancelled': 'Cancelled',
   'swaps.actionConflict': 'This swap request is no longer pending.',
+
+  // AI chat (PLAN.md Stage 7) — the persistent chat bubble/panel.
+  'chat.bubbleLabel': 'Chat with assistant',
+  'chat.title': 'Assistant',
+  'chat.emptyState': 'Ask about the schedule, or claim, release, or swap a shift.',
+  'chat.inputPlaceholder': 'Ask something…',
+  'chat.send': 'Send',
+  'chat.genericError': 'Something went wrong. Please try again.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1101,4 +1109,13 @@ export const he: Record<MessageKey, string> = {
   'swaps.statusExpired': 'פג תוקף',
   'swaps.statusCancelled': 'בוטל',
   'swaps.actionConflict': 'בקשת ההחלפה הזו כבר לא ממתינה.',
+
+  // AI-drafted, NOT yet native-speaker-reviewed (unlike the rest of this
+  // file — see this block's doc comment above) — review before pilot.
+  'chat.bubbleLabel': 'צ׳אט עם העוזר',
+  'chat.title': 'עוזר',
+  'chat.emptyState': 'שאלו על לוח הזמנים, או תבעו, שחררו או בקשו החלפה של הסעה.',
+  'chat.inputPlaceholder': 'שאלו משהו…',
+  'chat.send': 'שליחה',
+  'chat.genericError': 'משהו השתבש. נסו שוב.',
 };

@@ -75,13 +75,24 @@ export function resolveSessionToken(request: FastifyRequest): string | undefined
  * Double-submit CSRF check for cookie-authenticated (browser) requests only. Bearer-token
  * requests (curl, tests, future non-browser clients) aren't automatically replayed by a
  * browser, so they aren't CSRF-vulnerable and are exempt.
+ *
+ * Gated on `request.currentUser` (set by `plugins/auth.ts`'s `onRequest` hook, which
+ * `app.ts` registers *before* this one runs — see its `app.register(authPlugin)` /
+ * `app.addHook('onRequest', ...)` ordering) rather than raw cookie presence. CSRF
+ * protection exists to stop a forged request from riding on an *already-authenticated*
+ * session — if the session isn't actually valid (revoked, expired, deactivated user),
+ * there's no authenticated action to protect, so this must not gate on it. Checking
+ * cookie presence instead of validity previously meant a stale `soccer_session` cookie
+ * left over from a revoked/expired session — one the browser keeps sending regardless
+ * of server-side validity — permanently blocked login itself (and every other
+ * unauthenticated endpoint) with "Missing or invalid CSRF token", since the frontend has
+ * no CSRF token to send until a request like login actually succeeds. Found in
+ * production 2026-08-20; see docs/deployment.md's "Post-launch incidents" section.
  */
 export function assertCsrfSafe(request: FastifyRequest): void {
   if (!MUTATING_METHODS.has(request.method)) return;
   if (request.headers.authorization) return;
-
-  const sessionCookie = request.cookies[SESSION_COOKIE_NAME];
-  if (!sessionCookie) return;
+  if (!request.currentUser) return;
 
   const csrfCookie = request.cookies[CSRF_COOKIE_NAME];
   const csrfHeader = request.headers['x-csrf-token'];

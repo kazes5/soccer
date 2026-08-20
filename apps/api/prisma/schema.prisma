@@ -149,6 +149,7 @@ model User {
   passwordCredential         PasswordCredential?
   passwordResetTokens        PasswordResetToken[]
   passwordLoginAttempts      PasswordLoginAttempt[]
+  chatRequestAttempts        ChatRequestAttempt[]
   sessions                   Session[]
   notificationPrefs          NotificationPreference[]
   auditLogEntries            AuditLog[]                   @relation("AuditActor")
@@ -300,6 +301,24 @@ model PasswordLoginAttempt {
   @@index([identifierHash, createdAt])
   @@index([requestIp, createdAt])
   @@map("password_login_attempts")
+}
+
+/**
+ * One row per chat request (not just failures, unlike PasswordLoginAttempt
+ * above) — every call reaches the paid OpenRouter API, so the rate limit
+ * this backs (chat-rate-limit.ts) bounds spend, not just abuse.
+ */
+model ChatRequestAttempt {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  requestIp String   @map("request_ip")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([requestIp, createdAt])
+  @@map("chat_request_attempts")
 }
 
 model Session {

@@ -6,7 +6,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 
 ## Current Status (read this first)
 
-**Active stage: Stage 8 — Native Mobile Application. Stages 0-6 (Product Foundation through Verification/Security/Performance) are complete or blocked only on non-code items (a real device for VoiceOver/NVDA/TalkBack checks, a real pilot with real users, a recovery-email/SMS provider). At the user's explicit request on 2026-08-18, Stage 8 was started ahead of Stage 7 (Post-MVP Web Expansion), which remains unstarted and deliberately deferred — see the 2026-08-18 revision note on Stage 8's own heading. Stage 8 Checkpoints 1 (Expo scaffold + shared-package wiring) and 2 (native locale/RTL provider) are done; see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below for the full ten-checkpoint breakdown and what's done versus still open. Stage 8 itself did not progress further in the 2026-08-19/20 session described below — that work was entirely password-auth production hardening, out of band from the mobile track; see the "Production Deployment" section near the end of this file for the full account.**
+**Active stage: Stage 8 — Native Mobile Application (Checkpoint 3 next). Stages 0-6 (Product Foundation through Verification/Security/Performance) are complete or blocked only on non-code items (a real device for VoiceOver/NVDA/TalkBack checks, a real pilot with real users, a recovery-email/SMS provider). At the user's explicit request on 2026-08-18, Stage 8 was started ahead of Stage 7 (Post-MVP Web Expansion) — Stage 8 Checkpoints 1 (Expo scaffold + shared-package wiring) and 2 (native locale/RTL provider) are done; see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below for the full ten-checkpoint breakdown. Two pieces of out-of-band work landed since: password-auth production hardening (2026-08-19/20, see "Production Deployment" near the end of this file, including a third post-launch incident found and fixed 2026-08-20 — a stale session cookie could permanently block login), and, from Stage 7 (otherwise still deferred), the AI-chat-via-OpenRouter checkpoint's parent-facing scope, shipped 2026-08-20 — see "AI Chat via OpenRouter" under Stage 7 below. Team Color Theming (also technically Stage 7) shipped earlier the same day. Stage 7's remaining items (fairness reports, digests, audit archive, admin-scoped chat tools) and Stage 8 Checkpoint 3 (password auth/session storage on mobile) are both open, independent next steps.**
 
 **2026-08-19 out-of-band change:** At explicit user request, passkeys/WebAuthn were removed entirely across the whole stack (backend routes/lib/schema/migration, contracts, web frontend, i18n, and the seed script) in favor of password-only authentication for every role — parent, team-admin, and system-admin alike — with no separate "privileged assurance" step-up. Two new capabilities were added: admin/system-admin can create a parent (or, for system admins, an admin) account directly with a password of their own choosing, alongside the existing invite-link flow; and admin/system-admin can reset any existing user's password. System admins additionally gained direct team creation, direct add-member-to-any-team, and team player management (create/edit/delete — team admins got the same for their own team, a natural extension since no player-CRUD endpoint existed before at all). This was not part of the Stage 8 mobile work and did not block it — see CLAUDE.md's 2026-08-19 revision notes (§4.1, §4.2, §8.2 decision 6, §9.1) and `docs/authentication-and-system-admin.md` for the full design, and the note below for implementation status. Every historical mention of "passkey" elsewhere in this plan (mostly Stage 5's completion log) is a record of what was built at the time and is intentionally left as-is rather than rewritten.
 
@@ -21,7 +21,7 @@ Build a responsive, bilingual web application first for the high-frequency coord
 | 4 — Swap/Notification/Reminder/Escalation | Complete for MVP — Checkpoints 1-9 done (2026-08-11, 2026-08-12 ×7); Checkpoint 10 removed from MVP scope 2026-08-12 | Notification/event/recipient ADR recorded; `PracticeSession.startsAt` now stores real UTC instants converted through each team's IANA timezone, not pseudo-UTC wall time. Admin-configurable swap expiry/reminder offsets/escalation lead and team quiet hours, plus per-member overrides and per-category push opt-out, now exist as real settings (`/admin/notification-settings`, `/settings/notifications`). The transactional-outbox/BullMQ-worker foundation (durable `OutboxEvent`/`UserNotification`/`NotificationDelivery`/`ScheduledTask` models, a separate worker process, idempotent recipient fan-out, crash-safe startup reconciliation) is implemented and tested. All 5 team-changing route files now write outbox events on every mutation, fanning out to a real `/notifications` center with unread/dismiss state. As of Checkpoint 5, `/notifications` updates live via a team-scoped SSE stream (Redis pub/sub fast path + periodic fallback poll, Web Locks leader election across tabs) instead of only pull-refreshing, and notification deep links now scroll/highlight the right row on `/schedule` instead of just landing on the right team. As of Checkpoint 6, opted-in browser push actually delivers: VAPID + an injectable `WebPushProvider`, quiet-hours/collapse/throttle-aware delivery per ADR 0001, a service worker (suppressing the OS notification when a tab is already focused), and a Settings > Notifications subscribe/unsubscribe UI. As of Checkpoints 7-8, one-way shift swaps are fully live end to end: a `SwapRequest` lifecycle (pending/accepted/declined/expired/cancelled) with version-CAS acceptance, a database-enforced one-pending-request-per-shift constraint, scheduled-task-driven expiry capped at session start, and a new `/swaps` page (plus a real-time "Request swap" action on `/schedule` and a live pending-count widget on Home). As of Checkpoint 9, durable pre-shift reminders are fully live: one `ScheduledTask` per (shift, offset) pair, resynced on every assignee/session-time change, quiet-hours-deferred or suppressed at execution, and rendered with full session/point/player detail. Checkpoint 10 ("Emergency and closure" — `cannotMakeIt`, emergency-open shifts, auto-escalation) was removed from MVP scope at the product owner's explicit request; deferred to post-MVP (CLAUDE.md Roadmap v1.1). See the Checkpoint 1-9 and Checkpoint 10 scope-decision Progress notes below. |
 | **5 — Admin Ops & Reporting** | **Checklist complete 2026-08-16; Checkpoint 10 (rollout) and pilot-run exit criteria still open** | Admin member management is live at `/admin/members`: phone/email invites, current-member search/role filters, confirmation-gated promotion/demotion/removal, final-admin disabled controls, and serialized backend mutations that preserve the last-admin invariant under concurrency. Removal cleanup now reopens scheduled future shifts while preserving past attribution. The read-only audit-log viewer (`/admin/audit-logs`), parent password onboarding/login, and the isolated `system_admin` control plane (`/system/*`) are all built, tested, and merged — see the Stage 5 Detailed Execution Plan below (Checkpoints 2–9 done; Checkpoint 10's production-rollout gate is the only open item there). The personal stats view (Home's "My Stats" card) was found already complete. A new `/settings` hub + `/settings/account` page closes the privacy/account-controls item and wires up the previously-unused password-change endpoint. A manual EN/HE design and Hebrew-copy review pass found and fixed a real bug (phone-number inputs missing `dir="ltr"`, bidi-reordering under RTL) and one awkward Hebrew string. `docs/operations-runbook.md` closes the ops-runbook item. Two Exit Criteria remain open because they can only be confirmed by running a real pilot, not by more code. |
 | **6 — Verification/Security/Performance** | **Started 2026-08-16 (ongoing gate, not a one-time stage)** | Several checklist items were found already satisfied by existing work and just never checked off: domain-policy unit tests and the ten-concurrent-claims race test. A real Playwright E2E suite (`apps/e2e`) now covers the invite-to-claim journey (EN+HE, desktop and a `Pixel 5` mobile viewport), admin invite+promote, keyboard-only login, an axe accessibility scan (caught and fixed a real WCAG contrast bug), the swap-request lifecycle, broadcast notifications with a deep link, and the system console (caught and fixed a real seed-data bug and a missing notification-worker process in the E2E infra itself) — see the Stage 6 Playwright E2E Checkpoint 1-4 notes below. As of 2026-08-17: the Playwright checklist item, the security-checks item (RP ID/origin spoofing closed, see the WebAuthn Verification Checkpoint note), both remaining Verification Commands items (disposable-DB API integration tests via `pnpm run test:integration`, and `pnpm test` coverage thresholds for critical domain modules — see the Disposable Test DB & Coverage Thresholds Checkpoint note, which also caught and fixed a freshly-published high-severity dependency advisory), load testing (new `apps/load` package, `pnpm test:load` — see the Load Testing Checkpoint note, which found a real perf issue: schedule reads breach their provisional budget under concurrent load), offline/slow-network behavior (a genuinely unbuilt feature before this session, not just a missing test — new `useOnlineStatus`/`OfflineBanner` on Home and Schedule, see the Offline Behavior Checkpoint note), everything code-achievable in the accessibility item (RTL reading order, automated target sizing), and — as of the Final Checkpoint, after a correction found by code review — backup/rollback/worker-recovery/swap-expiry-recovery are all fully checked off. All four were rehearsed for real against a disposable database on the shared `docker compose` Postgres/Redis, which is this project's own standing definition of "staging" (Stage 1, 2026-08-10) — an earlier draft of this note incorrectly claimed no such environment existed, contradicting that decision; corrected (see the Final Checkpoint note). Found and fixed a real bug in the backup runbook and a real methodology lesson about Redis-vs-Postgres scheduling state along the way. What remains genuinely open — VoiceOver/NVDA/TalkBack (needs a real device), agreed load-test budgets (needs a product/ops conversation), and Stage 5's Checkpoint 10/pilot exit criteria (needs a provider procured and real users) — is blocked on something outside this agent's reach, not on more code or on infrastructure that turned out to already exist; see the Final Checkpoint note's honesty pass for the full breakdown. **As of 2026-08-20:** the one item that was code-achievable and still open — `apps/e2e` still driving the old passkey ceremony after the password-auth migration — is closed too; the whole suite was rewritten to the password flow and actually run against the live Railway production deployment (not just locally), which is how the two cross-origin production bugs described in "Production Deployment" near the end of this file were actually found. |
-| 7 — Post-MVP Web Expansion | Not started; deliberately deferred behind Stage 8 (2026-08-18 decision) | |
+| 7 — Post-MVP Web Expansion | Mostly deferred behind Stage 8 (2026-08-18 decision), but two items shipped out of order at explicit user request | Team Color Theming (2026-08-20) and the AI-chat-via-OpenRouter checkpoint's parent-facing scope (2026-08-20) are both done — see their own sections below. Fairness reports, digests, audit archive, and admin-scoped chat tools remain unstarted. |
 | **8 — Native Mobile** | **Checkpoints 1-2 of 10 done (2026-08-18)** | Skipped ahead of Stage 7 at explicit user request — see the 2026-08-18 revision note at Stage 8's own heading below. `apps/mobile` now exists (Expo + Expo Router + Metro, monorepo-aware) with `@soccer/contracts`/`@soccer/i18n` wired unmodified and a new `@soccer/ui-tokens/native` module for RN `StyleSheet` consumption (Checkpoint 1), plus a native `LocaleProvider` (`AsyncStorage` persistence, `I18nManager` RTL flip + restart prompt) porting web's exact `{ locale, setLocale, t }` contract (Checkpoint 2) — see the Stage 8 Detailed Implementation Plan and its Checkpoint notes below. |
 
 ### What's done right now
@@ -874,8 +874,8 @@ Depends on a stable Web MVP pilot and prioritizes validated pilot needs.
 - [ ] Add daily/weekly change digests, granular notification preferences, and robust email delivery reporting.
 - [ ] Add advanced audit archive/search experience and end-of-season archival/export workflow.
 - [ ] Add optional multi-shift trade offers only after designing transactional reservation/acceptance semantics and conflict recovery.
-- [ ] Add Claude-powered web chat through the existing command/query layer: tool allowlists, server-side permission evaluation, explicit destructive-action confirmation, concise responses, transcript minimization, and `source: ai_chat` audit context.
-- [ ] Add AI evaluation fixtures in English and Hebrew for questions, valid actions, unsafe requests, ambiguous intents, stale state, and permission denial.
+- [x] Add AI Open Router powered web chat through the existing command/query layer: tool allowlists, server-side permission evaluation, explicit destructive-action confirmation, concise responses, transcript minimization, and `source: ai_chat` audit context. Parent-facing scope shipped 2026-08-20 — see "AI Chat via OpenRouter" below. Admin-action tools are a follow-up.
+- [x] Add AI evaluation fixtures in English and Hebrew for questions, valid actions, unsafe requests, ambiguous intents, stale state, and permission denial. Shipped as targeted integration tests (not a standalone eval harness) alongside the checkpoint above — see its "Tests" bullet.
 - [x] Add per-team accent color theming — see "Team Color Theming" below. Planned 2026-08-20, implemented and shipped the same day.
 
 ### Team Color Theming (shipped 2026-08-20)
@@ -977,6 +977,198 @@ per-row-skip resilience the SSE stream already had, plus a proper
 `describeNotification` case (web) and push-payload case (API) instead of
 relying on their existing generic fallbacks. Confirmed fixed with 3
 consecutive clean `pnpm test:e2e` runs (15/15) after the change.
+
+### AI Chat via OpenRouter (shipped 2026-08-20)
+
+Parent-facing scope of CLAUDE.md §6: a persistent chat bubble (mounted once
+in `AppShell`, hidden on the team-less system console) that answers
+schedule questions and performs the same claim/release/swap actions the
+manual UI does, through the *same* server-side code paths — not a
+reimplementation.
+
+**Scope decisions** (made explicitly with the user before implementation,
+via three rounds of clarifying questions and three parallel architecture
+proposals — minimal-diff, clean-architecture, pragmatic-balance — before
+picking a hybrid of the latter two):
+- **Parent-facing actions only for v1**: shift claim/release, swap
+  request/accept/decline/cancel, plus read-only schedule/stats Q&A.
+  Admin-only tools (add/remove members, sessions, templates, collection
+  points, settings) are an explicit follow-up, not attempted here.
+- **Confirmation is conversational-in-thread, but server-enforced**: the
+  user's stated preference was a conversational "are you sure?" rather than
+  a modal popup — but the actual execution gate is still a deterministic
+  server check (a proposal token), never the model's own read of whether
+  the user said yes. None of the six in-scope actions actually need this
+  gate (claim/release are one-tap self-service per §3.3; swap
+  accept/decline/cancel *is* the consent step, not a second one on top of
+  it) — the mechanism is built and unit-tested now so it's ready when an
+  admin-only destructive tool needs it later, not exercised by any real
+  tool today.
+- **Persistent bubble in `AppShell`**, not a dedicated page — matches
+  CLAUDE.md §6.1's framing and how `AppShell` already mounts cross-page UI
+  (logout, language toggle).
+- **SSE streaming** for responses (token-by-token text, plus discrete
+  tool-call/tool-result/done/error events) — a new hand-rolled `fetch` +
+  `ReadableStream` client (`chat-stream.ts`), not `EventSource` (a JSON body
+  and CSRF header are needed, neither of which `EventSource` supports).
+- **`google/gemini-2.5-flash`** default model (configurable via
+  `OPENROUTER_MODEL`) — picked for solid tool-calling reliability at low
+  cost/latency, which matters more here than for a plain-chat use case since
+  correct tool selection/arguments is safety-critical, not just answer
+  quality.
+- **Chat history is client-side only and ephemeral** — plain React state,
+  lost on reload, nothing persisted server-side beyond what an *executed*
+  action's audit row needs. The simplest reading of CLAUDE.md §6's
+  "transcript minimization," and sidesteps a new retention/deletion policy.
+
+**Implementation:**
+- **Command/query-layer extraction** (the prerequisite CLAUDE.md §6.2's
+  "same backend operations" requirement actually needed): the six in-scope
+  actions' logic — previously inline in `routes/shifts.ts`/
+  `routes/swap-requests.ts` — moved into plain functions in a new
+  `apps/api/src/lib/chat-actions.ts` (`claimShift`, `releaseShift`,
+  `createSwapRequest`, `acceptSwapRequest`, `declineSwapRequest`,
+  `cancelSwapRequest`, plus two read-only functions, `getSchedule`/
+  `getMyStats`), each taking a `ChatAuditSource` (`{source:'app'}` or
+  `{source:'ai_chat', transcript}`) so both the HTTP route and a chat tool
+  call the *exact same* function — same `requireTeamRole` check, same
+  optimistic-lock CAS, same `recordAuditLog`/`recordOutboxEvent` calls. The
+  routes themselves shrank to param-parsing + a single call-through. A pure
+  lift-and-shift refactor (no behavior change) — the full pre-existing
+  `shifts.test.ts`/`swap-requests.test.ts` suites passed unmodified
+  afterward, acting as the regression gate.
+- **Tool allowlist** (`apps/api/src/lib/chat-tools.ts`): 8 hand-written tool
+  definitions (JSON Schema — not generated from the `@soccer/contracts` Zod
+  schemas; 8 flat schemas didn't justify a new `zod-to-json-schema`
+  dependency), each with `allowedRoles` and a `run` pointing at a
+  `chat-actions.ts` function. `allowedRoles` is a *pre-filter* (which tool
+  definitions even get sent to the model, and a fast fail if the model
+  proposes a disallowed one) — never the actual authorization boundary,
+  which stays inside `chat-actions.ts`'s own `requireTeamRole` call, so the
+  two can never disagree about what's actually permitted.
+- **Dispatch** (`apps/api/src/lib/chat-dispatch.ts`): resolves one tool call
+  — allowlist check, arg validation (against the tool's own Zod schema), the
+  confirmation gate (skipped by every current tool), execution, and a
+  dedicated `source:'ai_chat', result:'failure'` audit row for any outcome
+  that never reaches the action's own success-path audit write (denied,
+  invalid args, or a thrown `HttpError` — e.g. a stale-state 409 conflict).
+  A refused or failed AI attempt is traceable the same way a successful one
+  is, per §6.3.
+- **Confirmation tokens** (`apps/api/src/lib/chat-confirmation.ts`):
+  stateless, HMAC-signed (`userId`+`teamId`+`toolName`+canonical `argsJson`
+  + 5-minute expiry) — no server-side store to expire/clean up, and the
+  signature/expiry is independently re-verified server-side rather than
+  trusting a client's say-so. The signing secret is threaded as an explicit
+  function parameter, never read from `env` internally, resolved from a new
+  `app.chatConfirmationSecret` decoration (falls back to
+  `app.openRouterApiKey`) — both new `BuildAppOptions` fields, following the
+  exact pattern `systemAdminEnabled`/`passwordRecoveryProvider` already
+  established, specifically so tests can supply fake values without
+  mutating shared `process.env` (which `env.ts`'s parse-once-at-import-time
+  singleton makes otherwise impossible mid-suite).
+- **OpenRouter client** (`apps/api/src/lib/openrouter.ts`): a thin
+  hand-rolled `fetch`-based streaming wrapper (OpenRouter's
+  `chat/completions` endpoint is OpenAI-compatible) — no SDK dependency for
+  one call site, matching this codebase's existing preference for small
+  purpose-built `lib/` wrappers over generic client libraries (`web-push.ts`,
+  `sse.ts`). Accumulates tool-call argument deltas by stream index (not id,
+  which only appears on a call's first chunk), same as any OpenAI-compatible
+  provider's real streaming shape.
+- **Route** (`apps/api/src/routes/chat.ts`): `POST /teams/:teamId/chat/message`,
+  hijacked (`reply.hijack()`, same pattern as `notifications.ts`'s SSE
+  stream) and terminating (calls `res.end()`, unlike the notification
+  stream's intentionally-infinite connection) — bounded to
+  `MAX_TOOL_ITERATIONS = 4` model↔tool round trips per message so a model
+  that keeps calling tools can't run (and bill) indefinitely. System prompt
+  includes the team's current date/time in its own timezone (needed to
+  resolve "Wednesday"/"this week") and an explicit reply-language
+  instruction from the request's `locale`.
+- **Audit contract**: `packages/contracts/src/audit-log.ts`'s `aiContext`
+  changed from `z.unknown().nullable()` to a real typed
+  `{transcript, translatedAction, result: 'success'|'failure'}` shape (the
+  schema/DB column already existed, anticipating this — `apps/api/src/lib/audit.ts`'s
+  `RecordAuditLogInput` just needed the field actually wired through to
+  `db.auditLog.create`, which it hadn't been).
+- **Rate limiting**: new `ChatRequestAttempt` table + `chat-rate-limit.ts`,
+  mirroring `auth.ts`'s login-attempt pattern exactly (Postgres
+  advisory-lock-serialized rolling-hour count) — every request counts here,
+  not just failures, since each one reaches the paid OpenRouter API
+  regardless of outcome. Defaults: 30/user/hour, 60/IP/hour
+  (`CHAT_MAX_REQUESTS_PER_USER_PER_HOUR`/`_IP_PER_HOUR`).
+- **New env vars** (`env.ts`, `.env.example`): `OPENROUTER_API_KEY`
+  (optional — unset means the feature is gracefully unavailable, same
+  pattern as `VAPID_*`), `OPENROUTER_MODEL` (defaults to
+  `google/gemini-2.5-flash`), `CHAT_CONFIRMATION_SECRET` (optional, falls
+  back to `OPENROUTER_API_KEY`), the two rate-limit thresholds above.
+- **Frontend**: `apps/web/src/components/chat/` (`chat-bubble.tsx`,
+  `chat-panel.tsx`, `chat-message.tsx`, `use-chat-session.ts`) plus
+  `apps/web/src/lib/chat-stream.ts`. `ChatBubble` self-resolves its team
+  (reads `?team=` from `window.location.search` directly, *not*
+  `next/navigation`'s `useSearchParams` — see the note below on why) via its
+  own `api.me()` call, the same way every page already independently
+  bootstraps its own session (no shared session context exists in this app
+  to plug into instead), and renders nothing without a team. Mounted once in
+  `AppShell` via a new `hideChatBubble` prop (set on the two system-console
+  pages, which have no team context). `apps/web/src/lib/api.ts` gained an
+  exported `getCsrfToken()` so the chat stream's own hand-rolled `fetch`
+  call (not going through `api.ts`'s `request()` helper, since its response
+  is a stream, not one parsed JSON body) can still attach the CSRF header
+  every other mutating request does.
+- **Found and fixed while wiring the bubble into `AppShell`**: `useSearchParams()`
+  broke two *existing, unrelated* test files (`system/page.test.tsx`,
+  `system/teams/[teamId]/page.test.tsx`) whose `next/navigation` mocks
+  didn't export it, since those pages never needed it themselves before a
+  globally-mounted component started needing it too. Fixed by having
+  `ChatBubble` read the query param via plain `window.location.search`
+  instead — avoids the router-hook/test-mock coupling entirely rather than
+  patching every affected mock. A related, narrower issue on the same pages:
+  `system/page.test.tsx` asserts an *exact* `api.me` call count, which
+  `ChatBubble`'s own independent `api.me()` call would have thrown off even
+  after the `useSearchParams` fix — resolved by the `hideChatBubble` prop
+  above, which is also the semantically correct call (chat has nothing to
+  operate against on a team-less system-console page).
+
+**Tests** (the "AI evaluation fixtures" checklist item above, delivered as
+targeted integration tests rather than a standalone eval harness):
+`apps/api/test/chat.test.ts` — a real `buildApp()` + real Postgres, with
+only the outbound OpenRouter `fetch` call stubbed (`vi.stubGlobal`,
+scripted SSE frames) since LLM output is otherwise non-deterministic and a
+real key isn't available in CI. Covers: a valid claim end-to-end (shift
+actually claimed, `source:'ai_chat'` audit row with populated `aiContext`);
+an unrecognized/disallowed tool call refused with no mutation and a
+`result:'failure'` audit row; a stale-state conflict (shift claimed by
+someone else mid-flight) surfaced as a friendly failure, not a crash or
+silent no-op; a read-only schedule question; the Hebrew system-prompt
+instruction actually present in the request sent to OpenRouter when
+`locale:'he'`; the 503 "unavailable" fallback with no `OPENROUTER_API_KEY`
+configured; and the rate limiter rejecting a user already at the hourly
+cap. `apps/api/src/lib/chat-confirmation.test.ts` unit-tests the token
+primitive directly (round-trip, tampered args, wrong user/team/tool,
+expiry, malformed, wrong secret) — the part of the confirmation mechanism
+that actually needs to be provably correct, independent of no tool
+exercising it end-to-end yet. Full quality gate green from the repository
+root: `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+(336 API tests, 227 web tests, all passing; API coverage 91.4%
+statements/80.7% branches/93.3% functions/92.4% lines, above every
+threshold). `pnpm run audit` (2 pre-existing, already-documented ignored
+`image-size` advisories from Stage 8 Checkpoint 1, nothing new) and
+`pnpm run secrets:scan` (one pre-existing false-positive on a placeholder
+`<password>` example in this file's own deployment table, predating this
+session, unrelated to the chat feature) both otherwise clean.
+
+**Not done / left open:** admin-action tools (add/remove members, sessions,
+templates, collection points, settings) — the tool-allowlist/dispatch/
+confirmation-token architecture is deliberately built to generalize to them
+(each is "extract the action the same way `chat-actions.ts` did, register
+one more tool"), but none are implemented. The confirmation mechanism is
+untested against a real end-to-end tool call (only the token primitive
+itself and the dispatcher's branch logic, by inspection) since no shipped
+tool triggers it — a real destructive admin tool arriving later should add
+that end-to-end case. No frontend UI exists yet for a confirmation card
+(inline Yes/No in the thread) — deliberately not built for a code path
+nothing can reach today, per this project's own "don't build for
+hypothetical requirements" convention; add it alongside the first tool that
+actually needs it.
 
 ## Stage 8: Native Mobile Application
 
@@ -1590,6 +1782,18 @@ migration.
   alongside this work was deliberately deferred until after this production
   hardening landed — see Stage 7's new "Team Color Theming" planning
   section above. No code exists for it yet.
-- **Next concrete action:** either resume Stage 8 (native mobile,
-  Checkpoint 3 — see above) or start implementing Team Color Theming, per
-  user direction; both are unstarted and independent of each other.
+- **Update (2026-08-20):** Team Color Theming shipped (see its own section
+  above). A third post-launch incident in this same cross-origin
+  session/CSRF area surfaced afterward, reported by a real user: a stale
+  (revoked/expired) `soccer_session` cookie permanently blocked login with
+  "Missing or invalid CSRF token", since `assertCsrfSafe` gated on cookie
+  *presence* rather than *validity*. Fixed by checking `request.currentUser`
+  instead — see docs/deployment.md's "Post-launch incident: stale session
+  cookie permanently blocked login" section for the full write-up, and
+  `apps/api/src/lib/cookies.ts`. Regression tests added; full API suite
+  (321 tests) still green.
+- **Next concrete action:** Stage 7's AI-chat-via-OpenRouter checkpoint is
+  now in progress (backend command/query-layer extraction, tool dispatch,
+  and the streaming route are built; frontend chat bubble and tests are
+  still open). Stage 8 (native mobile, Checkpoint 3) remains the other
+  unstarted, independent option once chat lands.
