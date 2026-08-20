@@ -307,11 +307,11 @@ describe('HomePage', () => {
 
     const mineSection = screen.getByText('Your upcoming shifts').closest('section');
     expect(mineSection).not.toBeNull();
-    expect(within(mineSection!).getByText(/Pick-up · Downtown Park/)).toBeInTheDocument();
+    expect(within(mineSection!).getByText(/From practice · Downtown Park/)).toBeInTheDocument();
 
     const helpSection = screen.getByText('Shifts that need a driver').closest('section');
     expect(helpSection).not.toBeNull();
-    expect(within(helpSection!).getByText(/Drop-off · Oak St/)).toBeInTheDocument();
+    expect(within(helpSection!).getByText(/To practice · Oak St/)).toBeInTheDocument();
   });
 
   it('lets a parent claim an open shift from the help-needed list', async () => {
@@ -329,7 +329,7 @@ describe('HomePage', () => {
     });
 
     renderWithProviders(<HomePage />);
-    await screen.findByText(/Drop-off · Oak St/);
+    await screen.findByText(/To practice · Oak St/);
 
     fireEvent.click(screen.getByRole('button', { name: /^claim$/i }));
 
@@ -358,7 +358,7 @@ describe('HomePage', () => {
     });
 
     renderWithProviders(<HomePage />);
-    await screen.findByText(/Pick-up · Downtown Park/);
+    await screen.findByText(/From practice · Downtown Park/);
 
     fireEvent.click(screen.getByRole('button', { name: /^release$/i }));
 
@@ -464,9 +464,9 @@ describe('HomePage', () => {
 
     const statsSection = (await screen.findByText('My stats')).closest('section');
     expect(statsSection).not.toBeNull();
-    expect(within(statsSection!).getByText('Drop-off: 3')).toBeInTheDocument();
-    expect(within(statsSection!).getByText('Pick-up: 2')).toBeInTheDocument();
-    expect(within(statsSection!).getByText('Drop-off: 1.5')).toBeInTheDocument();
-    expect(within(statsSection!).getByText('Pick-up: 0.8')).toBeInTheDocument();
+    expect(within(statsSection!).getByText('To practice: 3')).toBeInTheDocument();
+    expect(within(statsSection!).getByText('From practice: 2')).toBeInTheDocument();
+    expect(within(statsSection!).getByText('To practice: 1.5')).toBeInTheDocument();
+    expect(within(statsSection!).getByText('From practice: 0.8')).toBeInTheDocument();
   });
 });

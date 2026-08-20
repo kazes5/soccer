@@ -197,7 +197,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    expect(await screen.findByText('Drop-off · Oak St')).toBeInTheDocument();
+    expect(await screen.findByText('To practice · Oak St')).toBeInTheDocument();
     expect(screen.getByText('Open')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^claim$/i }));
@@ -214,7 +214,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
     expect(screen.queryByRole('button', { name: /^claim$/i })).not.toBeInTheDocument();
   });
 
@@ -226,7 +226,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
     expect(screen.getByRole('button', { name: /^claim$/i })).toBeInTheDocument();
   });
 
@@ -237,7 +237,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    const pointLabel = await screen.findByText('Drop-off · Oak St');
+    const pointLabel = await screen.findByText('To practice · Oak St');
     const pointRow = pointLabel.closest('div')?.parentElement;
     expect(pointRow?.className).toContain('bg-status-mine-subtle');
   });
@@ -253,7 +253,7 @@ describe('SchedulePage', () => {
     vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ shiftStatus: 'open' }));
 
     const { rerender } = renderWithProviders(<SchedulePage />);
-    const pointLabel = await screen.findByText('Drop-off · Oak St');
+    const pointLabel = await screen.findByText('To practice · Oak St');
     expect(pointLabel.closest('div')?.parentElement?.className).toContain('bg-status-mine-subtle');
 
     searchParams = new URLSearchParams({ team: 'team-1' });
@@ -267,7 +267,7 @@ describe('SchedulePage', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Drop-off · Oak St').closest('div')?.parentElement?.className,
+        screen.getByText('To practice · Oak St').closest('div')?.parentElement?.className,
       ).not.toContain('bg-status-mine-subtle'),
     );
   });
@@ -278,7 +278,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    const pointLabel = await screen.findByText('Drop-off · Oak St');
+    const pointLabel = await screen.findByText('To practice · Oak St');
     const pointRow = pointLabel.closest('div')?.parentElement;
     expect(pointRow?.className).not.toContain('bg-status-mine-subtle');
   });
@@ -427,7 +427,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
     expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /manage players/i })).toBeInTheDocument();
@@ -441,7 +441,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
     expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
   });
@@ -459,7 +459,7 @@ describe('SchedulePage', () => {
     const expectedWallClock = instantToWallClock(new Date(FUTURE_STARTS_AT), 'Asia/Jerusalem');
 
     renderWithProviders(<SchedulePage />);
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
 
     fireEvent.click(screen.getByRole('button', { name: /^edit/i }));
     expect(screen.getByLabelText('Date')).toHaveValue(expectedWallClock.date);
@@ -491,7 +491,7 @@ describe('SchedulePage', () => {
     });
 
     renderWithProviders(<SchedulePage />);
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^cancel session$/i }));
@@ -512,7 +512,7 @@ describe('SchedulePage', () => {
     );
 
     renderWithProviders(<SchedulePage />);
-    await screen.findByText('Drop-off · Oak St');
+    await screen.findByText('To practice · Oak St');
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^cancel session$/i }));

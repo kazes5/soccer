@@ -145,7 +145,7 @@ describe('AdminCollectionPointsPage', () => {
 
     expect(await screen.findByText('Oak St')).toBeInTheDocument();
     expect(screen.getByText('123 Oak St')).toBeInTheDocument();
-    expect(screen.getByText('Pickup')).toBeInTheDocument();
+    expect(screen.getByText('Pickup location')).toBeInTheDocument();
   });
 
   it('lets an admin add a new collection point, patching it into the list from the create response', async () => {

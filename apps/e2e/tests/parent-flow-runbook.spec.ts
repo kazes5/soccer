@@ -172,8 +172,8 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
       await gotoSchedule(avi);
       await expect(avi.getByRole('list', { name: 'Schedule' })).toBeVisible();
       // Each session breaks shifts down by direction *and* collection point.
-      await expect(avi.getByText('Drop-off · Oak St').first()).toBeVisible();
-      await expect(avi.getByText('Pick-up · Central Field').first()).toBeVisible();
+      await expect(avi.getByText('To practice · Oak St').first()).toBeVisible();
+      await expect(avi.getByText('From practice · Central Field').first()).toBeVisible();
 
       // Window B logs in here, right as it's first needed.
       await loginAsSeededUser(sarah, baseURL, SARAH);
@@ -277,7 +277,7 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
     // regular parent here.
     await test.step('Phase 6 — Collection-point roster (Sarah)', async () => {
       const manageButton = sarah
-        .getByRole('button', { name: /Manage players for Pick-up · Central Field/ })
+        .getByRole('button', { name: /Manage players for From practice · Central Field/ })
         .last();
       await manageButton.click();
 
