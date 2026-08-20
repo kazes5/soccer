@@ -34,14 +34,24 @@ import { DEMO_PASSWORD, acceptInvite, loginAsSeededUser } from '../fixtures/scen
  */
 
 const TEAM = 'U-12 Wildcats';
-const AVI = { locale: 'en' as const, phone: '+15550000002', teamName: TEAM, parentName: 'Avi Levi' };
+const AVI = {
+  locale: 'en' as const,
+  phone: '+15550000002',
+  teamName: TEAM,
+  parentName: 'Avi Levi',
+};
 const SARAH = {
   locale: 'en' as const,
   phone: '+15550000003',
   teamName: TEAM,
   parentName: 'Sarah Katz',
 };
-const DANA = { locale: 'en' as const, phone: '+15550000001', teamName: TEAM, parentName: 'Dana Cohen' };
+const DANA = {
+  locale: 'en' as const,
+  phone: '+15550000001',
+  teamName: TEAM,
+  parentName: 'Dana Cohen',
+};
 
 // Bilingual (like fixtures/scenarios.ts's own locators): Phase 8 switches
 // Sarah's window to Hebrew mid-flow, and these two helpers get used both
@@ -180,7 +190,9 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
       // button — clicking it should fail cleanly, not silently or with a
       // crash.
       await sarah.getByRole('button', { name: 'Claim' }).last().click();
-      await expect(sarah.getByText(`That shift was just claimed by ${AVI.parentName}.`)).toBeVisible();
+      await expect(
+        sarah.getByText(`That shift was just claimed by ${AVI.parentName}.`),
+      ).toBeVisible();
 
       // Releasing flips it straight back to open for everyone.
       await avi.getByRole('button', { name: 'Release' }).first().click();
@@ -194,7 +206,9 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
       await expect(avi.getByText('You').first()).toBeVisible();
 
       await sarah.reload();
-      await coveredByRow(sarah, AVI.parentName).getByRole('button', { name: 'Request swap' }).click();
+      await coveredByRow(sarah, AVI.parentName)
+        .getByRole('button', { name: 'Request swap' })
+        .click();
       await expect(sarah.getByText('Swap request sent.')).toBeVisible();
 
       await avi.goto('/swaps');
@@ -215,7 +229,9 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
       await expect(avi.getByText('You').first()).toBeVisible();
 
       await sarah.reload();
-      await coveredByRow(sarah, AVI.parentName).getByRole('button', { name: 'Request swap' }).click();
+      await coveredByRow(sarah, AVI.parentName)
+        .getByRole('button', { name: 'Request swap' })
+        .click();
       await expect(sarah.getByText('Swap request sent.')).toBeVisible();
 
       await avi.goto('/swaps');
@@ -296,7 +312,9 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
       await expect(avi.getByRole('heading', { name: 'Account' })).toBeVisible();
       const newPassword = 'Harbor-Meadow!Kite-47';
       await avi.getByLabel('Current password', { exact: true }).fill(DEMO_PASSWORD);
-      await avi.getByLabel('New password (15 characters or more)', { exact: true }).fill(newPassword);
+      await avi
+        .getByLabel('New password (15 characters or more)', { exact: true })
+        .fill(newPassword);
       await avi.getByLabel('Confirm new password', { exact: true }).fill(newPassword);
       await avi.getByRole('button', { name: 'Change password', exact: true }).click();
       await expect(
@@ -385,9 +403,7 @@ test('the Parent Flow Runbook, phase by phase', async ({ browser, baseURL }) => 
         await sarah.context().setOffline(false);
       }
 
-      await expect(
-        sarah.getByText(/you're offline — showing the last loaded data/i),
-      ).toBeHidden();
+      await expect(sarah.getByText(/you're offline — showing the last loaded data/i)).toBeHidden();
       await expect(claimButton).toBeEnabled();
     });
 
