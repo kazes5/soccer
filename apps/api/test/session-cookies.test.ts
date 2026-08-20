@@ -230,4 +230,49 @@ describe('cookie-based sessions and CSRF', () => {
 
     expect(response.statusCode).toBe(403);
   });
+
+  // Regression test for a production bug (2026-08-21): unlike the stale/revoked
+  // cookie case above, this is a genuinely *valid* session cookie for a
+  // *different* account still sitting in the browser (e.g. someone already
+  // logged in elsewhere, then opens the login form fresh to sign into a
+  // second account). `currentUser` resolves successfully, so the old fix
+  // above didn't help — login itself doesn't act on that unrelated session,
+  // so it must not be CSRF-gated by its mere presence.
+  it('still allows login when the browser sends a different, still-valid session cookie and no CSRF header', async () => {
+    const { cookieHeader: otherAccountCookie } = await loginWithCookies('+15551240014');
+    const phone = '+15551240015';
+    await loginWithCookies(phone);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/password/login',
+      headers: { cookie: otherAccountCookie },
+      payload: { identifier: phone, password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('still allows team creation when the browser sends a different, still-valid session cookie and no CSRF header', async () => {
+    const { cookieHeader: otherAccountCookie } = await loginWithCookies('+15551240016');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/teams',
+      headers: { cookie: otherAccountCookie },
+      payload: {
+        teamName: 'U-13 Falcons',
+        season: 'Fall 2026',
+        adminName: 'Noa Peretz',
+        adminPhone: '+15551240017',
+        adminPassword: PASSWORD,
+        adminPasswordConfirmation: PASSWORD,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    createdTeamIds.push(body.team.id);
+    createdUserIds.push(body.admin.id);
+  });
 });

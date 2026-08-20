@@ -8,6 +8,23 @@ export const CSRF_COOKIE_NAME = 'soccer_csrf';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/**
+ * Routes that establish or reset credentials themselves and never call
+ * `requireAuth` — they don't act on whatever session the browser happens to
+ * be carrying, so there's nothing for CSRF to protect even if an unrelated
+ * *valid* session cookie is present (e.g. a different account still logged
+ * in on the same browser, or a first-time visitor who never had a reason to
+ * fetch a CSRF token yet). See `assertCsrfSafe`'s doc comment.
+ */
+const CSRF_EXEMPT_ROUTES = new Set([
+  '/auth/password/login',
+  '/auth/password/forgot',
+  '/auth/password/reset',
+  '/teams',
+  '/invites/:code/verify-code',
+  '/invites/:code/complete-password-onboarding',
+]);
+
 function baseCookieOptions() {
   const secure = env.NODE_ENV === 'production';
   return {
@@ -88,11 +105,23 @@ export function resolveSessionToken(request: FastifyRequest): string | undefined
  * unauthenticated endpoint) with "Missing or invalid CSRF token", since the frontend has
  * no CSRF token to send until a request like login actually succeeds. Found in
  * production 2026-08-20; see docs/deployment.md's "Post-launch incidents" section.
+ *
+ * The `currentUser` check alone isn't sufficient, though: it only proves *some*
+ * session cookie is valid, not that the request is acting on it. A browser that
+ * already has a genuinely valid (non-stale) session for one account — from a
+ * previous login, a different accepted invite, or simply never logging out —
+ * still carries that cookie when POSTing to `/auth/password/login`,
+ * `/teams` (team creation), or a password-reset endpoint on a *fresh page
+ * load*, before the frontend has cached any CSRF token to send. Those routes
+ * never call `requireAuth`, so the existing session (valid or not) is
+ * irrelevant to what they do — see `CSRF_EXEMPT_ROUTES` above. Found in
+ * production 2026-08-21.
  */
 export function assertCsrfSafe(request: FastifyRequest): void {
   if (!MUTATING_METHODS.has(request.method)) return;
   if (request.headers.authorization) return;
   if (!request.currentUser) return;
+  if (CSRF_EXEMPT_ROUTES.has(request.routeOptions.url ?? '')) return;
 
   const csrfCookie = request.cookies[CSRF_COOKIE_NAME];
   const csrfHeader = request.headers['x-csrf-token'];
