@@ -9,6 +9,10 @@ export const playerSummarySchema = z.object({
   // than the column would make a future admin-edit or backfill path that
   // legitimately produces age 0 fail every roster read for that team.
   age: z.number().int().nonnegative().nullable(),
+  // Denormalized here (not just parentUserIds on playerDetailSchema below)
+  // so the admin players list can show who's linked without a second
+  // per-player roster lookup/join on the client.
+  parentNames: z.array(z.string()),
 });
 export type PlayerSummary = z.infer<typeof playerSummarySchema>;
 

@@ -26,7 +26,14 @@ describe('acceptInvitePlayerSchema', () => {
 describe('playerListResponseSchema', () => {
   it('accepts a roster with a null age', () => {
     const result = playerListResponseSchema.safeParse({
-      players: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Yossi Levi', age: null }],
+      players: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Yossi Levi',
+          age: null,
+          parentNames: [],
+        },
+      ],
     });
 
     expect(result.success).toBe(true);
@@ -34,7 +41,7 @@ describe('playerListResponseSchema', () => {
 
   it('rejects a player missing a valid id', () => {
     const result = playerListResponseSchema.safeParse({
-      players: [{ id: 'not-a-uuid', name: 'Yossi Levi', age: null }],
+      players: [{ id: 'not-a-uuid', name: 'Yossi Levi', age: null, parentNames: [] }],
     });
 
     expect(result.success).toBe(false);
@@ -42,7 +49,29 @@ describe('playerListResponseSchema', () => {
 
   it('accepts age 0, since the response schema describes what is storable, not the stricter registration business rule', () => {
     const result = playerListResponseSchema.safeParse({
-      players: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Newborn Sibling', age: 0 }],
+      players: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Newborn Sibling',
+          age: 0,
+          parentNames: [],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('denormalizes linked parent names onto each entry', () => {
+    const result = playerListResponseSchema.safeParse({
+      players: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Yossi Levi',
+          age: 11,
+          parentNames: ['Avi Levi'],
+        },
+      ],
     });
 
     expect(result.success).toBe(true);

@@ -88,8 +88,8 @@ const emptyRoster: TeamRosterResponse = { members: [] };
 
 const playersFixture: PlayerListResponse = {
   players: [
-    { id: 'player-1', name: 'Yossi Levi', age: 11 },
-    { id: 'player-2', name: 'Alon Cohen', age: 9 },
+    { id: 'player-1', name: 'Yossi Levi', age: 11, parentNames: [] },
+    { id: 'player-2', name: 'Alon Cohen', age: 9, parentNames: [] },
   ],
 };
 

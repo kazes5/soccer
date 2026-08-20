@@ -272,6 +272,30 @@ describe('players', () => {
     expect(linkCount).toBe(1);
   });
 
+  it('denormalizes linked parent names onto both the create response and the list', async () => {
+    const { adminToken, teamId } = await setUpTeam();
+    const { userId: parentId } = await addParent(teamId, adminToken);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/players`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: 'Linked Player', parentUserIds: [parentId] },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().parentNames).toEqual(['Avi Levi']);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/players`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const listed = (list.json().players as Array<{ id: string; parentNames: string[] }>).find(
+      (p) => p.id === created.json().id,
+    );
+    expect(listed?.parentNames).toEqual(['Avi Levi']);
+  });
+
   it('records player_created, player_updated, and player_deleted audit entries', async () => {
     const { adminToken, teamId } = await setUpTeam();
 

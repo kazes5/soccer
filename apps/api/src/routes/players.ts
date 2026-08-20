@@ -39,11 +39,21 @@ export default async function playerRoutes(app: FastifyInstance) {
     const players = await app.prisma.player.findMany({
       where: { teamId: params.teamId },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, age: true },
+      select: {
+        id: true,
+        name: true,
+        age: true,
+        parents: { select: { user: { select: { name: true } } } },
+      },
     });
 
     return playerListResponseSchema.parse({
-      players: players.map((player) => ({ id: player.id, name: player.name, age: player.age })),
+      players: players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        age: player.age,
+        parentNames: player.parents.map((p) => p.user.name),
+      })),
     });
   });
 
@@ -62,7 +72,7 @@ export default async function playerRoutes(app: FastifyInstance) {
           age: body.age,
           parents: { create: body.parentUserIds.map((userId) => ({ userId })) },
         },
-        include: { parents: { select: { userId: true } } },
+        include: { parents: { select: { userId: true, user: { select: { name: true } } } } },
       });
       await recordAuditLog(tx, {
         teamId: params.teamId,
@@ -80,6 +90,7 @@ export default async function playerRoutes(app: FastifyInstance) {
       id: player.id,
       name: player.name,
       age: player.age,
+      parentNames: player.parents.map((p) => p.user.name),
       parentUserIds: player.parents.map((p) => p.userId),
     });
   });
@@ -111,7 +122,7 @@ export default async function playerRoutes(app: FastifyInstance) {
             ? { parents: { create: body.parentUserIds.map((userId) => ({ userId })) } }
             : {}),
         },
-        include: { parents: { select: { userId: true } } },
+        include: { parents: { select: { userId: true, user: { select: { name: true } } } } },
       });
       await recordAuditLog(tx, {
         teamId: params.teamId,
@@ -125,10 +136,14 @@ export default async function playerRoutes(app: FastifyInstance) {
       return updated;
     });
 
+    // `include` on the update above always reflects the relation's current
+    // state post-write, regardless of whether `parentUserIds` was part of
+    // this call's `data` — so `player.parents` is correct either way.
     return playerDetailSchema.parse({
       id: player.id,
       name: player.name,
       age: player.age,
+      parentNames: player.parents.map((p) => p.user.name),
       parentUserIds: player.parents.map((p) => p.userId),
     });
   });

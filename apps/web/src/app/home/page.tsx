@@ -35,6 +35,7 @@ import {
   swapsNavItem,
 } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { useOnDataChanged } from '@/lib/data-changed-bus';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import { formatSessionStartsAt, updateShiftInSessions } from '@/lib/sessions';
 import { useOnlineStatus } from '@/lib/use-online-status';
@@ -288,6 +289,10 @@ function HomeWorkspace({
     loadPendingSwaps().catch(() => {});
   }, [loadSessions, loadStats, loadPendingSwaps]);
   const isOnline = useOnlineStatus(handleReconnect);
+  // Chat runs in a separate, persistently-mounted component (chat-bubble.tsx)
+  // — a claim/release/swap made through it doesn't otherwise reach this
+  // page's own state. See data-changed-bus.ts.
+  useOnDataChanged(handleReconnect);
 
   async function handleClaim(shiftId: string) {
     setPendingShiftId(shiftId);

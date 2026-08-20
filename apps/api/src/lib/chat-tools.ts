@@ -4,6 +4,15 @@ import * as actions from './chat-actions';
 import type { ChatAuditSource } from './chat-actions';
 import type { TeamRole } from '../../generated/prisma/client';
 import type { CurrentUser } from '../plugins/auth';
+import { instantToWallClock } from './timezone';
+
+/** `"yyyy-MM-dd HH:mm"` in the team's local timezone — the same wall-clock
+ *  values the web Schedule page renders, meant to be quoted verbatim by the
+ *  model rather than recomputed from the raw UTC `startsAt` instant. */
+function formatLocal(startsAtIso: string, timeZone: string): string {
+  const { date, time } = instantToWallClock(new Date(startsAtIso), timeZone);
+  return `${date} ${time}`;
+}
 
 /**
  * The tool allowlist CLAUDE.md §6.1 calls for. `allowedRoles` is a
@@ -46,7 +55,7 @@ export const CHAT_TOOLS: ChatTool[] = [
   {
     name: 'get_schedule',
     description:
-      "Get the team's practice sessions, with each shift's status and who (if anyone) holds it. Use this to answer questions about the schedule, who's covering a shift, or which shifts are still open. Optionally bound by date range.",
+      'Get the team\'s practice sessions, with each shift\'s id, status, who (if anyone) holds it, and a ready-to-read local time. Use this to answer schedule questions AND — critically — to look up the shiftId a claim_shift/release_shift/create_swap_request call needs: a user will describe a shift by day, location, or direction ("Wednesday\'s drop-off", "the Oak St pickup"), never by its id, so call this first, find the matching entry yourself, and use its `shift.id`. Never ask the user for a shift id. Optionally bound by date range.',
     parameters: {
       type: 'object',
       properties: {
@@ -61,8 +70,27 @@ export const CHAT_TOOLS: ChatTool[] = [
     argsSchema: z.object({ from: z.string().optional(), to: z.string().optional() }),
     allowedRoles: ['parent', 'admin'],
     confirmationRequired: false,
-    run: (app, currentUser, teamId, args) =>
-      actions.getSchedule(app, currentUser, teamId, args as { from?: string; to?: string }),
+    run: async (app, currentUser, teamId, args) => {
+      const [schedule, team] = await Promise.all([
+        actions.getSchedule(app, currentUser, teamId, args as { from?: string; to?: string }),
+        app.prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { timezone: true } }),
+      ]);
+      // The model is unreliable at converting `startsAt`'s raw UTC ISO
+      // instant to the team's local time itself (this is exactly what
+      // produced a real reported bug: the chat reply's stated time didn't
+      // match the Schedule page's, which always renders in team-local time)
+      // — so this pre-computes the same conversion the web Schedule page
+      // uses (see apps/web/src/lib/timezone.ts's instantToWallClock) and
+      // hands the model an unambiguous string to quote verbatim instead of
+      // a value to do arithmetic on.
+      return {
+        teamTimezone: team.timezone,
+        sessions: schedule.sessions.map((session) => ({
+          ...session,
+          localStartsAt: formatLocal(session.startsAt, team.timezone),
+        })),
+      };
+    },
   },
   {
     name: 'get_my_stats',

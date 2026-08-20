@@ -260,6 +260,54 @@ describe('chat', () => {
     expect(sentBody.messages[0].content).toMatch(/Hebrew/);
   });
 
+  it('tells the model the local time and not to ask users for shift ids', async () => {
+    const { adminToken, teamId } = await setUpTeamWithShift();
+    fetchMock.mockResolvedValueOnce(textResponse('ok'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/chat/message`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { message: 'hi', history: [], locale: 'en' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const sentBody = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    const systemContent = sentBody.messages[0].content as string;
+    // The team defaults to Asia/Jerusalem (prisma schema default); this
+    // should be stated as an already-local wall clock, not a raw UTC ISO
+    // instant left for the model to convert itself.
+    expect(systemContent).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+    expect(systemContent).toMatch(/local date\/time/i);
+    expect(systemContent).toMatch(/never ask the user for a shift id/i);
+  });
+
+  it("includes each session's team-local start time in get_schedule's tool result", async () => {
+    const { adminToken, teamId } = await setUpTeamWithShift();
+
+    fetchMock
+      .mockResolvedValueOnce(toolCallResponse('call_1', 'get_schedule', '{}'))
+      .mockResolvedValueOnce(textResponse('Monday at 18:00.'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/chat/message`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { message: "what's my schedule?", history: [], locale: 'en' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const toolResultMessage = JSON.parse(fetchMock.mock.calls[1]![1].body as string).messages.at(
+      -1,
+    ) as { content: string };
+    const toolResultPayload = JSON.parse(toolResultMessage.content) as {
+      teamTimezone: string;
+      sessions: Array<{ localStartsAt: string }>;
+    };
+    expect(toolResultPayload.teamTimezone).toBe('Asia/Jerusalem');
+    expect(toolResultPayload.sessions[0]!.localStartsAt).toMatch(/^\d{4}-\d{2}-\d{2} 18:00$/);
+  });
+
   it('reports the assistant as unavailable when no OPENROUTER_API_KEY is configured', async () => {
     const unconfiguredApp = buildApp();
     try {
