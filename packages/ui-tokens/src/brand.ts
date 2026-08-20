@@ -88,7 +88,12 @@ export const brandColorPalette: Record<BrandColorKey, BrandColorEntry> = {
     dark: { base: '#fb923c', subtle: '#3a1f0a', on: '#fdba74', contrast: '#1f0f02' },
   },
   yellow: {
-    light: { base: '#854d0e', subtle: '#fef9c3', on: '#713f12', contrast: '#ffffff' },
+    // `base` set to the user's requested #FFEF00 (2026-08-20 SOC-58 fix) — a
+    // pure, saturated yellow. Same white-text problem as `orange` above:
+    // white-on-#FFEF00 fails WCAG AA badly, so `contrast` switches to black
+    // (~17.6:1) instead of the palette's usual white — verified by
+    // brand.test.ts. `subtle`/`on` are unaffected by the `base` swap.
+    light: { base: '#ffef00', subtle: '#fef9c3', on: '#713f12', contrast: '#000000' },
     dark: { base: '#facc15', subtle: '#3f3502', on: '#fde047', contrast: '#221c00' },
   },
 };

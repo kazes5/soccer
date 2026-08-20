@@ -15,7 +15,7 @@ describe('buildPushPayload', () => {
     });
 
     expect(result.title).toBe('Shift claimed');
-    expect(result.body).toBe('Avi Levi claimed the Drop-off shift at Oak St');
+    expect(result.body).toBe('Avi Levi claimed the To practice shift at Oak St');
     expect(result.url).toBe('/schedule?team=team-1&session=session-1&shift=shift-1');
   });
 
@@ -123,7 +123,7 @@ describe('buildPushPayload', () => {
     });
 
     expect(result.title).toBe('Upcoming shift reminder');
-    expect(result.body).toBe('Pick-up at Oak St');
+    expect(result.body).toBe('From practice at Oak St');
     expect(result.url).toBe('/schedule?team=team-1&session=session-1&shift=shift-1');
   });
 
