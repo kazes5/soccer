@@ -1170,6 +1170,116 @@ nothing can reach today, per this project's own "don't build for
 hypothetical requirements" convention; add it alongside the first tool that
 actually needs it.
 
+### Admin Players UI & Orange Brand-Color Update (2026-08-20)
+
+Two small, user-requested changes, out of band from the stage work above.
+
+**Admin players screen** — a genuine gap, not a permission change: CLAUDE.md's
+role table already specified players as admin-managed (create/edit/delete;
+GET already parent+admin-readable), and the backend (`apps/api/src/routes/players.ts`)
+already fully implemented all four operations — but **no frontend page ever
+called them**. Players could only be created via the seed script or a direct
+API call. New `/admin/players` (`apps/web/src/app/admin/players/page.tsx`),
+mirroring `/admin/collection-points`'s exact list/add/edit/delete pattern
+(same `Dialog`/`ConfirmDialog`/`DataList` components), plus a new nav entry
+in `admin-nav.tsx`'s shared `adminNavItems`. Parent linking uses the same
+checkbox-list pattern already established for session collection-point
+rosters (`schedule/page.tsx`'s `FieldsetGroup` of player checkboxes, mirrored
+here as a fieldset of team-roster checkboxes instead). One backend addition
+beyond wiring up the existing endpoints: `playerSummarySchema` gained a
+denormalized `parentNames: string[]` (both `packages/contracts/src/player.ts`
+and the GET/POST/PATCH handlers in `players.ts`) so the list can show who's
+linked without a second per-player roster join on the client — the list
+endpoint previously returned only `{id, name, age}`.
+
+**Orange brand color** — `packages/ui-tokens/src/brand.ts`'s `orange.light.base`
+changed to the user's requested `#FF7e00` from the original `#c2410c`. This
+one didn't just drop in: `#FF7e00` is far more saturated than every other
+`light.base` in this palette (all deliberately dark/muted so white
+`contrast` text stays WCAG-AA-readable on them — see the file's own doc
+comment) — white-on-`#FF7e00` is only ~2.6:1, well under the 4.5:1 floor
+`brand.test.ts` enforces. Fixed by switching `light.contrast` to the same
+near-black (`#1f0f02`) already used for this hue's dark-mode `contrast`,
+verified passing by the existing automated contrast test rather than
+eyeballed. `subtle`/`on` (the secondary badge-tint pair) were left
+unchanged — untouched by this request and not part of what the test's
+`contrast`-vs-`base` pairing checks.
+
+**Tests:** new `apps/web/src/app/admin/players/page.test.tsx` (10 cases,
+mirroring `collection-points/page.test.tsx`'s coverage shape: redirects,
+nav, empty state, list-with-parents, add/edit/delete, server-error
+surfacing) and a new API case in `apps/api/test/players.test.ts` asserting
+`parentNames` on both the create response and the list. Two pre-existing
+test files needed fixture updates for the new required `parentNames` field
+(`packages/contracts/src/player.test.ts`, `apps/web/src/app/schedule/page.test.tsx`)
+— not regressions, just fixtures now needing the field like any real caller
+would supply. Full quality gate green: `pnpm format:check && pnpm lint &&
+pnpm typecheck && pnpm test && pnpm build` (337 API tests, 237 web tests,
+99 contracts tests, all passing).
+
+### AI Chat Bug Fixes: Live Updates, Shift-Id Resolution, Timezone Consistency (2026-08-20)
+
+Three bugs reported from actually using the shipped AI chat feature (Stage 7's
+OpenRouter checkpoint), all real and now fixed:
+
+**1. Actions weren't visible until refresh.** Chat runs in a persistent
+`ChatBubble` mounted once in `AppShell`, entirely separate from whichever
+page (`schedule/page.tsx`, `home/page.tsx`) happens to be mounted underneath
+it — a claim/release/swap made through chat had no way to reach an
+already-rendered page's local state. Fixed with a same-tab pub-sub, new
+`apps/web/src/lib/data-changed-bus.ts`: `use-chat-session.ts` calls
+`broadcastDataChanged()` whenever a `tool-result` event reports success;
+`schedule/page.tsx` and `home/page.tsx` call `useOnDataChanged(...)` with
+their existing quiet-refetch handler (`refreshSilently`/`handleReconnect`).
+Deliberately not wired through the notification SSE stream
+(`apps/web/src/lib/sse.ts`) — that's a team-wide, cross-tab broadcast with
+its own leader-election machinery, more than this same-tab, own-action case
+needs; a plain `window` `CustomEvent` is enough.
+
+**2. The assistant asked for exact shift ids.** Nothing in the system prompt
+or any tool description told the model it could — and should — resolve a
+user's natural-language shift description ("Wednesday's drop-off") into a
+`shiftId` itself, via `get_schedule`, rather than asking the user to supply
+one directly (which no user ever has). Fixed by rewriting `get_schedule`'s
+description in `apps/api/src/lib/chat-tools.ts` to spell out the
+resolve-then-call pattern, and adding an explicit instruction to the same
+effect in `chat.ts`'s `systemPrompt()`.
+
+**3. The chat reply's stated time didn't match the Schedule page's.**
+Root cause: `getSchedule` (`chat-actions.ts`) returns each session's
+`startsAt` as a raw UTC ISO instant (correct — it's the shared
+`SessionListResponse` contract, and the web Schedule page does its own
+UTC→local conversion via `apps/web/src/lib/sessions.ts`'s
+`formatSessionStartsAt`), and the system prompt's "current date/time" line
+was similarly `new Date().toISOString()` — raw UTC mislabeled as team-local.
+The model was left to do UTC→local arithmetic itself, unreliably. Fixed by
+pre-computing local wall-clock strings server-side with the same
+`instantToWallClock` (`apps/api/src/lib/timezone.ts`, Luxon-based) the web
+side's equivalent conversion is built on, rather than shipping the
+conversion as a task for the model: `get_schedule`'s tool `run` wrapper in
+`chat-tools.ts` now fetches the team's timezone alongside the schedule and
+augments each session with a `localStartsAt` (`"yyyy-MM-dd HH:mm"`) field
+and a top-level `teamTimezone`, deliberately done in the tool wrapper (which
+returns `Promise<unknown>`) rather than by changing `getSchedule`'s own
+return shape, since that shape is the shared contract other callers (the
+REST route) rely on unchanged. `chat.ts`'s `systemPrompt()` now takes the
+`Date` directly and converts it the same way, and both the prompt and the
+tool-result instruct the model to quote `localStartsAt`/the prompt's local
+time verbatim rather than recomputing anything from `startsAt`.
+
+**Tests:** two new cases in `apps/api/test/chat.test.ts` — one asserting the
+system prompt contains no raw UTC ISO timestamp and does contain the local
+date/time and shift-id-resolution instructions, one asserting
+`get_schedule`'s tool-result payload carries `teamTimezone` and a correctly
+formatted `localStartsAt` per session (team default timezone is
+`Asia/Jerusalem` per the Prisma schema default, so the fixed practice time
+of `18:00` local resolves predictably). No new web-side tests for the
+data-changed bus itself — it's a two-line indirection over each page's
+already-tested `refreshSilently`/reconnect handler, not new behavior to
+verify. Full quality gate green: `pnpm format:check && pnpm lint &&
+pnpm typecheck && pnpm test && pnpm build` (339 API tests, 237 web tests,
+all passing).
+
 ## Stage 8: Native Mobile Application
 
 Starts only after the web API and interaction patterns are stable. It must reuse server commands, contracts, translation catalog, and design tokens rather than fork behavior.

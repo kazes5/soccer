@@ -2,6 +2,7 @@
 
 import type { ChatTurn } from '@soccer/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { broadcastDataChanged } from '@/lib/data-changed-bus';
 import { streamChatMessage, type ChatStreamEvent } from '@/lib/chat-stream';
 
 export interface ChatToolCall {
@@ -57,6 +58,13 @@ export function useChatSession(teamId: string | null, locale: 'en' | 'he') {
               ],
             };
           case 'tool-result':
+            // A successful action (claim/release/swap — the read-only
+            // schedule/stats tools succeed too, but a redundant quiet
+            // refetch from those is harmless) means whatever Schedule/Home
+            // page happens to be mounted right now is showing stale data —
+            // see data-changed-bus.ts for why chat can't just update it
+            // directly.
+            if (event.ok) broadcastDataChanged();
             return {
               ...message,
               toolCalls: message.toolCalls.map((call) =>

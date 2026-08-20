@@ -8,6 +8,7 @@ import { toolsAllowedFor } from '../lib/chat-tools';
 import { HttpError } from '../lib/errors';
 import { env } from '../env';
 import { streamChatCompletion, type OpenRouterMessage } from '../lib/openrouter';
+import { instantToWallClock } from '../lib/timezone';
 
 const teamParamsSchema = z.object({ teamId: z.string().uuid() });
 
@@ -16,16 +17,24 @@ const teamParamsSchema = z.object({ teamId: z.string().uuid() });
  *  running (and billing) indefinitely. */
 const MAX_TOOL_ITERATIONS = 4;
 
-function systemPrompt(locale: 'en' | 'he', teamTimezone: string, nowIso: string): string {
+function systemPrompt(locale: 'en' | 'he', teamTimezone: string, now: Date): string {
   const languageLine =
     locale === 'he'
       ? 'Respond in Hebrew, natural and concise, regardless of what language the user wrote in.'
       : 'Respond in English, natural and concise, regardless of what language the user wrote in.';
+  // Pre-converted to the team's local wall clock — a model asked to do this
+  // math itself (from a raw UTC instant) does it unreliably, which is
+  // exactly what produced a real reported bug: the chat's stated time didn't
+  // match the Schedule page's. Same reasoning applies to `get_schedule`'s
+  // `localStartsAt` field (see chat-tools.ts).
+  const { date, time } = instantToWallClock(now, teamTimezone);
   return [
     'You are the chat assistant for the Soccer Carpool Coordinator, a youth soccer carpool scheduling app.',
     'You can answer questions about the schedule and take real actions using ONLY the tools provided to you — never claim an action succeeded unless a tool call actually confirms it.',
     'Keep replies short and mobile-friendly (a couple of sentences), not a long report.',
-    `The current date/time is ${nowIso} in the team's timezone (${teamTimezone}) — use this to resolve relative dates like "Wednesday" or "this week".`,
+    `The current local date/time for this team is ${date} ${time} (timezone ${teamTimezone}) — use this to resolve relative dates like "Wednesday" or "this week". This is already local time, not UTC — do not convert it further.`,
+    "When a tool result includes a `localStartsAt` field, quote that value (not `startsAt`, which is UTC) when telling the user a session's time.",
+    'Shifts and swap requests are identified internally by id, but users never know or say these ids — they describe a shift by day, location, or direction. Call get_schedule to resolve the id yourself before claim_shift/release_shift/create_swap_request; never ask the user for a shift id or swap-request id.',
     'If a tool call fails or is refused, explain plainly what happened; do not retry the same call with different arguments hoping it works.',
     languageLine,
   ].join(' ');
@@ -81,7 +90,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     const messages: OpenRouterMessage[] = [
       {
         role: 'system',
-        content: systemPrompt(body.locale, team.timezone, new Date().toISOString()),
+        content: systemPrompt(body.locale, team.timezone, new Date()),
       },
       ...body.history.map((turn) => ({ role: turn.role, content: turn.content })),
       { role: 'user', content: body.message },

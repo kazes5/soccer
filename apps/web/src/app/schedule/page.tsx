@@ -40,6 +40,7 @@ import {
   swapsNavItem,
 } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
+import { useOnDataChanged } from '@/lib/data-changed-bus';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
   formatSessionStartsAt,
@@ -271,6 +272,10 @@ function ScheduleSessions({
       });
   }, [fetchAll]);
   const isOnline = useOnlineStatus(refreshSilently);
+  // Chat runs in a separate, persistently-mounted component (chat-bubble.tsx)
+  // — a claim/release/swap made through it doesn't otherwise reach this
+  // page's own state. See data-changed-bus.ts.
+  useOnDataChanged(refreshSilently);
 
   const playersById = useMemo(
     () => new Map((players ?? []).map((player) => [player.id, player.name])),
