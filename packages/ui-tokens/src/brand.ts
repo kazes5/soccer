@@ -77,7 +77,14 @@ export const brandColorPalette: Record<BrandColorKey, BrandColorEntry> = {
     dark: { base: '#f87171', subtle: '#3f1414', on: '#fca5a5', contrast: '#1a0505' },
   },
   orange: {
-    light: { base: '#c2410c', subtle: '#ffedd5', on: '#9a3412', contrast: '#ffffff' },
+    // `base` set to the user's requested #FF7e00 (2026-08-20) — a much more
+    // vivid/saturated orange than this palette's other entries, which all
+    // lean dark/muted specifically so white `contrast` text stays readable
+    // on them. This one doesn't: white-on-#FF7e00 is only ~2.6:1, well
+    // under WCAG AA's 4.5:1 floor, so `contrast` switches to the same
+    // near-black already used for this same hue family's dark-mode
+    // `contrast` below (`#1f0f02`) instead — verified by brand.test.ts.
+    light: { base: '#ff7e00', subtle: '#ffedd5', on: '#9a3412', contrast: '#1f0f02' },
     dark: { base: '#fb923c', subtle: '#3a1f0a', on: '#fdba74', contrast: '#1f0f02' },
   },
   yellow: {

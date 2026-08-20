@@ -8,6 +8,7 @@ import {
   Paintbrush,
   Repeat,
   Settings,
+  UserRound,
   Users,
 } from 'lucide-react';
 import type { ShellNavItem } from '@/components/ui/shell';
@@ -63,6 +64,7 @@ export function adminNavItems(
   t: Translate,
   activePage?:
     | 'members'
+    | 'players'
     | 'collection-points'
     | 'schedule-templates'
     | 'notification-settings'
@@ -75,6 +77,12 @@ export function adminNavItems(
       label: t('adminMembers.title'),
       icon: <Users className="size-full" />,
       active: activePage === 'members',
+    },
+    {
+      href: `/admin/players?team=${encodeURIComponent(teamId)}`,
+      label: t('adminPlayers.title'),
+      icon: <UserRound className="size-full" />,
+      active: activePage === 'players',
     },
     {
       href: `/admin/collection-points?team=${encodeURIComponent(teamId)}`,
