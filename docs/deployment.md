@@ -130,11 +130,12 @@ server, which the worker doesn't run.
 
 Environment variables:
 
-| Variable              | Value                                         | Why                                                                                                                                                                       |
-| --------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`            | `production`                                  |                                                                                                                                                                           |
-| `PORT`                | `8080`                                        | Next.js `start` honors `PORT`; matches the generated domain's target port.                                                                                                |
-| `NEXT_PUBLIC_API_URL` | `https://soccerapi-production.up.railway.app` | `NEXT_PUBLIC_*` vars are inlined into the client bundle — the end user's browser calls the API directly, so this must be `api`'s **public** domain, not its internal one. |
+| Variable              | Value                                             | Why                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`            | `production`                                      |                                                                                                                                                                                                                                                                                                                     |
+| `PORT`                | `8080`                                            | Next.js `start` honors `PORT`; matches the generated domain's target port.                                                                                                                                                                                                                                          |
+| `NEXT_PUBLIC_API_URL` | `https://soccerweb-production.up.railway.app/api` | Points at this app's **own** domain (`/api/*`), not the API's domain directly — see `API_PROXY_TARGET` below and the "Mobile login" incident. `NEXT_PUBLIC_*` vars are inlined into the client bundle.                                                                                                              |
+| `API_PROXY_TARGET`    | `https://soccerapi-production.up.railway.app`     | Server-side only (no `NEXT_PUBLIC_` prefix). The real destination `next.config.ts`'s `rewrites()` proxies `/api/*` to. Unset in local dev — `rewrites()` returns `[]` and `NEXT_PUBLIC_API_URL` there (`http://localhost:4000`) talks to the API directly, since same-host-different-port dev was never cross-site. |
 
 ## Reference variables vs. literal connection strings
 
@@ -360,6 +361,56 @@ no route-by-route allowlist needed. Regression tests added in
 cookie no longer blocks login; a genuinely authenticated mutation still
 correctly requires the CSRF header). See `apps/api/src/lib/cookies.ts`'s
 `assertCsrfSafe` doc comment for the full reasoning.
+
+### Post-launch incident: mobile login silently bounced back to `/login` (2026-08-21)
+
+A fourth cross-origin session bug, reported by a real user: password login
+worked correctly on desktop Chrome but, on mobile Safari and Chrome for iOS,
+submitting the correct phone/password just redisplayed the login form with
+no error message.
+
+Root cause: `SameSite=None; Secure` (the fix for the first incident above)
+made the session cookie survive a cross-site `fetch()` in Chrome, but it
+does nothing about Safari/WebKit's Intelligent Tracking Prevention, which
+unconditionally discards a `Set-Cookie` from a genuinely cross-site
+response regardless of its `SameSite` value — and every iOS browser is
+WebKit under the hood (Apple requires it), so this wasn't Safari-specific,
+it affected every browser on iOS. The failure was invisible up the stack:
+`POST /auth/password/login` returned `200` and the login form correctly
+called `router.push('/home')` — but `/home`'s mount effect immediately
+calls `GET /auth/me` to load the session, found no cookie to send, got
+`401`, and `router.replace`d straight back to `/login`
+(`apps/web/src/app/home/page.tsx`). All three previous cross-origin
+incidents in this section were found and verified in desktop Chrome, which
+doesn't block third-party cookies by default, so this WebKit-specific gap
+was never exercised until a real mobile user hit it.
+
+Fixed at the architecture level rather than another cookie-attribute
+patch, since no cookie attribute makes WebKit accept a cross-site cookie:
+`apps/web/next.config.ts` now proxies `/api/*` to the real API (via the new
+`API_PROXY_TARGET` env var, server-side only) using Next.js `rewrites()`,
+and `NEXT_PUBLIC_API_URL` points at this app's own domain
+(`https://soccerweb-production.up.railway.app/api`) instead of the API's
+domain directly. The browser now only ever talks to its own origin; the
+web server makes the real API call itself, where cross-site cookie rules
+don't apply at all. This makes the session cookie genuinely first-party,
+which fixes ITP and makes the `SameSite=None; Secure` / CSRF-in-body
+workarounds from the first two incidents unnecessary going forward (left
+in place — they're harmless once same-site, and reverting them isn't
+required for correctness). Local dev is unaffected: `API_PROXY_TARGET` is
+unset there, so `rewrites()` returns `[]` and `NEXT_PUBLIC_API_URL`
+(`http://localhost:4000`) talks to the API directly, exactly as before —
+same-host-different-port dev was never cross-site to begin with.
+
+One area flagged for explicit post-deploy verification rather than assumed
+safe: the AI chat's SSE stream (`apps/web/src/lib/chat-stream.ts`) and the
+live notification stream (`apps/web/src/lib/sse.ts`'s `EventSource`) both
+now route through this same proxy. Next.js `rewrites()` to an external
+destination are documented to support streaming responses, but this is the
+one path most likely to reveal a proxy-buffering quirk in practice —
+confirm a chat response actually streams token-by-token (not one big
+delayed chunk) and that live notifications still arrive in real time after
+this deploy, on both desktop and mobile.
 
 ### Bootstrapping the super-admin account in production
 
