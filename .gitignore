@@ -29,6 +29,7 @@ apps/api/generated/
 apps/e2e/playwright-report/
 apps/e2e/test-results/
 apps/e2e/blob-report/
+.playwright-mcp/
 
 # Turborepo (unused today, ignored defensively)
 .turbo/
