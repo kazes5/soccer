@@ -169,6 +169,57 @@ describe('chat', () => {
     });
   });
 
+  it('hands a pasted coach message to the import review screen', async () => {
+    const { adminToken, teamId } = await setUpTeamWithShift();
+    const coachMessage = 'לוז אימונים שבוע הבא ראשון 17:30 בית דני';
+
+    fetchMock
+      .mockResolvedValueOnce(toolCallResponse('call_1', 'review_coach_message', '{}'))
+      .mockResolvedValueOnce(textResponse('Tap Review changes to check them.'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/chat/message`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { message: coachMessage, history: [], locale: 'he' },
+    });
+
+    const sentTools = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ).tools.map((tool: { function: { name: string } }) => tool.function.name);
+    expect(sentTools).toContain('review_coach_message');
+
+    const events = parseSseEvents(response.body);
+    expect(events).toContainEqual({
+      event: 'schedule-import-suggested',
+      data: { message: coachMessage },
+    });
+    // Nothing on the schedule changes from the chat itself.
+    expect(await app.prisma.auditLog.count({ where: { teamId, source: 'ai_chat' } })).toBe(0);
+  });
+
+  it("doesn't offer the coach-message hand-off when the team has import turned off", async () => {
+    const { adminToken, teamId } = await setUpTeamWithShift();
+    await app.prisma.team.update({
+      where: { id: teamId },
+      data: { coachMessageImportEnabled: false },
+    });
+    fetchMock.mockResolvedValueOnce(textResponse('Here is the schedule.'));
+
+    await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/chat/message`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { message: 'what is on this week?', history: [], locale: 'en' },
+    });
+
+    const sentTools = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    ).tools.map((tool: { function: { name: string } }) => tool.function.name);
+    expect(sentTools).not.toContain('review_coach_message');
+    expect(sentTools).toContain('get_schedule');
+  });
+
   it('refuses an unrecognized tool call, never mutates anything, and audits the failure', async () => {
     const { adminToken, teamId } = await setUpTeamWithShift();
 

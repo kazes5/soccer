@@ -36,6 +36,15 @@ function formatLocalFields(locale: Locale, fields: ScheduleImportSessionFields):
   });
 }
 
+function formatLocalDate(locale: Locale, date: string): string {
+  return formatDate(locale, new Date(`${date}T00:00:00Z`), {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'UTC',
+  });
+}
+
 /**
  * Paste → review → apply. The first step sends the message to the assistant
  * and gets back a proposal; nothing is saved until the member applies the
@@ -44,16 +53,20 @@ function formatLocalFields(locale: Locale, fields: ScheduleImportSessionFields):
 export function ScheduleImportDialog({
   teamId,
   timeZone,
+  initialMessage = '',
   onClose,
   onApplied,
 }: {
   teamId: string;
   timeZone: string;
+  /** Pre-filled from the chat hand-off (coach-import-handoff.ts). */
+  initialMessage?: string;
   onClose: () => void;
   onApplied: (result: ScheduleImportApplyResponse) => void;
 }) {
   const { t, locale } = useLocale();
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialMessage);
+  const [replaceWeek, setReplaceWeek] = useState(false);
   const [referenceDate, setReferenceDate] = useState(
     () => instantToWallClock(new Date(), timeZone).date,
   );
@@ -67,7 +80,12 @@ export function ScheduleImportDialog({
     setError(null);
     setIsBusy(true);
     try {
-      const result = await api.previewScheduleImport(teamId, { message, referenceDate, locale });
+      const result = await api.previewScheduleImport(teamId, {
+        message,
+        referenceDate,
+        locale,
+        replaceWeek,
+      });
       setProposal(result);
       setSelected(new Set(result.operations.map((_, index) => index)));
     } catch (err) {
@@ -139,6 +157,18 @@ export function ScheduleImportDialog({
               className={inputClassName}
             />
           </Field>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={replaceWeek}
+              onChange={(e) => setReplaceWeek(e.target.checked)}
+              className={`mt-1 ${focusRingClassName}`}
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">{t('scheduleImport.replaceWeekLabel')}</span>
+              <span className="text-ink-muted">{t('scheduleImport.replaceWeekHint')}</span>
+            </span>
+          </label>
           {error && <FormError>{error}</FormError>}
           <button
             type="submit"
@@ -150,6 +180,14 @@ export function ScheduleImportDialog({
         </form>
       ) : (
         <div className="flex flex-col gap-4">
+          {proposal.replacedWeek && (
+            <p className="rounded-lg bg-status-attention-subtle p-3 text-sm text-status-attention-on">
+              {t('scheduleImport.replacingWeek', {
+                start: formatLocalDate(locale, proposal.replacedWeek.start),
+                end: formatLocalDate(locale, proposal.replacedWeek.end),
+              })}
+            </p>
+          )}
           {proposal.operations.length === 0 ? (
             <p className="text-sm text-ink-muted">{t('scheduleImport.noChanges')}</p>
           ) : (
@@ -269,7 +307,9 @@ function OperationRow({
           <span className="text-xs text-ink-muted">
             {operation.reason === 'explicit'
               ? t('scheduleImport.cancelReasonExplicit')
-              : t('scheduleImport.cancelReasonNotInMessage')}
+              : operation.reason === 'replaced'
+                ? t('scheduleImport.cancelReasonReplaced')
+                : t('scheduleImport.cancelReasonNotInMessage')}
           </span>
         )}
       </span>

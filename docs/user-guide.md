@@ -100,6 +100,18 @@ member can paste it into the app instead of waiting for an admin:
    is still pending).
 5. Uncheck anything that looks wrong, then select **Apply**.
 
+To start the week over instead, tick **Replace this week’s existing schedule**
+before step 4. Every upcoming session in the message's week (practices and
+games) is proposed for cancellation, and each session the coach lists is added
+fresh. Drivers who had signed up for that week's sessions need to sign up
+again. The week is the one the coach's schedule covers, or the Sunday–Saturday
+week of the message's first session. Cancelled sessions stay visible, labeled
+**Cancelled**.
+
+You can also paste the coach's message into the chat assistant. It replies
+with a **Review changes** button that opens this same screen with the message
+filled in.
+
 Nothing is saved until you apply. Applied changes appear in the audit log as
 AI actions and every team member gets one notification summarizing them.
 Games show a **Game** badge with their title and notes (kit, transport, start

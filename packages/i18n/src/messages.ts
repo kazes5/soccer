@@ -248,6 +248,12 @@ export const en = {
   'scheduleImport.applied':
     'Schedule updated: {created} added, {updated} changed, {cancelled} cancelled.',
   'scheduleImport.locationTbd': 'Location to be announced',
+  'scheduleImport.replaceWeekLabel': 'Replace this week’s existing schedule',
+  'scheduleImport.replaceWeekHint':
+    'Cancels every session already scheduled in the message’s week and adds the coach’s sessions fresh. Drivers signed up for that week will need to sign up again.',
+  'scheduleImport.replacingWeek':
+    'Replacing the week of {start}–{end}: its current sessions are cancelled and the coach’s sessions are added.',
+  'scheduleImport.cancelReasonReplaced': 'Replaced by the coach’s schedule for this week',
 
   'system.title': 'System administration',
   'system.subtitle': 'See every team and manage global administrator access.',
@@ -874,6 +880,12 @@ export const he: Record<MessageKey, string> = {
   'scheduleImport.back': 'עריכת ההודעה',
   'scheduleImport.applied': 'הלו״ז עודכן: {created} נוספו, {updated} שונו, {cancelled} בוטלו.',
   'scheduleImport.locationTbd': 'מיקום יימסר בהמשך',
+  'scheduleImport.replaceWeekLabel': 'להחליף את הלו״ז הקיים של השבוע',
+  'scheduleImport.replaceWeekHint':
+    'מבטל את כל המפגשים שכבר קבועים בשבוע של ההודעה ומוסיף מחדש את המפגשים של המאמן. נהגים שנרשמו לשבוע הזה יצטרכו להירשם שוב.',
+  'scheduleImport.replacingWeek':
+    'מחליפים את השבוע {start}–{end}: המפגשים הקיימים בו מבוטלים, והמפגשים של המאמן נוספים.',
+  'scheduleImport.cancelReasonReplaced': 'מוחלף בלו״ז של המאמן לשבוע זה',
 
   'system.title': 'ניהול המערכת',
   'system.subtitle': 'צפייה בכל הקבוצות וניהול הרשאות מנהלי המערכת.',

@@ -191,6 +191,13 @@ function normalizeTime(time: string): string {
  * doesn't mention are proposed for cancellation too — games are left alone,
  * since a practice-schedule message routinely omits a game announced
  * separately. Past days are never touched.
+ *
+ * With `replaceWeek`, matching is skipped for the message's week instead:
+ * every upcoming session that week (practices and games alike) is proposed
+ * for cancellation, and every event the message gives for that week becomes
+ * a new session. The week is the message's own full-schedule period when it
+ * has one, otherwise the Sunday–Saturday week of its earliest event. Events
+ * outside that week are still matched as usual.
  */
 export function planOperations(input: {
   extraction: ScheduleExtraction;
@@ -199,7 +206,12 @@ export function planOperations(input: {
   now: Date;
   /** Used for a new session whose place the message doesn't give yet. */
   locationPlaceholder: string;
-}): { operations: ScheduleImportOperation[]; unresolved: string[] } {
+  replaceWeek?: boolean;
+}): {
+  operations: ScheduleImportOperation[];
+  unresolved: string[];
+  replacedWeek: { start: string; end: string } | null;
+} {
   const { extraction, timeZone, now } = input;
   const today = instantToWallClock(now, timeZone).date;
   const lastAllowed = DateTime.fromISO(today, { zone: 'utc' })
@@ -220,6 +232,43 @@ export function planOperations(input: {
   const events = [...extraction.events].sort((a, b) =>
     `${a.date} ${normalizeTime(a.time)}`.localeCompare(`${b.date} ${normalizeTime(b.time)}`),
   );
+
+  // A "full schedule" covers one week at most. Without this bound, one
+  // pasted message claiming to be the schedule for months ahead would
+  // propose cancelling every practice in that span.
+  const period =
+    extraction.fullSchedule &&
+    extraction.periodStart &&
+    extraction.periodEnd &&
+    extraction.periodStart <= extraction.periodEnd &&
+    DateTime.fromISO(extraction.periodEnd, { zone: 'utc' }).diff(
+      DateTime.fromISO(extraction.periodStart, { zone: 'utc' }),
+      'days',
+    ).days <=
+      MAX_FULL_SCHEDULE_DAYS - 1
+      ? { start: extraction.periodStart, end: extraction.periodEnd }
+      : null;
+
+  const firstEvent = events.find((event) => inRange(event.date));
+  const replacedWeek = !input.replaceWeek
+    ? null
+    : (period ?? (firstEvent ? sundayToSaturdayWeekOf(firstEvent.date) : null));
+
+  if (replacedWeek) {
+    // Claimed up front, so the event loop below finds nothing to match in
+    // this week and creates every event fresh.
+    for (const { session, fields } of candidates) {
+      if (fields.date < replacedWeek.start || fields.date > replacedWeek.end) continue;
+      claimed.add(session.id);
+      operations.push({
+        type: 'cancel',
+        sessionId: session.id,
+        expectedUpdatedAt: session.updatedAt.toISOString(),
+        before: fields,
+        reason: 'replaced',
+      });
+    }
+  }
 
   for (const event of events) {
     const time = normalizeTime(event.time);
@@ -297,22 +346,6 @@ export function planOperations(input: {
     }
   }
 
-  // A "full schedule" covers one week at most. Without this bound, one
-  // pasted message claiming to be the schedule for months ahead would
-  // propose cancelling every practice in that span.
-  const period =
-    extraction.fullSchedule &&
-    extraction.periodStart &&
-    extraction.periodEnd &&
-    extraction.periodStart <= extraction.periodEnd &&
-    DateTime.fromISO(extraction.periodEnd, { zone: 'utc' }).diff(
-      DateTime.fromISO(extraction.periodStart, { zone: 'utc' }),
-      'days',
-    ).days <=
-      MAX_FULL_SCHEDULE_DAYS - 1
-      ? { start: extraction.periodStart, end: extraction.periodEnd }
-      : null;
-
   if (period) {
     for (const { session, fields } of candidates) {
       if (claimed.has(session.id) || fields.kind !== 'practice') continue;
@@ -334,5 +367,15 @@ export function planOperations(input: {
   };
   operations.sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
 
-  return { operations, unresolved };
+  return { operations, unresolved, replacedWeek };
+}
+
+function sundayToSaturdayWeekOf(date: string): { start: string; end: string } {
+  const day = DateTime.fromISO(date, { zone: 'utc' });
+  // Luxon weekdays run Monday=1 … Sunday=7.
+  const sunday = day.minus({ days: day.weekday % 7 });
+  return {
+    start: sunday.toFormat('yyyy-MM-dd'),
+    end: sunday.plus({ days: 6 }).toFormat('yyyy-MM-dd'),
+  };
 }

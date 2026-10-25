@@ -2,13 +2,16 @@
 
 import { focusRingClassName } from '@soccer/ui-tokens';
 import { Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocale } from '@/components/locale-provider';
+import { requestCoachImport } from '@/lib/coach-import-handoff';
 import { ChatMessage } from './chat-message';
 import { useChatSession } from './use-chat-session';
 
 export function ChatPanel({ teamId, onClose }: { teamId: string; onClose: () => void }) {
   const { t, locale } = useLocale();
+  const router = useRouter();
   const { messages, isStreaming, sendMessage } = useChatSession(teamId, locale);
   const [draft, setDraft] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
@@ -46,7 +49,14 @@ export function ChatPanel({ teamId, onClose }: { teamId: string; onClose: () => 
       <div ref={listRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
         {messages.length === 0 && <p className="text-sm text-ink-muted">{t('chat.emptyState')}</p>}
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
+          <ChatMessage
+            key={message.id}
+            message={message}
+            onReviewImport={(coachMessage) => {
+              onClose();
+              requestCoachImport(teamId, coachMessage, (href) => router.push(href));
+            }}
+          />
         ))}
       </div>
 

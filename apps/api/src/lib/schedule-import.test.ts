@@ -337,6 +337,102 @@ describe('planOperations', () => {
   });
 });
 
+describe('planOperations with replaceWeek', () => {
+  function planReplacing(input: { extraction: ScheduleExtraction; sessions: PlannerSession[] }) {
+    return planOperations({
+      ...input,
+      timeZone: TZ,
+      now: NOW,
+      locationPlaceholder: PLACEHOLDER,
+      replaceWeek: true,
+    });
+  }
+
+  it('cancels the whole week, games included, and creates every event fresh', () => {
+    const monday = session('2026-10-26', '17:30');
+    const tuesdayGame = session('2026-10-27', '20:00', { kind: 'game', title: 'גביע' });
+    const nextWeek = session('2026-11-02', '17:30');
+
+    const result = planReplacing({
+      sessions: [monday, tuesdayGame, nextWeek],
+      extraction: extraction({
+        events: [
+          // Same date and time as an existing session — still a fresh create.
+          {
+            date: '2026-10-26',
+            time: '17:30',
+            kind: 'practice',
+            title: null,
+            location: 'בית דני',
+            notes: null,
+          },
+          {
+            date: '2026-10-29',
+            time: '19:45',
+            kind: 'practice',
+            title: null,
+            location: 'כפר שלם',
+            notes: null,
+          },
+        ],
+        fullSchedule: true,
+        periodStart: '2026-10-25',
+        periodEnd: '2026-10-31',
+      }),
+    });
+
+    expect(result.replacedWeek).toEqual({ start: '2026-10-25', end: '2026-10-31' });
+    expect(result.operations).toEqual([
+      expect.objectContaining({ type: 'cancel', sessionId: monday.id, reason: 'replaced' }),
+      expect.objectContaining({
+        type: 'create',
+        after: expect.objectContaining({ date: '2026-10-26', time: '17:30' }),
+      }),
+      expect.objectContaining({ type: 'cancel', sessionId: tuesdayGame.id, reason: 'replaced' }),
+      expect.objectContaining({
+        type: 'create',
+        after: expect.objectContaining({ date: '2026-10-29', fieldLocation: 'כפר שלם' }),
+      }),
+    ]);
+    // The following week is outside the message's week and isn't touched.
+    expect(
+      result.operations.some((op) => op.type !== 'create' && op.sessionId === nextWeek.id),
+    ).toBe(false);
+  });
+
+  it("uses the earliest event's Sunday–Saturday week when the message gives no period", () => {
+    const wednesday = session('2026-10-28', '17:00');
+    const thursday = session('2026-10-29', '17:00');
+
+    const result = planReplacing({
+      sessions: [wednesday, thursday],
+      extraction: extraction({
+        events: [
+          {
+            date: '2026-10-30',
+            time: '12:00',
+            kind: 'game',
+            title: 'גביע המדינה',
+            location: null,
+            notes: null,
+          },
+        ],
+      }),
+    });
+
+    expect(result.replacedWeek).toEqual({ start: '2026-10-25', end: '2026-10-31' });
+    expect(result.operations.map((op) => op.type)).toEqual(['cancel', 'cancel', 'create']);
+  });
+
+  it('replaces nothing when the message gives no events or week', () => {
+    const result = planReplacing({
+      sessions: [session('2026-10-28', '17:00')],
+      extraction: extraction({}),
+    });
+    expect(result).toEqual({ operations: [], unresolved: [], replacedWeek: null });
+  });
+});
+
 describe('planOperations full-schedule bound', () => {
   it('ignores a "full schedule" claim spanning more than one week', () => {
     const result = plan({

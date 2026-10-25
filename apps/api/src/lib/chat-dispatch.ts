@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { recordAuditLog } from './audit';
 import { createConfirmationToken, verifyConfirmationToken } from './chat-confirmation';
-import { findTool } from './chat-tools';
+import { REVIEW_COACH_MESSAGE_TOOL, findTool } from './chat-tools';
 import { HttpError } from './errors';
 import type { TeamRole } from '../../generated/prisma/client';
 import type { CurrentUser } from '../plugins/auth';
@@ -108,5 +108,6 @@ export async function executeToolCall(
 
 function summarize(toolName: string): string {
   if (toolName === 'get_schedule' || toolName === 'get_my_stats') return 'Retrieved.';
+  if (toolName === REVIEW_COACH_MESSAGE_TOOL) return 'Ready to review.';
   return `Done: ${toolName.replace(/_/g, ' ')}.`;
 }
