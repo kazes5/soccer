@@ -337,6 +337,20 @@ describe('planOperations', () => {
   });
 });
 
+describe('planOperations full-schedule bound', () => {
+  it('ignores a "full schedule" claim spanning more than one week', () => {
+    const result = plan({
+      sessions: [session('2026-10-28', '17:00'), session('2026-11-20', '17:00')],
+      extraction: extraction({
+        fullSchedule: true,
+        periodStart: '2026-10-25',
+        periodEnd: '2027-01-31',
+      }),
+    });
+    expect(result.operations).toEqual([]);
+  });
+});
+
 describe('parseExtraction', () => {
   it('keeps well-formed entries and drops malformed ones', () => {
     const parsed = parseExtraction({

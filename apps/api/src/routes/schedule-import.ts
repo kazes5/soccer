@@ -169,6 +169,11 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
       now,
       locationPlaceholder: translate(body.locale, 'scheduleImport.locationTbd'),
     });
+    // Matches the apply request's own cap — a proposal that couldn't be
+    // applied anyway is refused here rather than handed to the member.
+    if (plan.operations.length > 50) {
+      throw new HttpError(422, 'This message describes too many changes to apply at once.');
+    }
     // Signed in its parsed (canonical key order) form — the same form apply
     // re-derives from its own parsed request body before verifying.
     const operations = z.array(scheduleImportOperationSchema).parse(plan.operations);
@@ -257,6 +262,16 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
           const fields = operation.after;
           const startsAt = localDateTimeToInstant(fields.date, fields.time, team.timezone);
           if (isPastCalendarDay(startsAt, team.timezone)) throw new HttpError(409, staleMessage);
+          // Creates are what make a proposal replayable — updates and cancels
+          // are already single-use through their `updatedAt` guard. Refusing a
+          // create when a session already starts at that exact time stops the
+          // same signed proposal (valid for 30 minutes) from being applied again
+          // to stack duplicate sessions and broadcasts.
+          const duplicate = await tx.practiceSession.findFirst({
+            where: { teamId: params.teamId, startsAt, status: 'scheduled' },
+            select: { id: true },
+          });
+          if (duplicate) throw new HttpError(409, staleMessage);
           const session = await createSessionWithShifts(tx, {
             teamId: params.teamId,
             templateId: null,

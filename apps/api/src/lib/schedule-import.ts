@@ -26,6 +26,10 @@ const HEBREW_WEEKDAYS = ['שני', 'שלישי', 'רביעי', 'חמישי', 'ש
  *  mistake rather than a real plan — coach messages cover days to weeks. */
 const MAX_DAYS_AHEAD = 120;
 
+/** The longest period a "this is the full schedule" message may cover — the
+ *  Sunday–Saturday week coach messages are written for. */
+const MAX_FULL_SCHEDULE_DAYS = 7;
+
 const nullableText = z
   .string()
   .nullish()
@@ -293,10 +297,26 @@ export function planOperations(input: {
     }
   }
 
-  if (extraction.fullSchedule && extraction.periodStart && extraction.periodEnd) {
+  // A "full schedule" covers one week at most. Without this bound, one
+  // pasted message claiming to be the schedule for months ahead would
+  // propose cancelling every practice in that span.
+  const period =
+    extraction.fullSchedule &&
+    extraction.periodStart &&
+    extraction.periodEnd &&
+    extraction.periodStart <= extraction.periodEnd &&
+    DateTime.fromISO(extraction.periodEnd, { zone: 'utc' }).diff(
+      DateTime.fromISO(extraction.periodStart, { zone: 'utc' }),
+      'days',
+    ).days <=
+      MAX_FULL_SCHEDULE_DAYS - 1
+      ? { start: extraction.periodStart, end: extraction.periodEnd }
+      : null;
+
+  if (period) {
     for (const { session, fields } of candidates) {
       if (claimed.has(session.id) || fields.kind !== 'practice') continue;
-      if (fields.date < extraction.periodStart || fields.date > extraction.periodEnd) continue;
+      if (fields.date < period.start || fields.date > period.end) continue;
       claimed.add(session.id);
       operations.push({
         type: 'cancel',

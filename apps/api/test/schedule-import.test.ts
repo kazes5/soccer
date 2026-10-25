@@ -261,6 +261,56 @@ describe('coach-message schedule import', () => {
     });
   });
 
+  it('refuses to apply the same proposal twice', async () => {
+    const { teamId, parentToken, monday, wednesday } = await setUpTeam();
+    const proposal = (await preview(teamId, parentToken, monday, wednesday)).json();
+    // Only the create — the op an `updatedAt` guard can't make single-use.
+    const payload = {
+      message: COACH_MESSAGE,
+      operations: proposal.operations,
+      proposalToken: proposal.proposalToken,
+      selected: [1],
+    };
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/apply`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload,
+    });
+    expect(first.statusCode).toBe(200);
+
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/apply`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload,
+    });
+    expect(replay.statusCode).toBe(409);
+    expect(await app.prisma.practiceSession.count({ where: { teamId } })).toBe(4);
+    expect(
+      await app.prisma.outboxEvent.count({ where: { teamId, eventType: 'schedule_imported' } }),
+    ).toBe(1);
+  });
+
+  it("rejects another member applying a proposal that isn't theirs", async () => {
+    const { teamId, adminToken, parentToken, monday, wednesday } = await setUpTeam();
+    const proposal = (await preview(teamId, parentToken, monday, wednesday)).json();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/apply`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        message: COACH_MESSAGE,
+        operations: proposal.operations,
+        proposalToken: proposal.proposalToken,
+        selected: [0],
+      },
+    });
+    expect(response.statusCode).toBe(409);
+  });
+
   it('applies only the selected changes', async () => {
     const { teamId, parentToken, monday, wednesday } = await setUpTeam();
     const proposal = (await preview(teamId, parentToken, monday, wednesday)).json();
