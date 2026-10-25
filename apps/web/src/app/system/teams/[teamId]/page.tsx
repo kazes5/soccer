@@ -4,6 +4,7 @@ import type { SystemTeamMember, TeamRole } from '@soccer/contracts';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { CoachMessageImportToggle } from '@/components/coach-message-import-toggle';
 import { useLocale } from '@/components/locale-provider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
@@ -153,6 +154,7 @@ export default function SystemTeamPage() {
           <LoadingState label={t('system.loading')} />
         ) : (
           <>
+            <CoachMessageImportToggle teamId={teamId} />
             <section aria-labelledby="add-member-title" className="flex flex-col gap-3">
               <h2 id="add-member-title" className="text-lg font-semibold">
                 {t('system.addMemberTitle')}

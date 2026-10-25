@@ -11,7 +11,7 @@ import type {
 import type { Locale } from '@soccer/i18n';
 import type { StatusTone } from '@soccer/ui-tokens';
 import { focusRingClassName } from '@soccer/ui-tokens';
-import { Ban, Calendar, Home, Pencil, Users } from 'lucide-react';
+import { Ban, Calendar, ClipboardPaste, Home, Pencil, Trophy, Users } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -23,6 +23,7 @@ import {
   secondaryButtonClassName,
 } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
+import { ScheduleImportDialog } from '@/components/schedule-import-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataList, DataListItem } from '@/components/ui/data-list';
 import { Dialog } from '@/components/ui/dialog';
@@ -203,6 +204,8 @@ function ScheduleSessions({
     playerIds: string[];
   } | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [importEnabled, setImportEnabled] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const fetchAll = useCallback(
     () =>
@@ -232,6 +235,24 @@ function ScheduleSessions({
       cancelled = true;
     };
   }, [fetchAll]);
+
+  // Whether to offer "Paste coach message" — a team admin or system admin can
+  // turn the feature off. Fetched separately from the schedule so a failure
+  // here just hides the button instead of failing the whole page.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getCoachMessageImport(teamId)
+      .then((settings) => {
+        if (!cancelled) setImportEnabled(settings.enabled);
+      })
+      .catch(() => {
+        // Leave the button hidden.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
 
   // Used for the retry button and for re-syncing after a claim/release conflict —
   // both are event-driven (not inside an effect body), so the eager
@@ -390,6 +411,17 @@ function ScheduleSessions({
   return (
     <div className="flex flex-col gap-6">
       {!isOnline && <OfflineBanner />}
+      {importEnabled && (
+        <button
+          type="button"
+          disabled={!isOnline}
+          className={`${secondaryButtonClassName} gap-2 self-start`}
+          onClick={() => setIsImporting(true)}
+        >
+          <ClipboardPaste className="size-4" aria-hidden="true" />
+          {t('scheduleImport.openButton')}
+        </button>
+      )}
       {sessions.length === 0 ? (
         <EmptyState title={t('schedule.empty')} />
       ) : (
@@ -419,6 +451,19 @@ function ScheduleSessions({
       )}
 
       <TeamRosterSection roster={roster} />
+
+      {isImporting && (
+        <ScheduleImportDialog
+          teamId={teamId}
+          timeZone={timeZone}
+          onClose={() => setIsImporting(false)}
+          onApplied={(result) => {
+            setIsImporting(false);
+            showToast(t('scheduleImport.applied', result), 'success');
+            refreshSilently();
+          }}
+        />
+      )}
 
       {editingSession && (
         <SessionEditDialog
@@ -551,11 +596,29 @@ function SessionCard({
       className={`flex flex-col gap-4 ${showHighlight ? 'ring-2 ring-status-mine' : ''}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <p className="font-medium">{formatted}</p>
-          <p className="text-sm text-ink-muted">{practiceSession.fieldLocation}</p>
+          {practiceSession.title && (
+            <p className="text-sm font-medium" dir="auto">
+              {practiceSession.title}
+            </p>
+          )}
+          <p className="text-sm text-ink-muted" dir="auto">
+            {practiceSession.fieldLocation}
+          </p>
+          {practiceSession.notes && (
+            <p className="text-sm text-ink-muted" dir="auto">
+              {practiceSession.notes}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {practiceSession.kind === 'game' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-ink">
+              <Trophy className="size-3.5" aria-hidden="true" />
+              {t('schedule.kindGame')}
+            </span>
+          )}
           {practiceSession.status === 'cancelled' && (
             <span className="rounded-full bg-surface-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
               {t('schedule.cancelled')}
@@ -699,6 +762,9 @@ function SessionEditDialog({
   const [date, setDate] = useState(initialWallClock.date);
   const [time, setTime] = useState(initialWallClock.time);
   const [fieldLocation, setFieldLocation] = useState(practiceSession.fieldLocation);
+  const [kind, setKind] = useState(practiceSession.kind);
+  const [title, setTitle] = useState(practiceSession.title ?? '');
+  const [notes, setNotes] = useState(practiceSession.notes ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -714,6 +780,9 @@ function SessionEditDialog({
         date,
         time,
         fieldLocation,
+        kind,
+        title: title.trim() || null,
+        notes: notes.trim() || null,
       });
       onSaved(updated);
     } catch (err) {
@@ -754,6 +823,35 @@ function SessionEditDialog({
             required
             value={fieldLocation}
             onChange={(e) => setFieldLocation(e.target.value)}
+            className={inputClassName}
+          />
+        </Field>
+        <Field label={t('schedule.kindLabel')}>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value === 'game' ? 'game' : 'practice')}
+            className={inputClassName}
+          >
+            <option value="practice">{t('schedule.kindPractice')}</option>
+            <option value="game">{t('schedule.kindGame')}</option>
+          </select>
+        </Field>
+        <Field label={t('schedule.titleLabel')}>
+          <input
+            dir="auto"
+            maxLength={255}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputClassName}
+          />
+        </Field>
+        <Field label={t('schedule.notesLabel')}>
+          <textarea
+            dir="auto"
+            rows={3}
+            maxLength={1000}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
             className={inputClassName}
           />
         </Field>

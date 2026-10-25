@@ -180,7 +180,8 @@ scheduled sessions whose start time has not passed.
 ### Change a session
 
 1. Use the edit control on the session.
-2. Change its date, time, or field location.
+2. Change its date, time, field location, type (practice or game), title, or
+   notes.
 3. Select **Save**.
 
 This changes only that session, not its schedule template or other sessions.
@@ -205,6 +206,20 @@ point type.
 
 Player assignments are per session and per direction. Changing them does not
 change another session or the opposite direction.
+
+### Coach message import
+
+By default any team member can paste the coach's message on **Schedule** and
+have the assistant propose schedule changes, which they review and apply (see
+the user guide). To turn it off, open **Team settings** and clear **Allow coach
+message import**; a system admin can do the same from the team's page under
+`/system`. When it's off, the button is hidden and the API refuses imports for
+every member, admins included. The change is recorded in the audit log.
+
+The import needs `OPENROUTER_API_KEY` configured on the API, like the chat
+assistant. Changes it applies are logged with source `ai_chat` and the pasted
+message, and new sessions get the collection points of the team's most recent
+schedule template.
 
 ## Review coverage and the roster
 

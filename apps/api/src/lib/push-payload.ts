@@ -143,6 +143,19 @@ export function buildPushPayload(
         url: `/admin/schedule-templates?team=${encodeURIComponent(teamId)}`,
       };
 
+    case 'schedule_imported':
+      return {
+        title: translate(locale, 'push.scheduleImported.title'),
+        body: translate(locale, 'push.scheduleImported.body', {
+          byUserName: asString(payload, 'byUserName'),
+          changes:
+            asNumber(payload, 'created') +
+            asNumber(payload, 'updated') +
+            asNumber(payload, 'cancelled'),
+        }),
+        url: `/schedule?team=${encodeURIComponent(teamId)}`,
+      };
+
     case 'member_promoted':
       return {
         title: translate(locale, 'push.memberPromoted.title'),

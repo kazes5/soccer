@@ -31,6 +31,7 @@ export const notificationEventTypeSchema = z.enum([
   'session_point_players_updated',
   'schedule_template_created',
   'schedule_template_updated',
+  'schedule_imported',
   'member_promoted',
   'member_demoted',
   'member_removed',

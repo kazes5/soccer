@@ -36,6 +36,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
       updateSession: vi.fn(),
       cancelSession: vi.fn(),
       updateSessionPointPlayers: vi.fn(),
+      getCoachMessageImport: vi.fn(),
+      previewScheduleImport: vi.fn(),
+      applyScheduleImport: vi.fn(),
     },
   };
 });
@@ -120,6 +123,9 @@ function buildSessions(options: {
         templateId: 'template-1',
         startsAt,
         fieldLocation: 'Central Field',
+        kind: 'practice',
+        title: null,
+        notes: null,
         status,
         points: [
           {
@@ -158,6 +164,9 @@ describe('SchedulePage', () => {
     vi.mocked(api.updateSession).mockReset();
     vi.mocked(api.cancelSession).mockReset();
     vi.mocked(api.updateSessionPointPlayers).mockReset();
+    vi.mocked(api.getCoachMessageImport).mockReset().mockResolvedValue({ enabled: false });
+    vi.mocked(api.previewScheduleImport).mockReset();
+    vi.mocked(api.applyScheduleImport).mockReset();
   });
 
   it('redirects to /login when the session lookup fails', async () => {
@@ -474,6 +483,9 @@ describe('SchedulePage', () => {
         date: expectedWallClock.date,
         time: expectedWallClock.time,
         fieldLocation: 'North Field',
+        kind: 'practice',
+        title: null,
+        notes: null,
       }),
     );
     expect(await screen.findByText('North Field')).toBeInTheDocument();
@@ -558,5 +570,119 @@ describe('SchedulePage', () => {
       }),
     );
     expect(await screen.findByText('Alon Cohen')).toBeInTheDocument();
+  });
+
+  it('shows a game with its title and notes', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+    const sessions = buildSessions({});
+    vi.mocked(api.listSessions).mockResolvedValue({
+      sessions: [
+        {
+          ...sessions.sessions[0]!,
+          kind: 'game',
+          title: 'משחק ליגה – מעלה אדומים (חוץ)',
+          notes: 'מדים כתומים סט מלא',
+        },
+      ],
+    });
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('משחק ליגה – מעלה אדומים (חוץ)')).toBeInTheDocument();
+    expect(screen.getByText('מדים כתומים סט מלא')).toBeInTheDocument();
+    expect(screen.getByText('Game')).toBeInTheDocument();
+  });
+
+  it('hides the coach-message import when the team has it turned off', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+    vi.mocked(api.listSessions).mockResolvedValue(buildSessions({}));
+
+    renderWithProviders(<SchedulePage />);
+
+    await screen.findByText('To practice · Oak St');
+    await waitFor(() => expect(api.getCoachMessageImport).toHaveBeenCalledWith('team-1'));
+    expect(screen.queryByRole('button', { name: 'Paste coach message' })).not.toBeInTheDocument();
+  });
+
+  it('lets a parent paste a coach message, review the proposal, and apply the checked changes', async () => {
+    vi.mocked(api.me).mockResolvedValue(parentOnlyUser);
+    vi.mocked(api.listSessions).mockResolvedValue(buildSessions({}));
+    vi.mocked(api.getCoachMessageImport).mockResolvedValue({ enabled: true });
+    const before = {
+      date: '2099-08-10',
+      time: '18:00',
+      kind: 'practice' as const,
+      title: null,
+      fieldLocation: 'Central Field',
+      notes: null,
+    };
+    const operations = [
+      {
+        type: 'update' as const,
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        expectedUpdatedAt: '2099-08-01T00:00:00.000Z',
+        before,
+        after: { ...before, time: '19:00', fieldLocation: 'סינתטי גדול, בית דני' },
+      },
+      {
+        type: 'create' as const,
+        after: {
+          date: '2099-08-11',
+          time: '18:45',
+          kind: 'game' as const,
+          title: 'משחק ליגה',
+          fieldLocation: 'ספורטק דרום',
+          notes: 'תחילת משחק 19:45',
+        },
+      },
+    ];
+    vi.mocked(api.previewScheduleImport).mockResolvedValue({
+      operations,
+      unresolved: ['משחק גביע – מועד טרם נקבע'],
+      proposalToken: 'signed-proposal',
+    });
+    vi.mocked(api.applyScheduleImport).mockResolvedValue({ created: 1, updated: 0, cancelled: 0 });
+
+    renderWithProviders(<SchedulePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Paste coach message' }));
+    fireEvent.change(screen.getByLabelText('Coach’s message'), {
+      target: { value: 'לוז לשבוע הבא - שני 19:00 סינתטי גדול, בית דני' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+
+    await waitFor(() =>
+      expect(api.previewScheduleImport).toHaveBeenCalledWith('team-1', {
+        message: 'לוז לשבוע הבא - שני 19:00 סינתטי גדול, בית דני',
+        referenceDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        locale: 'en',
+      }),
+    );
+    expect(await screen.findByText('תחילת משחק 19:45')).toBeInTheDocument();
+    expect(screen.getByText('משחק גביע – מועד טרם נקבע')).toBeInTheDocument();
+    expect(screen.getByText(/^Was: .*Central Field$/)).toBeInTheDocument();
+
+    // Uncheck the update; keep only the new game.
+    const checkboxes = within(
+      screen.getByRole('group', { name: 'Suggested changes' }),
+    ).getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(2);
+    fireEvent.click(checkboxes[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply 1 selected' }));
+
+    await waitFor(() =>
+      expect(api.applyScheduleImport).toHaveBeenCalledWith('team-1', {
+        message: 'לוז לשבוע הבא - שני 19:00 סינתטי גדול, בית דני',
+        operations,
+        proposalToken: 'signed-proposal',
+        selected: [1],
+      }),
+    );
+    expect(
+      await screen.findByText('Schedule updated: 1 added, 0 changed, 0 cancelled.'),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // The schedule refreshes to show what was applied.
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalledTimes(2));
   });
 });

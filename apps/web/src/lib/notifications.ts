@@ -140,6 +140,17 @@ export function describeNotification(
         href: `/admin/schedule-templates?team=${encodeURIComponent(teamId)}`,
       };
 
+    case 'schedule_imported':
+      return {
+        text: t('notifications.event.scheduleImported', {
+          byUserName: asString(payload, 'byUserName'),
+          created: asNumber(payload, 'created'),
+          updated: asNumber(payload, 'updated'),
+          cancelled: asNumber(payload, 'cancelled'),
+        }),
+        href: `/schedule?team=${encodeURIComponent(teamId)}`,
+      };
+
     case 'member_promoted':
       return {
         text: t('notifications.event.memberPromoted', { userName: asString(payload, 'userName') }),

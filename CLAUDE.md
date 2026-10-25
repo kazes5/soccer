@@ -496,12 +496,16 @@ Parents on a youth soccer team need to coordinate who drives kids to practice an
 | Edit schedule template | ❌ | ✅ |
 | Edit individual sessions (date/time/location/cancel) | ❌ | ✅ |
 | Manage a session's collection-point player rosters | ✅ | ✅ |
+| Update the schedule from a pasted coach message (AI, reviewed before applying) | ✅ (if enabled) | ✅ (if enabled) |
+| Turn coach-message import on/off for the team | ❌ | ✅ |
 | Manage collection points (create/edit/delete) | ❌ | ✅ |
 | Set the team's accent color | ❌ | ✅ |
 | View full audit log | ❌ | ✅ |
 | Configure notifications (team-wide) | ❌ | ✅ |
 
 **2026-08-18 revision note:** "Edit individual sessions" originally covered a session's collection-point player rosters too, restricting that to Admins. It's been split out into its own row: any team member (parent or admin) can now add/remove players at a session's collection point — not just the assigned driver, and not gated on passkey assurance, since this is now an ordinary parent action rather than an admin-only one. Editing the session itself (date/time/field location/cancellation) remains Admin-only, unchanged. See `apps/api/src/routes/sessions.ts`'s `PATCH /teams/:teamId/sessions/:sessionId/points/:pointId`.
+
+**2026-10-25 revision note:** Added coach-message schedule import, at explicit product request. Coaches announce next week's practices and games in free-text (usually Hebrew WhatsApp) messages; any team member can paste one on the Schedule page, the AI (OpenRouter, same as §6.5) extracts the dates/times/places, and server-side code — not the model — matches them against existing sessions and proposes create/update/cancel changes. Nothing is written until the member reviews and applies them; the proposal is HMAC-signed so only what the AI proposed (or a subset) can be applied, each change is audited with `source: ai_chat` and the pasted message, and one `schedule_imported` broadcast goes to the team. This deliberately lets parents change session date/time/location through this one reviewed path, while the direct session editor stays admin-only. A team admin or system admin can turn it off per team (`Team.coachMessageImportEnabled`, default on). Sessions also gained `kind` (`practice`/`game`), `title` and `notes`, editable by admins in the session editor. See `apps/api/src/routes/schedule-import.ts` and `apps/api/src/lib/schedule-import.ts`.
 
 ---
 

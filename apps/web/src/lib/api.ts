@@ -5,6 +5,11 @@ import {
   type AuditLogListQuery,
   type AuditLogListResponse,
   type AuthSessionResponse,
+  type CoachMessageImportSettings,
+  type ScheduleImportApplyRequest,
+  type ScheduleImportApplyResponse,
+  type ScheduleImportPreviewRequest,
+  type ScheduleImportPreviewResponse,
   type CollectionPoint,
   type CollectionPointListResponse,
   type CollectionPointRequest,
@@ -69,6 +74,9 @@ import {
   addParentResponseSchema,
   auditLogListResponseSchema,
   authSessionResponseSchema,
+  coachMessageImportSettingsSchema,
+  scheduleImportApplyResponseSchema,
+  scheduleImportPreviewResponseSchema,
   collectionPointListResponseSchema,
   collectionPointSchema,
   coordinationSettingsSchema,
@@ -437,6 +445,30 @@ export const api = {
     request<PracticeSession>(
       `/teams/${encodeURIComponent(teamId)}/sessions/${encodeURIComponent(sessionId)}/cancel`,
       { method: 'POST', responseSchema: practiceSessionSchema },
+    ),
+
+  getCoachMessageImport: (teamId: string) =>
+    request<CoachMessageImportSettings>(
+      `/teams/${encodeURIComponent(teamId)}/coach-message-import`,
+      { responseSchema: coachMessageImportSettingsSchema },
+    ),
+
+  updateCoachMessageImport: (teamId: string, body: CoachMessageImportSettings) =>
+    request<CoachMessageImportSettings>(
+      `/teams/${encodeURIComponent(teamId)}/coach-message-import`,
+      { method: 'PATCH', body, responseSchema: coachMessageImportSettingsSchema },
+    ),
+
+  previewScheduleImport: (teamId: string, body: ScheduleImportPreviewRequest) =>
+    request<ScheduleImportPreviewResponse>(
+      `/teams/${encodeURIComponent(teamId)}/schedule-import/preview`,
+      { method: 'POST', body, responseSchema: scheduleImportPreviewResponseSchema },
+    ),
+
+  applyScheduleImport: (teamId: string, body: ScheduleImportApplyRequest) =>
+    request<ScheduleImportApplyResponse>(
+      `/teams/${encodeURIComponent(teamId)}/schedule-import/apply`,
+      { method: 'POST', body, responseSchema: scheduleImportApplyResponseSchema },
     ),
 
   updateSessionPointPlayers: (

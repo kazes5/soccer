@@ -131,3 +131,51 @@ function toChunks(parsed: unknown): OpenRouterStreamChunk[] {
   }
   return chunks;
 }
+
+/**
+ * One non-streaming completion whose reply is a single JSON object — used by
+ * the coach-message import (schedule-import.ts), which needs a structured
+ * extraction, not a conversational stream. `response_format: json_object`
+ * is OpenAI-compatible and honored by the default Gemini model; the reply is
+ * still parsed defensively (code fences stripped) since not every routed
+ * provider enforces it. Returns the parsed value, unvalidated — the caller
+ * owns the schema.
+ */
+export async function completeJson(input: {
+  apiKey: string;
+  model: string;
+  messages: OpenRouterMessage[];
+  maxTokens: number;
+}): Promise<unknown> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      'Content-Type': 'application/json',
+      'X-Title': 'Soccer Carpool Coordinator',
+    },
+    body: JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      response_format: { type: 'json_object' },
+      // Extraction, not conversation — as deterministic as the model allows.
+      temperature: 0,
+      max_tokens: input.maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`OpenRouter request failed (${response.status}): ${text.slice(0, 500)}`);
+  }
+
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>;
+  };
+  const content = body.choices?.[0]?.message?.content ?? '';
+  const unfenced = content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  return JSON.parse(unfenced);
+}

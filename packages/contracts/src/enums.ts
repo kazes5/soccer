@@ -30,6 +30,9 @@ export type CollectionPointType = z.infer<typeof collectionPointTypeSchema>;
 export const shiftDirectionSchema = z.enum(['to_practice', 'from_practice']);
 export type ShiftDirection = z.infer<typeof shiftDirectionSchema>;
 
+export const sessionKindSchema = z.enum(['practice', 'game']);
+export type SessionKind = z.infer<typeof sessionKindSchema>;
+
 export const sessionStatusSchema = z.enum(['scheduled', 'completed', 'cancelled']);
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 

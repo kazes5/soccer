@@ -347,7 +347,8 @@ export default async function scheduleTemplateRoutes(app: FastifyInstance) {
  * Creates one practice session plus its session-point assignments and shifts —
  * exactly one shift per valid (session, point, direction) tuple, per PLAN.md's
  * architecture decision. Shared by template-driven generation and (in a later
- * checkpoint) any ad-hoc/admin-created session.
+ * checkpoint) any ad-hoc/admin-created session — the coach-message import
+ * (schedule-import.ts) creates its new sessions through here too.
  */
 export async function createSessionWithShifts(
   tx: Prisma.TransactionClient,
@@ -356,6 +357,9 @@ export async function createSessionWithShifts(
     templateId: string | null;
     startsAt: Date;
     fieldLocation: string;
+    kind?: 'practice' | 'game';
+    title?: string | null;
+    notes?: string | null;
     points: Array<{ id: string; type: 'pickup' | 'dropoff' | 'both' }>;
   },
 ) {
@@ -365,6 +369,9 @@ export async function createSessionWithShifts(
       templateId: input.templateId,
       startsAt: input.startsAt,
       fieldLocation: input.fieldLocation,
+      kind: input.kind,
+      title: input.title,
+      notes: input.notes,
     },
   });
 

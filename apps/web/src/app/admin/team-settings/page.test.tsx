@@ -19,6 +19,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...actual.api,
       me: vi.fn(),
       updateTeamAccentColor: vi.fn(),
+      getCoachMessageImport: vi.fn(),
+      updateCoachMessageImport: vi.fn(),
     },
   };
 });
@@ -52,6 +54,8 @@ describe('AdminTeamSettingsPage', () => {
     replace.mockClear();
     vi.mocked(api.me).mockReset();
     vi.mocked(api.updateTeamAccentColor).mockReset();
+    vi.mocked(api.getCoachMessageImport).mockReset().mockResolvedValue({ enabled: true });
+    vi.mocked(api.updateCoachMessageImport).mockReset();
   });
 
   it('redirects to /login when the session lookup fails', async () => {
@@ -116,5 +120,21 @@ describe('AdminTeamSettingsPage', () => {
 
     expect(await screen.findByText('Server error.')).toBeInTheDocument();
     expect(blueSwatch).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('lets an admin turn coach-message import off', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.updateCoachMessageImport).mockResolvedValue({ enabled: false });
+
+    renderWithProviders(<AdminTeamSettingsPage />);
+    const toggle = await screen.findByRole('switch', { name: 'Allow coach message import' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(api.updateCoachMessageImport).toHaveBeenCalledWith('team-1', { enabled: false }),
+    );
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(await screen.findByText('Coach message import setting saved.')).toBeInTheDocument();
   });
 });

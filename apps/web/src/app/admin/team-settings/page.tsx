@@ -6,6 +6,7 @@ import { brandColorKeys, brandColorPalette, type BrandColorKey } from '@soccer/u
 import { Calendar, Home } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { CoachMessageImportToggle } from '@/components/coach-message-import-toggle';
 import { useLocale } from '@/components/locale-provider';
 import { AppShell, type ShellNavItem } from '@/components/ui/shell';
 import { TeamSwitcher } from '@/components/ui/team-switcher';
@@ -189,6 +190,8 @@ export default function AdminTeamSettingsPage() {
             })}
           </div>
         </fieldset>
+
+        <CoachMessageImportToggle key={navTeamId} teamId={navTeamId} />
       </div>
     </AppShell>
   );
