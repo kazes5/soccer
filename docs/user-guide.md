@@ -85,6 +85,27 @@ If another parent claims a shift first, the API returns a conflict and the UI
 shows that the shift is no longer available. This is expected behavior, not a
 silent overwrite.
 
+### Update the schedule from the coach's message
+
+When the coach sends next week's practices or a game announcement, any team
+member can paste it into the app instead of waiting for an admin:
+
+1. On `/schedule`, select **Paste coach message**.
+2. Paste the message as-is (Hebrew or English, WhatsApp formatting is fine).
+3. Check **Date the message was sent** — "next week" and day names like
+   "Tuesday" are worked out from it. It defaults to today.
+4. Select **Review changes**. The assistant lists what it would add, change,
+   or cancel, each with the old value for comparison, plus anything the
+   message mentions that it couldn't schedule (for example, a game whose date
+   is still pending).
+5. Uncheck anything that looks wrong, then select **Apply**.
+
+Nothing is saved until you apply. Applied changes appear in the audit log as
+AI actions and every team member gets one notification summarizing them.
+Games show a **Game** badge with their title and notes (kit, transport, start
+time). If an admin has turned this feature off for the team, the button does
+not appear.
+
 ## Shift swaps
 
 A parent can ask another parent to take over a shift the other parent already

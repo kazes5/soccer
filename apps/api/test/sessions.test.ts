@@ -156,6 +156,32 @@ describe('sessions', () => {
     expect(outboxEvents[0]?.payload).toMatchObject({ sessionId, fieldLocation: 'North Field' });
   });
 
+  it('lets an admin mark a session as a game, with a title and notes, and clear them again', async () => {
+    const { adminToken, teamId, sessionId } = await setUpTeamWithSession();
+
+    const asGame = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { kind: 'game', title: 'Cup game vs. Kfar Saba', notes: 'Orange kit' },
+    });
+    expect(asGame.statusCode).toBe(200);
+    expect(asGame.json()).toMatchObject({
+      kind: 'game',
+      title: 'Cup game vs. Kfar Saba',
+      notes: 'Orange kit',
+      fieldLocation: 'Central Field',
+    });
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/teams/${teamId}/sessions/${sessionId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { kind: 'practice', title: null, notes: null },
+    });
+    expect(cleared.json()).toMatchObject({ kind: 'practice', title: null, notes: null });
+  });
+
   it('converts a new local time through the team timezone, changing only the requested piece', async () => {
     const { adminToken, teamId, sessionId } = await setUpTeamWithSession();
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sessionStatusSchema, shiftDirectionSchema } from './enums';
+import { sessionKindSchema, sessionStatusSchema, shiftDirectionSchema } from './enums';
 import { shiftSummarySchema } from './shift';
 
 export const sessionPointSchema = z.object({
@@ -17,6 +17,9 @@ export const practiceSessionSchema = z.object({
   templateId: z.string().uuid().nullable(),
   startsAt: z.string().datetime(),
   fieldLocation: z.string(),
+  kind: sessionKindSchema,
+  title: z.string().nullable(),
+  notes: z.string().nullable(),
   status: sessionStatusSchema,
   points: z.array(sessionPointSchema),
 });
@@ -41,6 +44,10 @@ export const updateSessionRequestSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM (24-hour).')
     .optional(),
   fieldLocation: z.string().min(1).max(255).optional(),
+  kind: sessionKindSchema.optional(),
+  // `null` clears the value; omitting the key leaves it unchanged.
+  title: z.string().trim().max(255).nullable().optional(),
+  notes: z.string().trim().max(1000).nullable().optional(),
 });
 export type UpdateSessionRequest = z.infer<typeof updateSessionRequestSchema>;
 

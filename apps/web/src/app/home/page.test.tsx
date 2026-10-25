@@ -113,6 +113,9 @@ function buildSessions(): SessionListResponse {
         templateId: 'template-1',
         startsAt: '2099-08-10T18:00:00.000Z',
         fieldLocation: 'Central Field',
+        kind: 'practice',
+        title: null,
+        notes: null,
         status: 'scheduled',
         points: [
           {

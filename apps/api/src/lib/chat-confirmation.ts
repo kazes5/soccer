@@ -37,8 +37,12 @@ function sign(payload: ConfirmationPayload, expiresAt: number, secret: string): 
   return `${bodyBase64}.${signature}`;
 }
 
-export function createConfirmationToken(payload: ConfirmationPayload, secret: string): string {
-  return sign(payload, Date.now() + TTL_MS, secret);
+export function createConfirmationToken(
+  payload: ConfirmationPayload,
+  secret: string,
+  ttlMs: number = TTL_MS,
+): string {
+  return sign(payload, Date.now() + ttlMs, secret);
 }
 
 /** Verifies the token's signature, expiry, and that it matches the payload

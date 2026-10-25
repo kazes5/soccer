@@ -68,6 +68,14 @@ enum ShiftDirection {
   from_practice
 }
 
+// A coach's message distinguishes practices from games (league/cup matches),
+// which matter to drivers differently — see the coach-message import
+// (routes/schedule-import.ts). Every pre-existing session is a practice.
+enum SessionKind {
+  practice
+  game
+}
+
 enum SessionStatus {
   scheduled
   completed
@@ -166,15 +174,19 @@ model User {
 }
 
 model Team {
-  id           String           @id @default(uuid())
-  name         String
-  season       String
-  timezone     String           @default("Asia/Jerusalem")
+  id                        String           @id @default(uuid())
+  name                      String
+  season                    String
+  timezone                  String           @default("Asia/Jerusalem")
   // Null means "use the app's default brand color" — additive, so every
   // existing team keeps rendering exactly as before with zero backfill.
-  primaryColor TeamAccentColor? @map("primary_color")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
+  primaryColor              TeamAccentColor? @map("primary_color")
+  // Lets any team member paste a coach's message and have the AI apply it to
+  // the schedule (routes/schedule-import.ts). A team admin or system admin can
+  // turn it off; it's on by default so the feature is usable without setup.
+  coachMessageImportEnabled Boolean          @default(true) @map("coach_message_import_enabled")
+  createdAt                 DateTime         @default(now()) @map("created_at")
+  updatedAt                 DateTime         @updatedAt @map("updated_at")
 
   members                    TeamMember[]
   players                    Player[]
@@ -637,6 +649,11 @@ model PracticeSession {
   templateId    String?       @map("template_id")
   startsAt      DateTime      @map("starts_at")
   fieldLocation String        @map("field_location")
+  kind          SessionKind   @default(practice)
+  // Optional free text, e.g. "League game vs. Ma'ale Adumim (away)" / "Kit:
+  // full orange set" — set by the coach-message import, never required.
+  title         String?
+  notes         String?
   status        SessionStatus @default(scheduled)
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")

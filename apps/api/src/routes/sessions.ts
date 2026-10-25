@@ -59,6 +59,9 @@ function toSessionDto(session: NonNullable<SessionWithRelations>): PracticeSessi
     templateId: session.templateId,
     startsAt: session.startsAt.toISOString(),
     fieldLocation: session.fieldLocation,
+    kind: session.kind,
+    title: session.title,
+    notes: session.notes,
     status: session.status,
     points: session.assignments.map((assignment) => {
       const shift = session.shifts.find(
@@ -173,6 +176,9 @@ export default async function sessionRoutes(app: FastifyInstance) {
         data: {
           startsAt: newStartsAt,
           fieldLocation: body.fieldLocation,
+          kind: body.kind,
+          title: body.title,
+          notes: body.notes,
         },
         include: {
           assignments: { include: { point: true } },
@@ -186,8 +192,20 @@ export default async function sessionRoutes(app: FastifyInstance) {
         actionType: 'session_updated',
         targetEntity: 'practice_session',
         targetId: updated.id,
-        beforeState: { startsAt: existing.startsAt, fieldLocation: existing.fieldLocation },
-        afterState: { startsAt: updated.startsAt, fieldLocation: updated.fieldLocation },
+        beforeState: {
+          startsAt: existing.startsAt,
+          fieldLocation: existing.fieldLocation,
+          kind: existing.kind,
+          title: existing.title,
+          notes: existing.notes,
+        },
+        afterState: {
+          startsAt: updated.startsAt,
+          fieldLocation: updated.fieldLocation,
+          kind: updated.kind,
+          title: updated.title,
+          notes: updated.notes,
+        },
       });
 
       const outboxEvent = await recordOutboxEvent(tx, {

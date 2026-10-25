@@ -573,6 +573,9 @@ export async function getSchedule(
       templateId: session.templateId,
       startsAt: session.startsAt.toISOString(),
       fieldLocation: session.fieldLocation,
+      kind: session.kind,
+      title: session.title,
+      notes: session.notes,
       status: session.status,
       points: session.assignments.map((assignment) => {
         const shift = session.shifts.find(

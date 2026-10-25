@@ -27,6 +27,7 @@ import notificationRoutes from './routes/notifications';
 import notificationSettingsRoutes from './routes/notification-settings';
 import playerRoutes from './routes/players';
 import pushSubscriptionRoutes from './routes/push-subscriptions';
+import scheduleImportRoutes from './routes/schedule-import';
 import scheduleTemplateRoutes from './routes/schedule-templates';
 import sessionRoutes from './routes/sessions';
 import shiftRoutes from './routes/shifts';
@@ -119,6 +120,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(collectionPointRoutes);
   app.register(scheduleTemplateRoutes);
   app.register(sessionRoutes);
+  app.register(scheduleImportRoutes);
   app.register(shiftRoutes);
   app.register(swapRequestRoutes);
   app.register(coordinationSettingsRoutes);
