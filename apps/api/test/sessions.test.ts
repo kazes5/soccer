@@ -95,6 +95,40 @@ describe('sessions', () => {
     return rawToken;
   }
 
+  it('pages through sessions newest-first with order and limit', async () => {
+    const { adminToken, teamId } = await setUpTeamWithSession();
+    const all = (
+      await app.inject({
+        method: 'GET',
+        url: `/teams/${teamId}/sessions`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      })
+    ).json().sessions as Array<{ id: string; startsAt: string }>;
+    expect(all.length).toBeGreaterThan(1);
+
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions?order=desc&limit=1`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(firstPage.json().sessions.map((s: { id: string }) => s.id)).toEqual([all.at(-1)!.id]);
+
+    const before = new Date(new Date(all.at(-1)!.startsAt).getTime() - 1).toISOString();
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions?order=desc&limit=1&to=${encodeURIComponent(before)}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(secondPage.json().sessions.map((s: { id: string }) => s.id)).toEqual([all.at(-2)!.id]);
+
+    const tooMany = await app.inject({
+      method: 'GET',
+      url: `/teams/${teamId}/sessions?limit=500`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(tooMany.statusCode).toBe(400);
+  });
+
   it('lets a parent assign players to a session collection point without passkey assurance', async () => {
     const { teamId, sessionId, pointId, playerId } = await setUpTeamWithSession();
     const parentToken = await addParent(teamId);

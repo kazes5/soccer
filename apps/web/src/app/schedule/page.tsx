@@ -11,7 +11,16 @@ import type {
 import type { Locale } from '@soccer/i18n';
 import type { StatusTone } from '@soccer/ui-tokens';
 import { focusRingClassName } from '@soccer/ui-tokens';
-import { Ban, Calendar, ClipboardPaste, Home, Pencil, Trophy, Users } from 'lucide-react';
+import {
+  Ban,
+  Calendar,
+  ChevronDown,
+  ClipboardPaste,
+  Home,
+  Pencil,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -51,6 +60,31 @@ import {
 } from '@/lib/sessions';
 import { instantToWallClock, isPastCalendarDay } from '@/lib/timezone';
 import { useOnlineStatus } from '@/lib/use-online-status';
+
+/** Fetched lookback for "upcoming": a little over a day, so everything from
+ * the start of today in any team timezone is included. Anything from an
+ * earlier calendar day is split off on the client (`isSessionPast`) — it
+ * belongs to Past rides, which pages back through history on demand. */
+const UPCOMING_LOOKBACK_MS = 36 * 60 * 60 * 1000;
+/** Weeks shown up front (this week + the next two, CLAUDE.md §3.8), and how
+ * many each "Show later weeks" adds. */
+const INITIAL_WEEKS = 3;
+/** Past sessions fetched per "Show earlier" page. */
+const PAST_PAGE_SIZE = 10;
+
+/** Adds `days` to a "YYYY-MM-DD" calendar date. */
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The last day ("YYYY-MM-DD") of the Sunday–Saturday week `weeks` weeks
+ * into the schedule, counting this week as the first. */
+function lastDayOfWeekWindow(today: string, weeks: number): string {
+  const dayOfWeek = new Date(`${today}T00:00:00.000Z`).getUTCDay();
+  return addDays(today, 6 - dayOfWeek + 7 * (weeks - 1));
+}
 
 function toneFor(shift: ShiftSummary, currentUserId: string): StatusTone {
   if (shift.status === 'open') return 'open';
@@ -209,9 +243,17 @@ function ScheduleSessions({
   const [isImporting, setIsImporting] = useState(false);
   const [importDraft, setImportDraft] = useState('');
 
+  const [weeksShown, setWeeksShown] = useState(INITIAL_WEEKS);
+
   const fetchAll = useCallback(
     () =>
-      Promise.all([api.listSessions(teamId), api.listPlayers(teamId), api.listTeamRoster(teamId)]),
+      Promise.all([
+        api.listSessions(teamId, {
+          from: new Date(Date.now() - UPCOMING_LOOKBACK_MS).toISOString(),
+        }),
+        api.listPlayers(teamId),
+        api.listTeamRoster(teamId),
+      ]),
     [teamId],
   );
 
@@ -431,6 +473,28 @@ function ScheduleSessions({
     );
   }
 
+  const today = instantToWallClock(new Date(), timeZone).date;
+  const localDateOf = (practiceSession: PracticeSession) =>
+    instantToWallClock(new Date(practiceSession.startsAt), timeZone).date;
+  const upcoming = sessions.filter(
+    (practiceSession) => !isSessionPast(practiceSession.startsAt, timeZone),
+  );
+  // A notification deep link to a session further out than the window
+  // widens it far enough to show that session — derived, not stored, so it
+  // follows the link even when it changes while the page stays mounted.
+  const highlighted = upcoming.find((practiceSession) => practiceSession.id === highlightSessionId);
+  const weeksNeeded = highlighted
+    ? Math.ceil(
+        (Date.parse(localDateOf(highlighted)) - Date.parse(lastDayOfWeekWindow(today, 1))) /
+          (7 * 24 * 60 * 60 * 1000),
+      ) + 1
+    : 0;
+  const windowEnd = lastDayOfWeekWindow(today, Math.max(weeksShown, weeksNeeded));
+  const visibleUpcoming = upcoming.filter(
+    (practiceSession) => localDateOf(practiceSession) <= windowEnd,
+  );
+  const hasLaterWeeks = upcoming.length > visibleUpcoming.length;
+
   return (
     <div className="flex flex-col gap-6">
       {!isOnline && <OfflineBanner />}
@@ -448,33 +512,58 @@ function ScheduleSessions({
           {t('scheduleImport.openButton')}
         </button>
       )}
-      {sessions.length === 0 ? (
+      {upcoming.length === 0 ? (
         <EmptyState title={t('schedule.empty')} />
+      ) : visibleUpcoming.length === 0 ? (
+        <EmptyState title={t('schedule.noSessionsInWindow')} />
       ) : (
         <DataList ariaLabel={t('schedule.title')}>
-          {sessions.map((practiceSession) => (
-            <SessionCard
-              key={practiceSession.id}
-              practiceSession={practiceSession}
-              currentUserId={currentUserId}
-              locale={locale}
-              timeZone={timeZone}
-              isAdmin={isAdmin}
-              playersById={playersById}
-              pendingShiftId={pendingShiftId}
-              highlightShiftId={practiceSession.id === highlightSessionId ? highlightShiftId : null}
-              isHighlighted={practiceSession.id === highlightSessionId}
-              isOnline={isOnline}
-              onClaim={handleClaim}
-              onRelease={handleRelease}
-              onRequestSwap={handleRequestSwap}
-              onEdit={setEditingSession}
-              onCancelRequest={setCancellingSession}
-              onManagePlayers={(point) => setManagingPoint(point)}
-            />
-          ))}
+          {visibleUpcoming.map((practiceSession) =>
+            practiceSession.status === 'cancelled' ? (
+              <CancelledSessionRow
+                key={practiceSession.id}
+                practiceSession={practiceSession}
+                locale={locale}
+                timeZone={timeZone}
+              />
+            ) : (
+              <SessionCard
+                key={practiceSession.id}
+                practiceSession={practiceSession}
+                currentUserId={currentUserId}
+                locale={locale}
+                timeZone={timeZone}
+                isAdmin={isAdmin}
+                playersById={playersById}
+                pendingShiftId={pendingShiftId}
+                highlightShiftId={
+                  practiceSession.id === highlightSessionId ? highlightShiftId : null
+                }
+                isHighlighted={practiceSession.id === highlightSessionId}
+                isOnline={isOnline}
+                onClaim={handleClaim}
+                onRelease={handleRelease}
+                onRequestSwap={handleRequestSwap}
+                onEdit={setEditingSession}
+                onCancelRequest={setCancellingSession}
+                onManagePlayers={(point) => setManagingPoint(point)}
+              />
+            ),
+          )}
         </DataList>
       )}
+
+      {hasLaterWeeks && (
+        <button
+          type="button"
+          className={`${secondaryButtonClassName} self-center`}
+          onClick={() => setWeeksShown((weeks) => Math.max(weeks, weeksNeeded) + INITIAL_WEEKS)}
+        >
+          {t('schedule.showLaterWeeks')}
+        </button>
+      )}
+
+      <PastRides teamId={teamId} timeZone={timeZone} />
 
       <TeamRosterSection roster={roster} />
 
@@ -768,6 +857,136 @@ function SessionCard({
         })}
       </div>
     </DataListItem>
+  );
+}
+
+/** An upcoming cancelled session, kept to one line — parents still need to
+ * see that it's off, but it shouldn't take a full card's space. */
+function CancelledSessionRow({
+  practiceSession,
+  locale,
+  timeZone,
+}: {
+  practiceSession: PracticeSession;
+  locale: Locale;
+  timeZone: string;
+}) {
+  const { t } = useLocale();
+  return (
+    <DataListItem className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-ink-muted">
+      <span className="min-w-0">
+        <span className="line-through">
+          {formatSessionStartsAt(locale, practiceSession.startsAt, timeZone)}
+        </span>{' '}
+        · <span dir="auto">{practiceSession.title ?? practiceSession.fieldLocation}</span>
+      </span>
+      <span className="rounded-full bg-surface-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide">
+        {t('schedule.cancelled')}
+      </span>
+    </DataListItem>
+  );
+}
+
+/**
+ * History, collapsed by default: opening it loads the most recent past
+ * sessions, newest first, and "Show earlier" pages further back. Read-only
+ * and compact — who drove each trip, nothing to act on. Cancelled sessions
+ * are left out of history.
+ */
+function PastRides({ teamId, timeZone }: { teamId: string; timeZone: string }) {
+  const { t, locale } = useLocale();
+  const [open, setOpen] = useState(false);
+  const [past, setPast] = useState<PracticeSession[] | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+
+  async function loadPage(before: PracticeSession[]) {
+    setLoadState('loading');
+    try {
+      // Strictly before the oldest one shown; the first page starts from now.
+      const oldest = before.at(-1);
+      const to = oldest ? new Date(Date.parse(oldest.startsAt) - 1) : new Date();
+      const page = await api.listSessions(teamId, {
+        to: to.toISOString(),
+        order: 'desc',
+        limit: PAST_PAGE_SIZE,
+      });
+      // The first page can include earlier today, which belongs to the
+      // upcoming list.
+      const pastOnly = page.sessions.filter((s) => isSessionPast(s.startsAt, timeZone));
+      setPast([...before, ...pastOnly]);
+      setHasMore(page.sessions.length === PAST_PAGE_SIZE);
+      setLoadState('idle');
+    } catch {
+      setLoadState('error');
+    }
+  }
+
+  function handleToggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && past === null) void loadPage([]);
+  }
+
+  const shown = (past ?? []).filter((practiceSession) => practiceSession.status !== 'cancelled');
+
+  return (
+    <section className="flex flex-col gap-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={handleToggle}
+        className={`flex min-h-11 items-center justify-between rounded-lg text-sm font-semibold uppercase tracking-wide text-ink-muted hover:text-ink ${focusRingClassName}`}
+      >
+        {t('schedule.pastTitle')}
+        <ChevronDown
+          className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <>
+          {past === null && loadState === 'loading' && (
+            <LoadingState label={t('schedule.loading')} />
+          )}
+          {past !== null && shown.length === 0 && loadState !== 'loading' && (
+            <p className="text-sm text-ink-muted">{t('schedule.noPastRides')}</p>
+          )}
+          {shown.length > 0 && (
+            <DataList ariaLabel={t('schedule.pastTitle')}>
+              {shown.map((practiceSession) => (
+                <DataListItem key={practiceSession.id} className="flex flex-col gap-1 py-3 text-sm">
+                  <p className="font-medium">
+                    {formatSessionStartsAt(locale, practiceSession.startsAt, timeZone)}
+                    {' · '}
+                    <span dir="auto">{practiceSession.title ?? practiceSession.fieldLocation}</span>
+                  </p>
+                  {practiceSession.points.map((point) => (
+                    <p key={`${point.pointId}-${point.direction}`} className="text-ink-muted">
+                      {point.direction === 'to_practice'
+                        ? t('schedule.toPractice')
+                        : t('schedule.fromPractice')}{' '}
+                      · {point.pointName}: {point.shift.assignedUserName ?? t('schedule.noDriver')}
+                    </p>
+                  ))}
+                </DataListItem>
+              ))}
+            </DataList>
+          )}
+          {loadState === 'error' && <FormError>{t('schedule.pastLoadError')}</FormError>}
+          {((past !== null && hasMore) || loadState === 'error') && (
+            <button
+              type="button"
+              disabled={loadState === 'loading'}
+              className={`${secondaryButtonClassName} self-center`}
+              onClick={() => void loadPage(past ?? [])}
+            >
+              {past === null ? t('common.retry') : t('schedule.showEarlier')}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

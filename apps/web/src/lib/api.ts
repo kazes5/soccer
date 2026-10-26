@@ -365,10 +365,20 @@ export const api = {
       responseSchema: z.unknown(),
     }),
 
-  listSessions: (teamId: string) =>
-    request<SessionListResponse>(`/teams/${encodeURIComponent(teamId)}/sessions`, {
+  listSessions: (
+    teamId: string,
+    query: { from?: string; to?: string; order?: 'asc' | 'desc'; limit?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (query.from) params.set('from', query.from);
+    if (query.to) params.set('to', query.to);
+    if (query.order) params.set('order', query.order);
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    const search = params.size > 0 ? `?${params.toString()}` : '';
+    return request<SessionListResponse>(`/teams/${encodeURIComponent(teamId)}/sessions${search}`, {
       responseSchema: sessionListResponseSchema,
-    }),
+    });
+  },
 
   claimShift: (teamId: string, shiftId: string) =>
     request<ShiftSummary>(

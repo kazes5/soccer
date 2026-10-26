@@ -187,8 +187,10 @@ describe('SchedulePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Switch team' })).not.toBeInTheDocument();
-    await waitFor(() => expect(api.listSessions).toHaveBeenCalledWith('team-1'));
-    expect(api.listSessions).not.toHaveBeenCalledWith('uninvited-team');
+    await waitFor(() =>
+      expect(api.listSessions).toHaveBeenCalledWith('team-1', { from: expect.any(String) }),
+    );
+    expect(api.listSessions).not.toHaveBeenCalledWith('uninvited-team', expect.anything());
   });
 
   it('shows an open shift and lets a parent claim it', async () => {
@@ -216,16 +218,114 @@ describe('SchedulePage', () => {
     expect(await screen.findByText('You')).toBeInTheDocument();
   });
 
-  it('hides claim/release/request-swap actions for a session from a past calendar day', async () => {
+  it('keeps past sessions out of the main list, under a collapsed, read-only Past rides', async () => {
     vi.mocked(api.me).mockResolvedValue(adminUser);
-    vi.mocked(api.listSessions).mockResolvedValue(
-      buildSessions({ shiftStatus: 'open', startsAt: PAST_STARTS_AT }),
-    );
+    const pastSessions = buildSessions({
+      shiftStatus: 'claimed',
+      assignedUserId: 'user-2',
+      startsAt: PAST_STARTS_AT,
+    });
+    pastSessions.sessions[0]!.points[0]!.shift.assignedUserName = 'Avi Levi';
+    // The upcoming fetch and the Past rides page both get it; the page puts
+    // it in the right place by its date.
+    vi.mocked(api.listSessions).mockResolvedValue(pastSessions);
 
     renderWithProviders(<SchedulePage />);
 
-    await screen.findByText('To practice · Oak St');
+    expect(await screen.findByText('No upcoming sessions.')).toBeInTheDocument();
+    expect(screen.queryByText('To practice · Oak St')).not.toBeInTheDocument();
+    expect(api.listSessions).toHaveBeenCalledTimes(1);
+
+    const pastToggle = screen.getByRole('button', { name: 'Past rides' });
+    expect(pastToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(pastToggle);
+
+    expect(await screen.findByText('To practice · Oak St: Avi Levi')).toBeInTheDocument();
+    expect(api.listSessions).toHaveBeenLastCalledWith('team-1', {
+      to: expect.any(String),
+      order: 'desc',
+      limit: 10,
+    });
     expect(screen.queryByRole('button', { name: /^claim$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /request swap/i })).not.toBeInTheDocument();
+    // A short page means there's nothing earlier to load.
+    expect(screen.queryByRole('button', { name: 'Show earlier' })).not.toBeInTheDocument();
+  });
+
+  it('pages back through past rides, before the oldest one shown', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValueOnce({ sessions: [] });
+    const template = buildSessions({ startsAt: PAST_STARTS_AT }).sessions[0]!;
+    const page = Array.from({ length: 10 }, (_, index) => ({
+      ...template,
+      id: `past-${index}`,
+      startsAt: new Date(Date.parse(PAST_STARTS_AT) - index * 24 * 60 * 60 * 1000).toISOString(),
+    }));
+    vi.mocked(api.listSessions)
+      .mockResolvedValueOnce({ sessions: page })
+      .mockResolvedValueOnce({
+        sessions: [{ ...template, id: 'past-oldest', fieldLocation: 'Old Field' }],
+      });
+
+    renderWithProviders(<SchedulePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Past rides' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show earlier' }));
+
+    expect(await screen.findByText(/Old Field/)).toBeInTheDocument();
+    const oldestShown = Date.parse(page.at(-1)!.startsAt);
+    expect(api.listSessions).toHaveBeenLastCalledWith('team-1', {
+      to: new Date(oldestShown - 1).toISOString(),
+      order: 'desc',
+      limit: 10,
+    });
+  });
+
+  it('shows three weeks up front, with later weeks one tap away', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    const template = buildSessions({}).sessions[0]!;
+    const inFiveWeeks = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.listSessions).mockResolvedValue({
+      sessions: [
+        { ...template, fieldLocation: 'Central Field' },
+        { ...template, id: 'session-later', startsAt: inFiveWeeks, fieldLocation: 'Far Field' },
+      ],
+    });
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('Central Field')).toBeInTheDocument();
+    expect(screen.queryByText('Far Field')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show later weeks' }));
+    expect(await screen.findByText('Far Field')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show later weeks' })).not.toBeInTheDocument();
+  });
+
+  it('widens the window to show a deep-linked session further out', async () => {
+    searchParams = new URLSearchParams({ team: 'team-1', session: 'session-later' });
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    const template = buildSessions({}).sessions[0]!;
+    const inSixWeeks = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.listSessions).mockResolvedValue({
+      sessions: [
+        { ...template, id: 'session-later', startsAt: inSixWeeks, fieldLocation: 'Far Field' },
+      ],
+    });
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('Far Field')).toBeInTheDocument();
+  });
+
+  it('shows an upcoming cancelled session as a single compact line', async () => {
+    vi.mocked(api.me).mockResolvedValue(adminUser);
+    vi.mocked(api.listSessions).mockResolvedValue(buildSessions({ status: 'cancelled' }));
+
+    renderWithProviders(<SchedulePage />);
+
+    expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+    expect(screen.getByText('Central Field')).toBeInTheDocument();
+    expect(screen.queryByText('To practice · Oak St')).not.toBeInTheDocument();
   });
 
   it('still shows the claim action for a session scheduled earlier today', async () => {
@@ -404,7 +504,7 @@ describe('SchedulePage', () => {
 
     renderWithProviders(<SchedulePage />);
 
-    expect(await screen.findByText('No practice sessions yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No upcoming sessions.')).toBeInTheDocument();
   });
 
   it('shows assigned player names instead of a count', async () => {
@@ -441,19 +541,6 @@ describe('SchedulePage', () => {
     expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /manage players/i })).toBeInTheDocument();
-  });
-
-  it('does not show admin controls for a session that has already happened', async () => {
-    vi.mocked(api.me).mockResolvedValue(adminUser);
-    vi.mocked(api.listSessions).mockResolvedValue(
-      buildSessions({ shiftStatus: 'open', startsAt: PAST_STARTS_AT }),
-    );
-
-    renderWithProviders(<SchedulePage />);
-
-    await screen.findByText('To practice · Oak St');
-    expect(screen.queryByRole('button', { name: /^edit/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument();
   });
 
   it('lets an admin edit a session, pre-filling and submitting local (not UTC) date/time', async () => {

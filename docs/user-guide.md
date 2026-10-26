@@ -74,7 +74,12 @@ your password.
 2. If the account belongs to more than one joined team, select the team to
    review. Single-team parents go straight to their schedule with no selector.
 3. Review upcoming sessions, field location, collection points, direction, and
-   open or claimed shifts.
+   open or claimed shifts. The page opens at today and shows this week and
+   the next two; select **Show later weeks** for more. A cancelled upcoming
+   session shows as one short line.
+   Earlier sessions are under **Past rides** at the bottom, collapsed. Open
+   it to see who drove each trip, newest first, and select **Show earlier**
+   to go further back. Past rides are read-only.
 4. Select **Claim** on an open shift to take responsibility for it.
 5. Select **Release** on a shift assigned to you to make it open again.
 
