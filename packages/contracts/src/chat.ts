@@ -52,3 +52,13 @@ export type ChatConfirmationRequiredEvent = z.infer<typeof chatConfirmationRequi
 
 export const chatErrorEventSchema = z.object({ message: z.string() });
 export type ChatErrorEvent = z.infer<typeof chatErrorEventSchema>;
+
+/** The user pasted a coach's message: the client offers to open the
+ *  coach-message import's review screen with it (see chat-tools.ts's
+ *  `review_coach_message`). */
+export const chatScheduleImportSuggestedEventSchema = z.object({
+  message: z.string().max(2000),
+});
+export type ChatScheduleImportSuggestedEvent = z.infer<
+  typeof chatScheduleImportSuggestedEventSchema
+>;

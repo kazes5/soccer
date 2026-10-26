@@ -1,6 +1,7 @@
 import {
   chatConfirmationRequiredEventSchema,
   chatErrorEventSchema,
+  chatScheduleImportSuggestedEventSchema,
   chatTextDeltaEventSchema,
   chatToolCallEventSchema,
   chatToolResultEventSchema,
@@ -14,6 +15,7 @@ export type ChatStreamEvent =
   | { type: 'tool-call'; id: string; name: string; summary: string }
   | { type: 'tool-result'; id: string; ok: boolean; summary: string }
   | { type: 'confirmation-required'; token: string; summary: string }
+  | { type: 'schedule-import-suggested'; message: string }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
@@ -113,6 +115,12 @@ function toStreamEvent(eventName: string, parsed: unknown): ChatStreamEvent | nu
     case 'confirmation-required': {
       const result = chatConfirmationRequiredEventSchema.safeParse(parsed);
       return result.success ? { type: 'confirmation-required', ...result.data } : null;
+    }
+    case 'schedule-import-suggested': {
+      const result = chatScheduleImportSuggestedEventSchema.safeParse(parsed);
+      return result.success
+        ? { type: 'schedule-import-suggested', message: result.data.message }
+        : null;
     }
     case 'error': {
       const result = chatErrorEventSchema.safeParse(parsed);

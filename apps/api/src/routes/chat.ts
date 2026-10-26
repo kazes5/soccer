@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireAuth, requireTeamRole } from '../lib/authorization';
 import { assertChatRateLimit } from '../lib/chat-rate-limit';
 import { executeToolCall } from '../lib/chat-dispatch';
-import { toolsAllowedFor } from '../lib/chat-tools';
+import { REVIEW_COACH_MESSAGE_TOOL, toolsAllowedFor } from '../lib/chat-tools';
 import { HttpError } from '../lib/errors';
 import { env } from '../env';
 import { streamChatCompletion, type OpenRouterMessage } from '../lib/openrouter';
@@ -36,6 +36,7 @@ function systemPrompt(locale: 'en' | 'he', teamTimezone: string, now: Date): str
     "When a tool result includes a `localStartsAt` field, quote that value (not `startsAt`, which is UTC) when telling the user a session's time.",
     'Shifts and swap requests are identified internally by id, but users never know or say these ids — they describe a shift by day, location, or direction. Call get_schedule to resolve the id yourself before claim_shift/release_shift/create_swap_request; never ask the user for a shift id or swap-request id.',
     'If a tool call fails or is refused, explain plainly what happened; do not retry the same call with different arguments hoping it works.',
+    'If the user pastes a message from the coach announcing practices, games or schedule changes, call review_coach_message when it is available, so the user can review the changes in the app; you cannot change sessions yourself.',
     languageLine,
   ].join(' ');
 }
@@ -58,7 +59,7 @@ export default async function chatRoutes(app: FastifyInstance) {
 
     const team = await app.prisma.team.findUniqueOrThrow({
       where: { id: params.teamId },
-      select: { timezone: true },
+      select: { timezone: true, coachMessageImportEnabled: true },
     });
 
     // Everything past this point streams — errors from here on go out as an
@@ -81,7 +82,9 @@ export default async function chatRoutes(app: FastifyInstance) {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     }
 
-    const tools = toolsAllowedFor(membership.role);
+    const tools = toolsAllowedFor(membership.role).filter(
+      (tool) => tool.name !== REVIEW_COACH_MESSAGE_TOOL || team.coachMessageImportEnabled,
+    );
     const openRouterTools = tools.map((tool) => ({
       type: 'function' as const,
       function: { name: tool.name, description: tool.description, parameters: tool.parameters },
@@ -156,6 +159,9 @@ export default async function chatRoutes(app: FastifyInstance) {
           }
 
           safeWrite('tool-result', { id: call.id, ok: outcome.ok, summary: outcome.summary });
+          if (call.name === REVIEW_COACH_MESSAGE_TOOL && outcome.ok) {
+            safeWrite('schedule-import-suggested', { message: body.message });
+          }
           messages.push({
             role: 'tool',
             tool_call_id: call.id,

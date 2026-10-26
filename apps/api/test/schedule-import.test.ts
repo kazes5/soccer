@@ -311,6 +311,115 @@ describe('coach-message schedule import', () => {
     expect(response.statusCode).toBe(409);
   });
 
+  it("replaces the message's week: cancels its sessions, then creates the coach's, even at the same time", async () => {
+    const { teamId, parentToken, monday, wednesday } = await setUpTeam();
+    fetchMock.mockResolvedValueOnce(
+      completion(
+        JSON.stringify({
+          events: [
+            // Exactly the existing Monday 18:00 slot.
+            {
+              date: monday,
+              time: '18:00',
+              kind: 'practice',
+              title: null,
+              location: 'בית דני',
+              notes: null,
+            },
+          ],
+          cancellations: [],
+          fullSchedule: false,
+          unresolved: [],
+        }),
+      ),
+    );
+
+    const previewResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/preview`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload: { message: COACH_MESSAGE, replaceWeek: true },
+    });
+    expect(previewResponse.statusCode).toBe(200);
+    const proposal = previewResponse.json();
+    expect(proposal.replacedWeek).toEqual({ start: addDays(monday, -1), end: addDays(monday, 5) });
+    // Monday and Wednesday cancelled; next Monday is another week.
+    expect(proposal.operations.map((op: { type: string }) => op.type)).toEqual([
+      'cancel',
+      'create',
+      'cancel',
+    ]);
+
+    const applyResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/apply`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload: {
+        message: COACH_MESSAGE,
+        operations: proposal.operations,
+        proposalToken: proposal.proposalToken,
+        selected: [0, 1, 2],
+      },
+    });
+    expect(applyResponse.statusCode).toBe(200);
+    expect(applyResponse.json()).toEqual({ created: 1, updated: 0, cancelled: 2 });
+
+    const sessions = await app.prisma.practiceSession.findMany({
+      where: { teamId },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+    });
+    expect(
+      sessions.map((s) => ({
+        date: instantToWallClock(s.startsAt, 'Asia/Jerusalem').date,
+        status: s.status,
+        fieldLocation: s.fieldLocation,
+      })),
+    ).toEqual([
+      { date: monday, status: 'cancelled', fieldLocation: 'Central Field' },
+      { date: monday, status: 'scheduled', fieldLocation: 'בית דני' },
+      { date: wednesday, status: 'cancelled', fieldLocation: 'Central Field' },
+      { date: addDays(monday, 7), status: 'scheduled', fieldLocation: 'Central Field' },
+    ]);
+    expect(
+      await app.prisma.auditLog.count({
+        where: { teamId, actionType: 'session_cancelled', source: 'ai_chat' },
+      }),
+    ).toBe(2);
+  });
+
+  it('refuses a same-time create whose replaced session was unticked', async () => {
+    const { teamId, parentToken, monday } = await setUpTeam();
+    fetchMock.mockResolvedValueOnce(
+      completion(
+        JSON.stringify({
+          events: [{ date: monday, time: '18:00', kind: 'practice', location: 'בית דני' }],
+        }),
+      ),
+    );
+    const proposal = (
+      await app.inject({
+        method: 'POST',
+        url: `/teams/${teamId}/schedule-import/preview`,
+        headers: { authorization: `Bearer ${parentToken}` },
+        payload: { message: COACH_MESSAGE, replaceWeek: true },
+      })
+    ).json();
+
+    const applyResponse = await app.inject({
+      method: 'POST',
+      url: `/teams/${teamId}/schedule-import/apply`,
+      headers: { authorization: `Bearer ${parentToken}` },
+      payload: {
+        message: COACH_MESSAGE,
+        operations: proposal.operations,
+        proposalToken: proposal.proposalToken,
+        selected: [1],
+      },
+    });
+    expect(applyResponse.statusCode).toBe(409);
+    expect(applyResponse.json().message).toMatch(/already exists at that time/);
+  });
+
   it('applies only the selected changes', async () => {
     const { teamId, parentToken, monday, wednesday } = await setUpTeam();
     const proposal = (await preview(teamId, parentToken, monday, wednesday)).json();

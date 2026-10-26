@@ -1,8 +1,15 @@
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, ClipboardPaste, Loader2, X } from 'lucide-react';
+import { secondaryButtonClassName } from '@/components/form-controls';
 import { useLocale } from '@/components/locale-provider';
 import type { ChatMessage as ChatMessageData } from './use-chat-session';
 
-export function ChatMessage({ message }: { message: ChatMessageData }) {
+export function ChatMessage({
+  message,
+  onReviewImport,
+}: {
+  message: ChatMessageData;
+  onReviewImport: (coachMessage: string) => void;
+}) {
   const { t } = useLocale();
   const isUser = message.role === 'user';
 
@@ -15,7 +22,7 @@ export function ChatMessage({ message }: { message: ChatMessageData }) {
           // is derived from the text itself, the same way the audit-log
           // detail dialog already handles arbitrary bilingual content.
           dir="auto"
-          className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+          className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm ${
             isUser ? 'bg-brand text-brand-contrast' : 'bg-surface-soft text-ink'
           }`}
         >
@@ -41,6 +48,16 @@ export function ChatMessage({ message }: { message: ChatMessageData }) {
           </span>
         </div>
       ))}
+      {message.importSuggestion !== undefined && (
+        <button
+          type="button"
+          className={`${secondaryButtonClassName} gap-2 text-sm`}
+          onClick={() => onReviewImport(message.importSuggestion!)}
+        >
+          <ClipboardPaste className="size-4" aria-hidden="true" />
+          {t('scheduleImport.analyze')}
+        </button>
+      )}
       {message.error && (
         <div className="max-w-[85%] rounded-2xl bg-status-open-subtle px-3.5 py-2 text-sm text-status-open-on">
           {message.error === 'Something went wrong.' ? t('chat.genericError') : message.error}

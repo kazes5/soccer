@@ -141,7 +141,9 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
     const extraction = parseExtraction(raw);
 
     // Everything an extracted date could match: from today through the
-    // furthest date the model mentioned (bounded inside planOperations).
+    // furthest date the model mentioned (bounded inside planOperations) —
+    // plus the rest of that week, which replacing a week cancels even on
+    // days the message doesn't name.
     const mentionedDates = [
       ...extraction.events.map((event) => event.date),
       ...extraction.cancellations.map((cancellation) => cancellation.date),
@@ -155,7 +157,7 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
             status: 'scheduled',
             startsAt: {
               gte: DateTime.fromJSDate(now).minus({ days: 1 }).toJSDate(),
-              lte: DateTime.fromISO(lastDate, { zone: team.timezone }).plus({ days: 1 }).toJSDate(),
+              lte: DateTime.fromISO(lastDate, { zone: team.timezone }).plus({ days: 7 }).toJSDate(),
             },
           },
           orderBy: { startsAt: 'asc' },
@@ -168,6 +170,7 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
       timeZone: team.timezone,
       now,
       locationPlaceholder: translate(body.locale, 'scheduleImport.locationTbd'),
+      replaceWeek: body.replaceWeek,
     });
     // Matches the apply request's own cap — a proposal that couldn't be
     // applied anyway is refused here rather than handed to the member.
@@ -192,6 +195,7 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
     return scheduleImportPreviewResponseSchema.parse({
       operations,
       unresolved: plan.unresolved,
+      replacedWeek: plan.replacedWeek,
       proposalToken,
     });
   });
@@ -231,7 +235,12 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
     if (selectedIndexes.some((index) => index >= body.operations.length)) {
       throw new HttpError(400, 'Selected changes do not match the proposal.');
     }
-    const selected = selectedIndexes.map((index) => body.operations[index]!);
+    // Cancellations first: replacing a week cancels a session and creates its
+    // successor at the same time, which the duplicate guard on creates below
+    // would otherwise refuse.
+    const selected = selectedIndexes
+      .map((index) => body.operations[index]!)
+      .sort((a, b) => Number(a.type !== 'cancel') - Number(b.type !== 'cancel'));
     const staleMessage =
       'The schedule changed since this preview. Please review the message again.';
 
@@ -271,7 +280,12 @@ export default async function scheduleImportRoutes(app: FastifyInstance) {
             where: { teamId: params.teamId, startsAt, status: 'scheduled' },
             select: { id: true },
           });
-          if (duplicate) throw new HttpError(409, staleMessage);
+          if (duplicate) {
+            throw new HttpError(
+              409,
+              'A session already exists at that time. Keep its cancellation selected, or untick the new one.',
+            );
+          }
           const session = await createSessionWithShifts(tx, {
             teamId: params.teamId,
             templateId: null,

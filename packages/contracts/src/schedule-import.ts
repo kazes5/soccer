@@ -28,6 +28,9 @@ export const scheduleImportPreviewRequestSchema = z.object({
    *  "next week" / "Tuesday" are resolved relative to it. Defaults to today. */
   referenceDate: localDateSchema.optional(),
   locale: z.enum(['en', 'he']).default('en'),
+  /** Start the message's week over: cancel every upcoming session in it and
+   *  create the message's events fresh, instead of matching and updating. */
+  replaceWeek: z.boolean().default(false),
 });
 export type ScheduleImportPreviewRequest = z.input<typeof scheduleImportPreviewRequestSchema>;
 
@@ -62,8 +65,9 @@ export const scheduleImportOperationSchema = z.discriminatedUnion('type', [
     expectedUpdatedAt: z.string().datetime(),
     before: scheduleImportSessionFieldsSchema,
     /** `explicit`: the message says it's off. `not_in_message`: the message
-     *  is a full schedule for the period and this session isn't in it. */
-    reason: z.enum(['explicit', 'not_in_message']),
+     *  is a full schedule for the period and this session isn't in it.
+     *  `replaced`: the member chose to replace the week's schedule. */
+    reason: z.enum(['explicit', 'not_in_message', 'replaced']),
   }),
 ]);
 export type ScheduleImportOperation = z.infer<typeof scheduleImportOperationSchema>;
@@ -74,6 +78,9 @@ export const scheduleImportPreviewResponseSchema = z.object({
    *  e.g. "cup game vs. Kfar Saba, date still pending" — shown to the
    *  member as-is so nothing the coach said silently disappears. */
   unresolved: z.array(z.string()),
+  /** The Sunday–Saturday week whose sessions were proposed for replacement,
+   *  when `replaceWeek` was requested and the message gave a week. */
+  replacedWeek: z.object({ start: localDateSchema, end: localDateSchema }).nullable(),
   /** Signs `operations` (see chat-confirmation.ts); applying requires it, so
    *  only what the AI actually proposed — or a subset — can be applied. */
   proposalToken: z.string(),

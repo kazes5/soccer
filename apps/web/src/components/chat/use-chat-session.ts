@@ -18,6 +18,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolCalls: ChatToolCall[];
+  /** A coach message this reply offers to open in the import's review screen. */
+  importSuggestion?: string;
   error?: string;
 }
 
@@ -77,6 +79,8 @@ export function useChatSession(teamId: string | null, locale: 'en' | 'he') {
                   : call,
               ),
             };
+          case 'schedule-import-suggested':
+            return { ...message, importSuggestion: event.message };
           case 'error':
             return { ...message, error: event.message };
           // 'confirmation-required' and 'done' carry no per-message content —

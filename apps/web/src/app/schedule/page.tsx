@@ -42,6 +42,7 @@ import {
 } from '@/lib/admin-nav';
 import { ApiError, api } from '@/lib/api';
 import { useOnDataChanged } from '@/lib/data-changed-bus';
+import { COACH_IMPORT_REQUESTED_EVENT, takeCoachImportDraft } from '@/lib/coach-import-handoff';
 import { buildLoginRedirect } from '@/lib/safe-redirect';
 import {
   formatSessionStartsAt,
@@ -206,6 +207,7 @@ function ScheduleSessions({
   const [isCancelling, setIsCancelling] = useState(false);
   const [importEnabled, setImportEnabled] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importDraft, setImportDraft] = useState('');
 
   const fetchAll = useCallback(
     () =>
@@ -244,7 +246,15 @@ function ScheduleSessions({
     api
       .getCoachMessageImport(teamId)
       .then((settings) => {
-        if (!cancelled) setImportEnabled(settings.enabled);
+        if (cancelled) return;
+        setImportEnabled(settings.enabled);
+        // A coach message handed over from the chat on another page — see
+        // coach-import-handoff.ts.
+        const draft = settings.enabled ? takeCoachImportDraft(teamId) : null;
+        if (draft !== null) {
+          setImportDraft(draft);
+          setIsImporting(true);
+        }
       })
       .catch(() => {
         // Leave the button hidden.
@@ -253,6 +263,19 @@ function ScheduleSessions({
       cancelled = true;
     };
   }, [teamId]);
+
+  // The same hand-off while this page is already open.
+  useEffect(() => {
+    if (!importEnabled) return;
+    function handleRequest() {
+      const draft = takeCoachImportDraft(teamId);
+      if (draft === null) return;
+      setImportDraft(draft);
+      setIsImporting(true);
+    }
+    window.addEventListener(COACH_IMPORT_REQUESTED_EVENT, handleRequest);
+    return () => window.removeEventListener(COACH_IMPORT_REQUESTED_EVENT, handleRequest);
+  }, [importEnabled, teamId]);
 
   // Used for the retry button and for re-syncing after a claim/release conflict —
   // both are event-driven (not inside an effect body), so the eager
@@ -416,7 +439,10 @@ function ScheduleSessions({
           type="button"
           disabled={!isOnline}
           className={`${secondaryButtonClassName} gap-2 self-start`}
-          onClick={() => setIsImporting(true)}
+          onClick={() => {
+            setImportDraft('');
+            setIsImporting(true);
+          }}
         >
           <ClipboardPaste className="size-4" aria-hidden="true" />
           {t('scheduleImport.openButton')}
@@ -455,6 +481,7 @@ function ScheduleSessions({
       {isImporting && (
         <ScheduleImportDialog
           teamId={teamId}
+          initialMessage={importDraft}
           timeZone={timeZone}
           onClose={() => setIsImporting(false)}
           onApplied={(result) => {

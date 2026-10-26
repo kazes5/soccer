@@ -51,6 +51,16 @@ export interface ChatTool {
 
 const uuidParam = { type: 'string', format: 'uuid' } as const;
 
+/**
+ * Not an action: the chat can't change the schedule itself. Calling this hands
+ * the user's pasted coach message to the reviewed coach-message import
+ * (routes/schedule-import.ts) — chat.ts sees the call and sends the client a
+ * `schedule-import-suggested` event carrying the message, which the client
+ * turns into a "Review changes" button. Only offered when the team has the
+ * import turned on (see chat.ts).
+ */
+export const REVIEW_COACH_MESSAGE_TOOL = 'review_coach_message';
+
 export const CHAT_TOOLS: ChatTool[] = [
   {
     name: 'get_schedule',
@@ -190,6 +200,16 @@ export const CHAT_TOOLS: ChatTool[] = [
     confirmationRequired: false,
     run: (app, currentUser, teamId, args, audit) =>
       actions.cancelSwapRequest(app, currentUser, teamId, args.swapRequestId as string, audit),
+  },
+  {
+    name: REVIEW_COACH_MESSAGE_TOOL,
+    description:
+      "Call this when the user's message is (or quotes) a message from the coach announcing practices, games, or schedule changes — e.g. a weekly schedule with days, times and places. It opens the app's review screen, where the user checks the proposed schedule changes and applies them. Call it instead of claiming you can't read announcements, and never try to change sessions yourself. Afterwards, tell the user in one sentence to tap the Review changes button.",
+    parameters: { type: 'object', properties: {} },
+    argsSchema: z.object({}),
+    allowedRoles: ['parent', 'admin'],
+    confirmationRequired: false,
+    run: async () => ({ reviewScreenOffered: true }),
   },
 ];
 
