@@ -22,7 +22,7 @@ export function ChatMessage({
           // is derived from the text itself, the same way the audit-log
           // detail dialog already handles arbitrary bilingual content.
           dir="auto"
-          className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+          className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm ${
             isUser ? 'bg-brand text-brand-contrast' : 'bg-surface-soft text-ink'
           }`}
         >
