@@ -25,6 +25,10 @@ const sessionPointParamsSchema = z.object({
 const listQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  // For paging back through history newest-first (the Schedule page's "Past
+  // rides"): `order=desc&limit=10&to=<just before the oldest one shown>`.
+  order: z.enum(['asc', 'desc']).default('asc'),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 type SessionWithRelations = Awaited<ReturnType<typeof loadSession>>;
@@ -116,7 +120,8 @@ export default async function sessionRoutes(app: FastifyInstance) {
         assignments: { include: { point: true } },
         shifts: { include: { assignedUser: true } },
       },
-      orderBy: { startsAt: 'asc' },
+      orderBy: { startsAt: query.order },
+      take: query.limit,
     });
 
     return sessionListResponseSchema.parse({ sessions: sessions.map(toSessionDto) });
