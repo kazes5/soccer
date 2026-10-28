@@ -1,5 +1,5 @@
 import { defaultLocale, directionFor, isLocale, type Locale } from '@soccer/i18n';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Heebo } from 'next/font/google';
 import { cookies } from 'next/headers';
 import { LocaleProvider } from '@/components/locale-provider';
@@ -23,6 +23,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Soccer Carpool Coordinator',
   description: 'Coordinate youth soccer team carpool pickups and drop-offs.',
+  // Opened from the iOS Home Screen, the app runs standalone (no Safari
+  // chrome) — which is also what unlocks web push there. See manifest.ts.
+  appleWebApp: {
+    capable: true,
+    title: 'Carpool',
+    statusBarStyle: 'default',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#1f7a4d',
 };
 
 async function resolveLocale(): Promise<Locale> {
