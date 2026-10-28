@@ -193,6 +193,10 @@ the app isn't the tab you're looking at:
   on your laptop.
 - If your browser doesn't support push, or you've blocked notifications for
   this site, the section explains that instead of showing the button.
+- On iPhone and iPad (iOS 16.4 or later), push works only from the app
+  installed on the Home Screen. In Safari, tap Share, choose **Add to Home
+  Screen**, open **Carpool** from the Home Screen, log in, and enable push
+  there. The section shows these steps when you open it in a Safari tab.
 - A rapid burst of unrelated changes for the same team is collapsed into a
   single summary push rather than one per change — every individual event
   still appears in full on `/notifications`, only the OS notification is

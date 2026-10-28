@@ -239,6 +239,26 @@ describe('NotificationPreferencesPage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('tells an iPhone user in a Safari tab how to install the app before enabling push', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(getPushStatus).mockResolvedValue('needs-install');
+
+    renderWithProviders(<NotificationPreferencesPage />);
+
+    expect(
+      await screen.findByText(/work only when the app is opened from your Home Screen/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Choose “Add to Home Screen”, then “Add”.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Enable push notifications on this device' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Push notifications are not supported in this browser.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('lets a parent enable push notifications', async () => {
     vi.mocked(api.me).mockResolvedValue(user);
     vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);

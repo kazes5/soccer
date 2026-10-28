@@ -1,7 +1,7 @@
 import { api } from './api';
 
 export type PushStatus =
-  'unsupported' | 'denied' | 'default' | 'granted-not-subscribed' | 'subscribed';
+  'unsupported' | 'needs-install' | 'denied' | 'default' | 'granted-not-subscribed' | 'subscribed';
 
 export function isPushSupported(): boolean {
   return (
@@ -10,6 +10,26 @@ export function isPushSupported(): boolean {
     'PushManager' in window &&
     'Notification' in window
   );
+}
+
+/**
+ * True on an iPhone/iPad when the app is open in a Safari tab rather than
+ * from the Home Screen. iOS (16.4+) exposes web push only to installed,
+ * standalone web apps, so in a tab push looks simply unsupported — this lets
+ * the settings page tell the parent how to install instead. iPadOS reports
+ * itself as a Mac, so a touch-capable "Macintosh" counts as an iPad.
+ */
+export function needsHomeScreenInstall(): boolean {
+  if (typeof window === 'undefined') return false;
+  const userAgent = navigator.userAgent;
+  const isIos =
+    /iPhone|iPad|iPod/.test(userAgent) ||
+    (/Macintosh/.test(userAgent) && navigator.maxTouchPoints > 1);
+  if (!isIos) return false;
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return !isStandalone;
 }
 
 /** The standard VAPID-key conversion every Web Push client needs —
@@ -33,7 +53,7 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * `Notification.permission`, and whether we've actually created a
  * subscription) collapsed into one value the settings UI can switch on. */
 export async function getPushStatus(): Promise<PushStatus> {
-  if (!isPushSupported()) return 'unsupported';
+  if (!isPushSupported()) return needsHomeScreenInstall() ? 'needs-install' : 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   if (Notification.permission === 'default') return 'default';
 

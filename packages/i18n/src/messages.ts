@@ -432,6 +432,12 @@ export const en = {
   'settingsNotifications.category.admin_changes': 'Team & admin changes',
   'settingsNotifications.pushSectionTitle': 'Push notifications',
   'settingsNotifications.pushNotSupported': 'Push notifications are not supported in this browser.',
+  'settingsNotifications.pushNeedsInstall':
+    'On iPhone and iPad, push notifications work only when the app is opened from your Home Screen (iOS 16.4 or later):',
+  'settingsNotifications.pushInstallStepShare': 'Tap the Share button in Safari.',
+  'settingsNotifications.pushInstallStepAdd': 'Choose “Add to Home Screen”, then “Add”.',
+  'settingsNotifications.pushInstallStepOpen':
+    'Open Carpool from your Home Screen, log in, and come back to this page to enable push.',
   'settingsNotifications.emailSectionTitle': 'Email',
   'settingsNotifications.emailReminders': 'Email me my shift reminders',
   'settingsNotifications.emailRemindersHint':
@@ -1081,6 +1087,12 @@ export const he: Record<MessageKey, string> = {
   'settingsNotifications.category.admin_changes': 'שינויים בקבוצה ובניהול',
   'settingsNotifications.pushSectionTitle': 'התראות דחיפה',
   'settingsNotifications.pushNotSupported': 'התראות דחיפה אינן נתמכות בדפדפן זה.',
+  'settingsNotifications.pushNeedsInstall':
+    'באייפון ובאייפד, התראות דחיפה עובדות רק כשפותחים את האפליקציה ממסך הבית (iOS 16.4 ומעלה):',
+  'settingsNotifications.pushInstallStepShare': 'הקישו על כפתור השיתוף בספארי.',
+  'settingsNotifications.pushInstallStepAdd': 'בחרו ״הוסף למסך הבית״, ואז ״הוסף״.',
+  'settingsNotifications.pushInstallStepOpen':
+    'פתחו את Carpool ממסך הבית, התחברו, וחזרו לעמוד הזה כדי להפעיל התראות.',
   'settingsNotifications.emailSectionTitle': 'מייל',
   'settingsNotifications.emailReminders': 'שליחת תזכורות משמרת במייל',
   'settingsNotifications.emailRemindersHint': 'נשלח ל־{email}, בנוסף לתזכורות בדחיפה ובאפליקציה.',

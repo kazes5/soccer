@@ -493,6 +493,16 @@ function PushNotificationSection() {
       {status === 'unsupported' && (
         <p className="text-sm text-ink-muted">{t('settingsNotifications.pushNotSupported')}</p>
       )}
+      {status === 'needs-install' && (
+        <div className="flex flex-col gap-2 text-sm text-ink-muted">
+          <p>{t('settingsNotifications.pushNeedsInstall')}</p>
+          <ol className="list-decimal ps-5">
+            <li>{t('settingsNotifications.pushInstallStepShare')}</li>
+            <li>{t('settingsNotifications.pushInstallStepAdd')}</li>
+            <li>{t('settingsNotifications.pushInstallStepOpen')}</li>
+          </ol>
+        </div>
+      )}
       {status === 'denied' && (
         <p className="text-sm text-ink-muted">{t('settingsNotifications.pushBlocked')}</p>
       )}
