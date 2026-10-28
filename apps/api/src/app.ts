@@ -7,9 +7,10 @@ import { Prisma } from '../generated/prisma/client';
 import { assertCsrfSafe } from './lib/cookies';
 import { HttpError } from './lib/errors';
 import {
-  DisabledPasswordRecoveryProvider,
+  EmailPasswordRecoveryProvider,
   type PasswordRecoveryProvider,
 } from './lib/password-recovery';
+import { createEmailProvider } from './lib/email';
 import authPlugin from './plugins/auth';
 import prismaPlugin from './plugins/prisma';
 import queuesPlugin from './plugins/queues';
@@ -81,7 +82,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate('systemAdminEnabled', options.systemAdminEnabled ?? env.SYSTEM_ADMIN_ENABLED);
   app.decorate(
     'passwordRecoveryProvider',
-    options.passwordRecoveryProvider ?? new DisabledPasswordRecoveryProvider(),
+    options.passwordRecoveryProvider ?? new EmailPasswordRecoveryProvider(createEmailProvider()),
   );
   app.decorate('openRouterApiKey', options.openRouterApiKey ?? env.OPENROUTER_API_KEY);
   app.decorate(

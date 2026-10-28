@@ -123,6 +123,15 @@ Games show a **Game** badge with their title and notes (kit, transport, start
 time). If an admin has turned this feature off for the team, the button does
 not appear.
 
+### Reminder emails
+
+If your account has an email address, shift reminders also arrive by email,
+in your language, with the time, collection point, practice location,
+players and a link to the shift. To stop them for a team, clear **Email me my
+shift reminders** in **Settings → Notifications** and select **Save**.
+Change notifications for the whole team stay in-app and push only, so you
+don't get an email for every change.
+
 ## Shift swaps
 
 A parent can ask another parent to take over a shift the other parent already

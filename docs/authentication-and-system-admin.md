@@ -64,6 +64,12 @@ none configured, `forgot` still returns its generic response but sends nothing
 and creates no token. This path is optional; admin-set passwords (above) work
 regardless of whether a provider is configured.
 
+The provider is email via Brevo (`EmailPasswordRecoveryProvider`), configured
+when `BREVO_API_KEY` and `EMAIL_FROM_ADDRESS` are set. The link goes to the
+account's email address, in the account's language. A phone-only account gets
+nothing, since there's no SMS provider, but the response is identical either
+way.
+
 `forgot` always returns the same generic response regardless of whether the
 identifier matches an account or matches nothing at all — the response body is
 never an enumeration oracle. Request _volume_ is bounded instead (there's no

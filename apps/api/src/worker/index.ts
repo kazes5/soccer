@@ -11,6 +11,7 @@ import {
 } from '../lib/queues';
 import { createRedisConnection } from '../lib/redis';
 import { VapidWebPushProvider } from '../lib/web-push';
+import { createEmailProvider } from '../lib/email';
 import { processOutboxEvent } from './processors/outbox';
 import { processScheduledTask } from './processors/scheduled-task';
 import { reconcile } from './reconcile';
@@ -50,6 +51,12 @@ async function main() {
       ? '[worker] Browser push delivery is configured.'
       : '[worker] Browser push delivery is disabled (VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT not set).',
   );
+  const email = createEmailProvider();
+  console.log(
+    email.isConfigured
+      ? '[worker] Reminder emails are configured (Brevo).'
+      : '[worker] Reminder emails are disabled (BREVO_API_KEY/EMAIL_FROM_ADDRESS not set).',
+  );
 
   const counts = await reconcile(prisma, outboxQueue, scheduledTaskQueue);
   console.log(
@@ -60,7 +67,8 @@ async function main() {
     OUTBOX_QUEUE_NAME,
     (job) =>
       withAttemptTracking(
-        () => processOutboxEvent(prisma, job.data.outboxEventId, notificationPublisher, webPush),
+        () =>
+          processOutboxEvent(prisma, job.data.outboxEventId, notificationPublisher, webPush, email),
         (lastError) =>
           prisma.outboxEvent.update({
             where: { id: job.data.outboxEventId },

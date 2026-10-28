@@ -112,6 +112,15 @@ Optional but recommended:
   unavailable. Never rotate the pair casually: a new one invalidates every
   device that already enabled push.
 
+Email (optional): `BREVO_API_KEY` and `EMAIL_FROM_ADDRESS` (a sender
+verified in Brevo) turn on password-reset emails here and shift-reminder
+emails on the worker; `EMAIL_FROM_NAME` defaults to "Soccer Carpool". If
+Brevo's "Authorised IPs" protection is on for the account (Security →
+Authorised IPs), deactivate it: Railway's outbound addresses change, and
+Brevo rejects calls from unrecognised addresses with a 401. The worker logs
+those failures, and they're recorded per notification in
+`notification_deliveries.last_error`.
+
 Password authentication is unconditional as of 2026-08-19 (no flag). Login
 was previously gated behind `PASSWORD_AUTH_ENABLED=true` here, and origin
 binding behind `WEBAUTHN_RP_ID` — both rows are removed since passkeys no
@@ -127,7 +136,9 @@ longer exist and password login can't be disabled.
 | Public domain | none — this service only consumes jobs, nothing calls it |
 
 Environment variables: `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`,
-and the three `VAPID_*` push keys — same values as `api` above. It doesn't need `PASSWORD_AUTH_ENABLED`,
+and the three `VAPID_*` push keys — same values as `api` above — plus, for
+reminder emails, `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` and `WEB_ORIGIN` (the
+links in reminder emails point there). It doesn't need `PASSWORD_AUTH_ENABLED`,
 `TRUST_PROXY`, or the WebAuthn/CORS variables; those only affect the HTTP
 server, which the worker doesn't run.
 

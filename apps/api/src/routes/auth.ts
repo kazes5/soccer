@@ -213,6 +213,7 @@ export default async function authRoutes(app: FastifyInstance) {
       await app.passwordRecoveryProvider.sendReset({
         phone: user.phone,
         email: user.email,
+        locale: user.languagePreference,
         // A fragment stays client-side and out of HTTP request/access logs.
         resetUrl: `${env.WEB_ORIGIN}/reset-password#token=${encodeURIComponent(token)}`,
       });
