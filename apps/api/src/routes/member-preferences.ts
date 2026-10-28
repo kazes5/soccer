@@ -35,9 +35,21 @@ async function buildCategoryPreferences(
 }
 
 async function toDto(db: PrismaClient | Prisma.TransactionClient, userId: string, teamId: string) {
-  const settings = await db.memberNotificationSettings.findUnique({
-    where: { userId_teamId: { userId, teamId } },
-  });
+  const [settings, emailReminders] = await Promise.all([
+    db.memberNotificationSettings.findUnique({
+      where: { userId_teamId: { userId, teamId } },
+    }),
+    db.notificationPreference.findUnique({
+      where: {
+        userId_teamId_category_channel: {
+          userId,
+          teamId,
+          category: 'reminders',
+          channel: 'email',
+        },
+      },
+    }),
+  ]);
 
   return memberNotificationPreferencesSchema.parse({
     teamId,
@@ -45,6 +57,7 @@ async function toDto(db: PrismaClient | Prisma.TransactionClient, userId: string
     quietHoursEnd: settings?.quietHoursEnd ?? null,
     reminderOffsetMinutes: settings?.reminderOffsetMinutes ?? [],
     categoryPreferences: await buildCategoryPreferences(db, userId, teamId),
+    emailReminders: emailReminders?.enabled ?? true,
   });
 }
 

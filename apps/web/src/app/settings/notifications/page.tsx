@@ -106,13 +106,19 @@ export default function NotificationPreferencesPage() {
           />
         )}
 
-        {activeTeamId && <PreferencesWorkspace key={activeTeamId} teamId={activeTeamId} />}
+        {activeTeamId && (
+          <PreferencesWorkspace
+            key={activeTeamId}
+            teamId={activeTeamId}
+            userEmail={session.user.email}
+          />
+        )}
       </div>
     </AppShell>
   );
 }
 
-function PreferencesWorkspace({ teamId }: { teamId: string }) {
+function PreferencesWorkspace({ teamId, userEmail }: { teamId: string; userEmail: string | null }) {
   const { t } = useLocale();
   const { showToast } = useToast();
   const [preferences, setPreferences] = useState<MemberNotificationPreferences | null>(null);
@@ -172,6 +178,7 @@ function PreferencesWorkspace({ teamId }: { teamId: string }) {
   return (
     <PreferencesForm
       teamId={teamId}
+      userEmail={userEmail}
       preferences={preferences}
       teamDefaults={teamDefaults}
       onSaved={(saved) => {
@@ -184,11 +191,14 @@ function PreferencesWorkspace({ teamId }: { teamId: string }) {
 
 function PreferencesForm({
   teamId,
+  userEmail,
   preferences,
   teamDefaults,
   onSaved,
 }: {
   teamId: string;
+  /** Reminder emails go to this address; without one there's nothing to offer. */
+  userEmail: string | null;
   preferences: MemberNotificationPreferences;
   teamDefaults: TeamNotificationSettings;
   onSaved: (saved: MemberNotificationPreferences) => void;
@@ -216,6 +226,7 @@ function PreferencesForm({
       preferences.categoryPreferences.map((p) => [p.category, p.enabled]),
     ) as Record<NotificationCategory, boolean>,
   );
+  const [emailReminders, setEmailReminders] = useState(preferences.emailReminders);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -254,11 +265,22 @@ function PreferencesForm({
         quietHoursStart: useCustomQuietHours ? quietHoursStart : null,
         quietHoursEnd: useCustomQuietHours ? quietHoursEnd : null,
         reminderOffsetMinutes: parsedOffsets,
-        categoryPreferences: notificationCategorySchema.options.map((category) => ({
-          category,
-          channel: 'push' as const,
-          enabled: categoryEnabled[category] ?? true,
-        })),
+        categoryPreferences: [
+          ...notificationCategorySchema.options.map((category) => ({
+            category,
+            channel: 'push' as const,
+            enabled: categoryEnabled[category] ?? true,
+          })),
+          ...(userEmail
+            ? [
+                {
+                  category: 'reminders' as const,
+                  channel: 'email' as const,
+                  enabled: emailReminders,
+                },
+              ]
+            : []),
+        ],
       });
       onSaved(saved);
     } catch (err) {
@@ -378,6 +400,23 @@ function PreferencesForm({
           ))}
         </div>
       </FieldsetGroup>
+
+      {userEmail && (
+        <FieldsetGroup legend={t('settingsNotifications.emailSectionTitle')}>
+          <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={emailReminders}
+              onChange={(e) => setEmailReminders(e.target.checked)}
+              className={focusRingClassName}
+            />
+            {t('settingsNotifications.emailReminders')}
+          </label>
+          <p className="text-xs text-ink-muted">
+            {t('settingsNotifications.emailRemindersHint', { email: userEmail })}
+          </p>
+        </FieldsetGroup>
+      )}
 
       {error && <FormError>{error}</FormError>}
       <button type="submit" disabled={isSubmitting} className={`${buttonClassName} self-end`}>

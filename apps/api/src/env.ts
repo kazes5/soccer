@@ -51,6 +51,14 @@ const envSchema = z.object({
   // A contact URI push services may use to reach the sender about this key pair — conventionally
   // `mailto:` per the Web Push protocol (RFC 8292), though an `https://` contact page also works.
   VAPID_SUBJECT: z.string().min(1).optional(),
+  // Transactional email via Brevo (https://www.brevo.com) — password-reset
+  // links and shift-reminder emails. Same graceful-unavailable pattern as
+  // VAPID_*: both of the first two must be set, otherwise email is off
+  // (forgot-password stays a no-op and reminders go out by push/in-app only).
+  // EMAIL_FROM_ADDRESS must be a sender verified in the Brevo account.
+  BREVO_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM_ADDRESS: z.string().email().optional(),
+  EMAIL_FROM_NAME: z.string().min(1).default('Soccer Carpool'),
   // AI chat (PLAN.md Stage 7): OpenRouter (https://openrouter.ai), an
   // OpenAI-compatible chat-completions API, chosen over calling Anthropic
   // directly per explicit product decision — see CLAUDE.md §6.5. Optional,

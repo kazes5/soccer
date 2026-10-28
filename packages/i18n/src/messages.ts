@@ -432,6 +432,10 @@ export const en = {
   'settingsNotifications.category.admin_changes': 'Team & admin changes',
   'settingsNotifications.pushSectionTitle': 'Push notifications',
   'settingsNotifications.pushNotSupported': 'Push notifications are not supported in this browser.',
+  'settingsNotifications.emailSectionTitle': 'Email',
+  'settingsNotifications.emailReminders': 'Email me my shift reminders',
+  'settingsNotifications.emailRemindersHint':
+    'Sent to {email}, alongside push and in-app reminders.',
   'settingsNotifications.pushBlocked':
     'Push notifications are blocked in your browser settings. Allow notifications for this site to enable them.',
   'settingsNotifications.pushEnabledOnDevice': 'Enabled on this device',
@@ -542,6 +546,13 @@ export const en = {
   'push.swapExpired.body': 'A swap request for {pointName} went unanswered',
   'push.swapCancelled.title': 'Swap cancelled',
   'push.swapCancelled.body': '{requestingUserName} cancelled their swap request for {pointName}',
+  'email.passwordReset.subject': 'Reset your Soccer Carpool password',
+  'email.passwordReset.body':
+    'Someone asked to reset the password for your Soccer Carpool account.\n\nTo choose a new password, open this link (it expires in {minutes} minutes):\n{resetUrl}\n\nIf this wasn’t you, ignore this email — your password stays the same.',
+  'email.reminder.subject': '{teamName}: {direction} at {pointName}, {when}',
+  'email.reminder.body':
+    'Hi {userName},\n\nA reminder that you’re driving {direction} for {teamName}.\n\nWhen: {when}\nCollection point: {pointName}\nPractice location: {fieldLocation}\nPlayers: {players}\n\nOpen the schedule: {scheduleUrl}\n\nTo stop these emails, turn off “Email me my shift reminders” in Settings → Notifications.',
+  'email.reminder.noPlayers': 'none assigned yet',
   'push.shiftReminder.title': 'Upcoming shift reminder',
   'push.shiftReminder.body': '{direction} at {pointName}',
   'push.summary.title': 'Team has updates',
@@ -1070,6 +1081,9 @@ export const he: Record<MessageKey, string> = {
   'settingsNotifications.category.admin_changes': 'שינויים בקבוצה ובניהול',
   'settingsNotifications.pushSectionTitle': 'התראות דחיפה',
   'settingsNotifications.pushNotSupported': 'התראות דחיפה אינן נתמכות בדפדפן זה.',
+  'settingsNotifications.emailSectionTitle': 'מייל',
+  'settingsNotifications.emailReminders': 'שליחת תזכורות משמרת במייל',
+  'settingsNotifications.emailRemindersHint': 'נשלח ל־{email}, בנוסף לתזכורות בדחיפה ובאפליקציה.',
   'settingsNotifications.pushBlocked':
     'התראות דחיפה חסומות בהגדרות הדפדפן. אפשרו התראות עבור אתר זה כדי להפעיל אותן.',
   'settingsNotifications.pushEnabledOnDevice': 'מופעל במכשיר זה',
@@ -1175,6 +1189,13 @@ export const he: Record<MessageKey, string> = {
   'push.swapExpired.body': 'בקשת החלפה עבור {pointName} נותרה ללא מענה',
   'push.swapCancelled.title': 'ההחלפה בוטלה',
   'push.swapCancelled.body': '{requestingUserName} ביטל/ה את בקשת ההחלפה עבור {pointName}',
+  'email.passwordReset.subject': 'איפוס הסיסמה למערכת הסעות לכדורגל',
+  'email.passwordReset.body':
+    'התקבלה בקשה לאפס את הסיסמה לחשבון שלך במערכת הסעות לכדורגל.\n\nכדי לבחור סיסמה חדשה, פתחו את הקישור (הוא בתוקף {minutes} דקות):\n{resetUrl}\n\nאם לא ביקשת זאת, אפשר להתעלם מהמייל — הסיסמה לא תשתנה.',
+  'email.reminder.subject': '{teamName}: {direction} מ{pointName}, {when}',
+  'email.reminder.body':
+    'שלום {userName},\n\nתזכורת: את/ה נוהג/ת {direction} עבור {teamName}.\n\nמתי: {when}\nנקודת איסוף: {pointName}\nמקום האימון: {fieldLocation}\nשחקנים: {players}\n\nלצפייה בלוח הזמנים: {scheduleUrl}\n\nכדי להפסיק לקבל מיילים אלה, כבו את ״שליחת תזכורות משמרת במייל״ בהגדרות ← התראות.',
+  'email.reminder.noPlayers': 'עדיין לא שובצו',
   'push.shiftReminder.title': 'תזכורת למשמרת קרובה',
   'push.shiftReminder.body': '{direction} ב{pointName}',
   'push.summary.title': 'יש עדכונים בקבוצה',

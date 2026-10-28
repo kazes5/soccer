@@ -37,5 +37,9 @@ export const memberNotificationPreferencesSchema = z.object({
   quietHoursEnd: timeOfDaySchema.nullable(),
   reminderOffsetMinutes: z.array(z.number().int()),
   categoryPreferences: z.array(categoryPreferenceSchema),
+  /** Shift reminders also by email (to the account's email address, when it
+   *  has one). On unless turned off — saved like any category preference,
+   *  as `{ category: 'reminders', channel: 'email' }`. */
+  emailReminders: z.boolean(),
 });
 export type MemberNotificationPreferences = z.infer<typeof memberNotificationPreferencesSchema>;

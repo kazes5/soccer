@@ -1,6 +1,8 @@
 import type IORedis from 'ioredis';
 import type { OutboxEvent, Prisma, PrismaClient } from '../../../generated/prisma/client';
 import { publishNotificationFanoutBestEffort } from '../../lib/notification-bus';
+import type { EmailProvider } from '../../lib/email';
+import { deliverReminderEmail } from '../../lib/email-delivery';
 import { deliverPushNotifications } from '../../lib/push-delivery';
 import type { WebPushProvider } from '../../lib/web-push';
 
@@ -40,12 +42,16 @@ async function resolveRecipientIds(prisma: PrismaClient, event: OutboxEvent): Pr
  * `webPush`, if given, is handed to `deliverPushNotifications` after the
  * same commit — also optional and never required for existing callers, and
  * a no-op by itself if its VAPID config is unset (see `web-push.ts`).
+ *
+ * `email`, if given, the same: reminder emails (email-delivery.ts), a no-op
+ * when Brevo isn't configured.
  */
 export async function processOutboxEvent(
   prisma: PrismaClient,
   outboxEventId: string,
   publisher?: IORedis,
   webPush?: WebPushProvider,
+  email?: EmailProvider,
 ): Promise<void> {
   const event = await prisma.outboxEvent.findUnique({ where: { id: outboxEventId } });
   if (!event || event.processedAt) return;
@@ -94,5 +100,9 @@ export async function processOutboxEvent(
 
   if (recipientIds.length > 0 && webPush) {
     await deliverPushNotifications(prisma, event, webPush);
+  }
+
+  if (recipientIds.length > 0 && email) {
+    await deliverReminderEmail(prisma, event, email);
   }
 }

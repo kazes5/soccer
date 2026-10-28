@@ -71,6 +71,7 @@ const noOverridePreferences: MemberNotificationPreferences = {
     { category: 'escalations', channel: 'push', enabled: true },
     { category: 'admin_changes', channel: 'push', enabled: true },
   ],
+  emailReminders: true,
 };
 
 describe('NotificationPreferencesPage', () => {
@@ -177,6 +178,49 @@ describe('NotificationPreferencesPage', () => {
         }),
       ),
     );
+  });
+
+  it('lets a parent with an email turn off reminder emails', async () => {
+    vi.mocked(api.me).mockResolvedValue({
+      ...user,
+      user: { ...user.user, email: 'avi@example.com' },
+    });
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+    vi.mocked(api.updateMemberPreferences).mockResolvedValue({
+      ...noOverridePreferences,
+      emailReminders: false,
+    });
+
+    renderWithProviders(<NotificationPreferencesPage />);
+
+    const toggle = await screen.findByLabelText('Email me my shift reminders');
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(/Sent to avi@example\.com/)).toBeInTheDocument();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(api.updateMemberPreferences).toHaveBeenCalledWith(
+        expect.objectContaining({
+          categoryPreferences: expect.arrayContaining([
+            { category: 'reminders', channel: 'email', enabled: false },
+            { category: 'reminders', channel: 'push', enabled: true },
+          ]),
+        }),
+      ),
+    );
+  });
+
+  it('offers no reminder-email option to a parent without an email address', async () => {
+    vi.mocked(api.me).mockResolvedValue(user);
+    vi.mocked(api.getMemberPreferences).mockResolvedValue(noOverridePreferences);
+    vi.mocked(api.getNotificationSettings).mockResolvedValue(teamDefaults);
+
+    renderWithProviders(<NotificationPreferencesPage />);
+
+    await screen.findByText('Shift changes');
+    expect(screen.queryByLabelText('Email me my shift reminders')).not.toBeInTheDocument();
   });
 
   it('shows an unsupported message and no button when the browser lacks push support', async () => {

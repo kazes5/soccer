@@ -124,6 +124,35 @@ describe('member notification preferences', () => {
     expect(auditEntries).toHaveLength(1);
   });
 
+  it('keeps reminder emails on by default, and lets a member turn them off separately from push', async () => {
+    const { adminToken, teamId } = await setUpTeam();
+
+    const initial = await app.inject({
+      method: 'GET',
+      url: `/users/me/preferences?teamId=${teamId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(initial.json().emailReminders).toBe(true);
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/preferences',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        teamId,
+        categoryPreferences: [{ category: 'reminders', channel: 'email', enabled: false }],
+      },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().emailReminders).toBe(false);
+    // Push reminders are a separate choice and stay on.
+    expect(updated.json().categoryPreferences).toContainEqual({
+      category: 'reminders',
+      channel: 'push',
+      enabled: true,
+    });
+  });
+
   it('rejects a request for a team the caller does not belong to', async () => {
     const { adminToken } = await setUpTeam();
     const { teamId: otherTeamId } = await setUpTeam();
