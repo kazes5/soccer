@@ -100,6 +100,18 @@ Environment variables:
 | `WEB_ORIGIN`           | `https://soccerweb-production.up.railway.app`                             | CORS: must exactly match the web app's origin.                                                                                                                         |
 | `SYSTEM_ADMIN_ENABLED` | `true`                                                                    | Enabled 2026-08-19 (was off at initial deploy) so `/system/*` is reachable — needed once the hardcoded super-admin account (below) made using the console practical.   |
 
+Optional but recommended:
+
+- `OPENROUTER_API_KEY` turns on the chat assistant and the coach-message
+  import. Unset, both show "Assistant temporarily unavailable".
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:`
+  contact address) turn on browser push. Generate the pair once with
+  `pnpm --filter @soccer/api exec web-push generate-vapid-keys`. Set the
+  same three values on the **worker** too, since the worker is what sends
+  push; `api` only hands the public key to browsers. Unset, push is silently
+  unavailable. Never rotate the pair casually: a new one invalidates every
+  device that already enabled push.
+
 Password authentication is unconditional as of 2026-08-19 (no flag). Login
 was previously gated behind `PASSWORD_AUTH_ENABLED=true` here, and origin
 binding behind `WEBAUTHN_RP_ID` — both rows are removed since passkeys no
@@ -114,8 +126,8 @@ longer exist and password login can't be disabled.
 | Watch paths   | `/apps/api/**`, `/packages/**`                           |
 | Public domain | none — this service only consumes jobs, nothing calls it |
 
-Environment variables: `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL` —
-same values as `api` above. It doesn't need `PASSWORD_AUTH_ENABLED`,
+Environment variables: `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`,
+and the three `VAPID_*` push keys — same values as `api` above. It doesn't need `PASSWORD_AUTH_ENABLED`,
 `TRUST_PROXY`, or the WebAuthn/CORS variables; those only affect the HTTP
 server, which the worker doesn't run.
 
